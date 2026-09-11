@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Database } from '../types/database.types'
+// Once you've run `supabase gen types typescript` (see src/types/database.types.ts),
+// switch this back to createClient<Database>(...) for fully typed queries.
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -10,7 +11,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   )
 }
 
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,

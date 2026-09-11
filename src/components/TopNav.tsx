@@ -1,16 +1,26 @@
 import { motion } from 'framer-motion'
 import { NavLink } from 'react-router-dom'
-import { Search, Mail, Bell } from 'lucide-react'
+import { Search, Mail, Bell, LogOut } from 'lucide-react'
 import apmLogo from '../assets/apm-logo.png'
+import { useAuth } from '../hooks/useAuth'
 
 const TABS = [
   { to: '/ngo', label: 'NGO' },
   { to: '/bencana', label: 'Bencana' },
   { to: '/sekretariat', label: 'Sekretariat' },
   { to: '/logistik', label: 'Logistik' },
+  { to: '/senarai-sumbangan', label: 'Sumbangan' },
 ]
 
+const ROLE_LABEL: Record<string, string> = {
+  pkop: 'Super Admin (PKOP)',
+  pkon: 'Admin (PKON)',
+  pkod: 'Operator (PKOD)',
+}
+
 export function TopNav() {
+  const { profile, signOut } = useAuth()
+
   return (
     <header className="flex items-center justify-between px-8 py-5">
       <div className="flex items-center gap-6">
@@ -56,7 +66,20 @@ export function TopNav() {
         <button className="rounded-full border border-neutral-200 bg-white p-2 text-neutral-500 hover:text-neutral-700">
           <Bell size={16} />
         </button>
-        <div className="h-9 w-9 rounded-full bg-neutral-300" />
+
+        {profile && (
+          <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-800">
+            {ROLE_LABEL[profile.role] ?? profile.role}
+          </span>
+        )}
+
+        <button
+          onClick={signOut}
+          title="Log keluar"
+          className="rounded-full border border-neutral-200 bg-white p-2 text-neutral-500 hover:text-red-600"
+        >
+          <LogOut size={16} />
+        </button>
       </div>
     </header>
   )
