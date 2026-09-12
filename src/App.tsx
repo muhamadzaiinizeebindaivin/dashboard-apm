@@ -15,7 +15,6 @@ import { LaporanSemasa } from './pages/LaporanSemasa'
 import { Logistik } from './pages/Logistik'
 import { SenaraiSumbangan } from './pages/SenaraiSumbangan'
 import { SenaraiParas } from './pages/SenaraiParas'
-import { LamanUtama } from './pages/LamanUtama'
 
 function App() {
   return (
@@ -30,7 +29,6 @@ function App() {
 
           <Route element={<RequireAuth />}>
             <Route element={<Layout />}>
-              <Route path="laman-utama" element={<LamanUtama />} />
               <Route path="ngo" element={<Ngo />} />
               <Route path="bencana" element={<Bencana />} />
               <Route path="sekretariat" element={<Sekretariat />}>
