@@ -14,7 +14,7 @@ type LoginModalProps = {
 
 const QUICK_LINKS = [
   { page: 'sumbangan', to: '/sumbangan', label: 'Sumbangan' },
-  { page: 'paras', to: '/paras', label: 'Paras' },
+  { page: 'paras', to: '/paras', label: 'PARAS' },
   { page: 'laporan', to: '/laporan', label: 'Laporan' },
 ]
 

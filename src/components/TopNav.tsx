@@ -5,11 +5,13 @@ import apmLogo from '../assets/apm-logo.png'
 import { useAuth } from '../hooks/useAuth'
 
 const TABS = [
+  { to: '/', label: 'Laman Utama' },
   { to: '/ngo', label: 'NGO' },
   { to: '/bencana', label: 'Bencana' },
   { to: '/sekretariat', label: 'Sekretariat' },
   { to: '/logistik', label: 'Logistik' },
   { to: '/senarai-sumbangan', label: 'Sumbangan' },
+  { to: '/senarai-paras', label: 'PARAS' },
 ]
 
 const ROLE_LABEL: Record<string, string> = {
