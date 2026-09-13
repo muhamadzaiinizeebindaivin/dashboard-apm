@@ -29,7 +29,8 @@ export function ParasJejak() {
       const { data } = await supabase.rpc('get_paras_lokasi_by_negeri', {
         p_negeri: negeri,
       })
-      setLokasiAwam((data as LokasiPoint[]) ?? [])
+      const semua = (data as LokasiPoint[]) ?? []
+      setLokasiAwam(semua.filter((p) => p.status === 'aktif'))
     }
 
     muatSemula()

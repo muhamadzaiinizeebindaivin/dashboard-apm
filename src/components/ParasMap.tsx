@@ -1,5 +1,5 @@
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { LocateFixed, Maximize2, Minimize2 } from 'lucide-react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -77,49 +77,39 @@ function LocateButton({ center }: { center: [number, number] }) {
   )
 }
 
-function FullscreenResizeHandler() {
+function ResizeHandler({ isFullscreen }: { isFullscreen: boolean }) {
   const map = useMap()
 
   useEffect(() => {
-    function handleChange() {
-      setTimeout(() => map.invalidateSize(), 100)
-    }
-    document.addEventListener('fullscreenchange', handleChange)
-    return () => document.removeEventListener('fullscreenchange', handleChange)
-  }, [map])
+    const timeout = setTimeout(() => map.invalidateSize(), 250)
+    return () => clearTimeout(timeout)
+  }, [isFullscreen, map])
 
   return null
 }
 
 export function ParasMap({ points, center }: ParasMapProps) {
-  const wrapperRef = useRef<HTMLDivElement>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
 
   useEffect(() => {
-    function handleChange() {
-      setIsFullscreen(document.fullscreenElement === wrapperRef.current)
+    if (!isFullscreen) return
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setIsFullscreen(false)
     }
-    document.addEventListener('fullscreenchange', handleChange)
-    return () => document.removeEventListener('fullscreenchange', handleChange)
-  }, [])
-
-  function toggleFullscreen() {
-    if (document.fullscreenElement) {
-      document.exitFullscreen()
-    } else {
-      wrapperRef.current?.requestFullscreen()
-    }
-  }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [isFullscreen])
 
   const initialCenter: [number, number] =
     center ?? (points.length > 0 ? [points[0].latitude, points[0].longitude] : [4.2105, 101.9758])
 
   return (
     <div
-      ref={wrapperRef}
-      className={`relative overflow-hidden border border-neutral-200 ${
-        isFullscreen ? 'h-screen w-screen rounded-none' : 'h-96 w-full rounded-2xl'
-      }`}
+      className={
+        isFullscreen
+          ? 'fixed inset-0 z-[2000] h-screen w-screen bg-white'
+          : 'relative h-96 w-full overflow-hidden rounded-2xl border border-neutral-200'
+      }
     >
       <MapContainer center={initialCenter} zoom={center ? 14 : points.length > 0 ? 8 : 6} className="h-full w-full">
         <TileLayer
@@ -134,12 +124,12 @@ export function ParasMap({ points, center }: ParasMapProps) {
           </Marker>
         ))}
         {center && <LocateButton center={center} />}
-        <FullscreenResizeHandler />
+        <ResizeHandler isFullscreen={isFullscreen} />
       </MapContainer>
 
       <button
         type="button"
-        onClick={toggleFullscreen}
+        onClick={() => setIsFullscreen((f) => !f)}
         title={isFullscreen ? 'Keluar skrin penuh' : 'Skrin penuh'}
         className="absolute right-4 top-4 z-[1000] flex h-10 w-10 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-700 shadow-md hover:bg-neutral-50"
       >
