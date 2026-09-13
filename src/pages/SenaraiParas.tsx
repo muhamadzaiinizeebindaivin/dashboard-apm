@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Home, ChevronRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { ParasMap } from '../components/ParasMap'
 import type { LokasiPoint } from '../components/ParasMap'
@@ -40,7 +41,7 @@ export function SenaraiParas() {
     }
   }, [])
 
-  // One marker per negeri — keep only the most recent point for each
+  // One marker per negeri — only active, recently-updated tracking sessions
   const DUA_MINIT = 2 * 60 * 1000
 
   const negeriAktif = Array.from(
@@ -58,9 +59,14 @@ export function SenaraiParas() {
 
   return (
     <div>
-      <div className="py-2">
-        <p className="text-sm text-neutral-400">Portal &gt; PARAS</p>
-        <h1 className="text-2xl font-semibold text-neutral-900">PARAS — Negeri Aktif</h1>
+      <div className="mt-2 rounded-2xl border border-white/60 bg-white/40 px-5 py-4 shadow-lg backdrop-blur-md">
+        <div className="flex items-center gap-1.5 text-sm">
+          <Home size={13} className="text-neutral-400" />
+          <span className="text-neutral-400">Portal</span>
+          <ChevronRight size={13} className="text-neutral-300" />
+          <span className="font-medium text-emerald-700">Paras</span>
+        </div>
+        <h1 className="text-2xl font-semibold text-neutral-900">Paras — Negeri Aktif</h1>
       </div>
 
       <div className="mt-6">

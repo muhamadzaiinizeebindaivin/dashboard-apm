@@ -2,15 +2,12 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { LoginModal } from '../components/LoginModal'
 import { StatCard } from '../components/StatCard'
-import { TopNav } from '../components/TopNav'
+import { AppShell } from '../components/AppShell'
 import { useAuth } from '../hooks/useAuth'
 import apmLogo from '../assets/apm-logo.png'
 
-export function HomeScreen() {
-  const [modalOpen, setModalOpen] = useState(false)
-  const { session } = useAuth()
-
-  const kandungan = (
+function Kandungan({ session }: { session: boolean }) {
+  return (
     <>
       {!session && (
         <>
@@ -36,7 +33,7 @@ export function HomeScreen() {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1, duration: 0.2 }}
-        className="mx-auto mt-4 max-w-2xl rounded-2xl border border-neutral-200 bg-white p-6 text-left shadow-sm"
+        className="mx-auto mt-4 max-w-2xl rounded-2xl border border-white/60 bg-white/40 p-6 text-left shadow-lg backdrop-blur-md"
       >
         <h2 className="text-sm font-medium text-neutral-900">Aktiviti terkini</h2>
         <ul className="mt-3 space-y-2 text-sm text-neutral-500">
@@ -47,14 +44,31 @@ export function HomeScreen() {
       </motion.div>
     </>
   )
+}
+
+export function HomeScreen() {
+  const [modalOpen, setModalOpen] = useState(false)
+  const { session } = useAuth()
+
+  if (session) {
+    return (
+      <AppShell>
+        <div className="text-center">
+          <Kandungan session />
+        </div>
+      </AppShell>
+    )
+  }
 
   return (
-    <div className="min-h-screen bg-neutral-50">
-      {session ? (
-        <TopNav />
-      ) : (
-        <header className="flex items-center justify-between px-8 py-5">
-          <img src={apmLogo} alt="Logo APM" className="h-14 w-14 object-contain" />
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-sky-100 via-sky-50 to-white">
+      <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-sky-300/40 blur-3xl" />
+      <div className="pointer-events-none absolute right-0 top-1/3 h-80 w-80 rounded-full bg-emerald-200/40 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-cyan-200/40 blur-3xl" />
+
+      <div className="relative">
+        <header className="flex items-center justify-between px-4 py-4 sm:px-8 sm:py-5">
+          <img src={apmLogo} alt="Logo APM" className="h-11 w-11 object-contain sm:h-14 sm:w-14" />
           <motion.button
             whileTap={{ scale: 0.97 }}
             onClick={() => setModalOpen(true)}
@@ -63,11 +77,11 @@ export function HomeScreen() {
             Log Masuk
           </motion.button>
         </header>
-      )}
 
-      <main className={session ? 'px-8 pb-16 text-center' : 'mx-auto max-w-4xl px-4 pb-16 pt-8 text-center'}>
-        {kandungan}
-      </main>
+        <main className="mx-auto max-w-4xl px-4 pb-16 pt-8 text-center">
+          <Kandungan session={false} />
+        </main>
+      </div>
 
       <LoginModal open={modalOpen} onClose={() => setModalOpen(false)} onSuccess={() => setModalOpen(false)} />
     </div>

@@ -8,7 +8,7 @@ type DashboardCardProps = {
 export function DashboardCard({ children, className = '' }: DashboardCardProps) {
   return (
     <div
-      className={`rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm ${className}`}
+      className={`rounded-2xl border border-white/60 bg-white/40 p-6 shadow-lg backdrop-blur-md ${className}`}
     >
       {children}
     </div>

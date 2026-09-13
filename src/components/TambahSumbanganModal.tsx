@@ -25,7 +25,7 @@ export function TambahSumbanganModal({ open, onClose, onSuccess }: TambahSumbang
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
             transition={{ duration: 0.15 }}
             onClick={(e) => e.stopPropagation()}
-            className="relative max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-neutral-200 bg-white p-8 shadow-xl"
+            className="relative max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-white/60 bg-white/90 p-8 shadow-xl backdrop-blur-md"
           >
             <button
               onClick={onClose}

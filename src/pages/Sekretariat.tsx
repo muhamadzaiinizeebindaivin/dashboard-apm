@@ -1,6 +1,6 @@
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { FileText, FileClock } from 'lucide-react'
+import { FileText, FileClock, Home, ChevronRight } from 'lucide-react'
 
 const PILIHAN = [
   {
@@ -23,8 +23,13 @@ export function Sekretariat() {
 
   return (
     <div>
-      <div className="py-2">
-        <p className="text-sm text-neutral-400">Portal &gt; Sekretariat</p>
+      <div className="mt-2 rounded-2xl border border-white/60 bg-white/40 px-5 py-4 shadow-lg backdrop-blur-md">
+        <div className="flex items-center gap-1.5 text-sm">
+          <Home size={13} className="text-neutral-400" />
+          <span className="text-neutral-400">Portal</span>
+          <ChevronRight size={13} className="text-neutral-300" />
+          <span className="font-medium text-emerald-700">Sekretariat</span>
+        </div>
         <h1 className="text-2xl font-semibold text-neutral-900">Sekretariat</h1>
       </div>
 
@@ -34,7 +39,7 @@ export function Sekretariat() {
             <Link key={to} to={to}>
               <motion.div
                 whileHover={{ y: -2 }}
-                className="flex items-start gap-4 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm"
+                className="flex items-start gap-4 rounded-2xl border border-white/60 bg-white/40 p-6 shadow-lg backdrop-blur-md"
               >
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800">
                   <Icon size={20} />

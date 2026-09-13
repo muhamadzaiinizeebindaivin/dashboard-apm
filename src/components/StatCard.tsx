@@ -20,7 +20,7 @@ export function StatCard({ label, value, detail }: StatCardProps) {
     <motion.div
       layout
       onClick={() => setExpanded((e) => !e)}
-      className="cursor-pointer rounded-xl border border-neutral-200 bg-white p-4 shadow-sm"
+      className="cursor-pointer rounded-xl border border-white/60 bg-white/40 p-4 shadow-lg backdrop-blur-md"
       transition={{ layout: { duration: 0.2, ease: 'easeOut' } }}
     >
       <motion.div layout="position" className="flex items-baseline justify-between">

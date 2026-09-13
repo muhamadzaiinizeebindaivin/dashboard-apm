@@ -45,11 +45,11 @@ export function Paras() {
       <div className="pointer-events-none absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-cyan-200/40 blur-3xl" />
 
       <div className="relative mx-auto max-w-4xl">
-        <div className="flex items-center justify-between rounded-2xl border border-white/60 bg-white/40 px-5 py-4 shadow-lg backdrop-blur-md">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/60 bg-white/40 px-5 py-4 shadow-lg backdrop-blur-md">
           <div className="flex items-center gap-3">
             <img src={apmLogo} alt="Logo APM" className="h-11 w-11 object-contain" />
             <div>
-              <h1 className="text-xl font-semibold text-neutral-900">Pasukan Respon Sokongan Bencana</h1>
+              <h1 className="text-base font-semibold text-neutral-900 sm:text-xl">Pasukan Respon Sokongan Bencana</h1>
               <p className="text-xs text-neutral-600">Pilih negeri untuk mula menjejak</p>
             </div>
           </div>

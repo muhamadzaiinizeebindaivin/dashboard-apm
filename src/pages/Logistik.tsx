@@ -1,10 +1,16 @@
+import { Home, ChevronRight } from 'lucide-react'
 import { DashboardCard } from '../components/DashboardCard'
 
 export function Logistik() {
   return (
     <div>
-      <div className="py-2">
-        <p className="text-sm text-neutral-400">Portal &gt; Logistik</p>
+      <div className="mt-2 rounded-2xl border border-white/60 bg-white/40 px-5 py-4 shadow-lg backdrop-blur-md">
+        <div className="flex items-center gap-1.5 text-sm">
+          <Home size={13} className="text-neutral-400" />
+          <span className="text-neutral-400">Portal</span>
+          <ChevronRight size={13} className="text-neutral-300" />
+          <span className="font-medium text-emerald-700">Logistik</span>
+        </div>
         <h1 className="text-2xl font-semibold text-neutral-900">Logistik</h1>
       </div>
 

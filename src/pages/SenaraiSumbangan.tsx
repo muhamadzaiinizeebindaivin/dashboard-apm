@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { Plus } from 'lucide-react'
+import { Plus, Home, ChevronRight } from 'lucide-react'
 import { DashboardCard } from '../components/DashboardCard'
 import { TambahSumbanganModal } from '../components/TambahSumbanganModal'
 import { supabase } from '../lib/supabase'
@@ -37,9 +37,14 @@ export function SenaraiSumbangan() {
 
   return (
     <div>
-      <div className="flex items-center justify-between py-2">
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/60 bg-white/40 px-5 py-4 shadow-lg backdrop-blur-md">
         <div>
-          <p className="text-sm text-neutral-400">Portal &gt; Sumbangan</p>
+          <div className="flex items-center gap-1.5 text-sm">
+            <Home size={13} className="text-neutral-400" />
+            <span className="text-neutral-400">Portal</span>
+            <ChevronRight size={13} className="text-neutral-300" />
+            <span className="font-medium text-emerald-700">Sumbangan</span>
+          </div>
           <h1 className="text-2xl font-semibold text-neutral-900">Senarai Sumbangan</h1>
         </div>
 

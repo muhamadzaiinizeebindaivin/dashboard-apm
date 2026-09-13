@@ -24,6 +24,12 @@ export function ParasJejak() {
   const trackingIdRef = useRef<string | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  // Center the map on the visitor's own position as soon as we can get it,
+  // even before they start tracking.
+  // Public map — anyone can see this, so it goes through the RPC
+  // (RLS blocks direct table reads for anonymous visitors) and refreshes
+  // by polling every 3s rather than a realtime subscription, since
+  // Supabase Realtime also enforces the table's RLS for anon clients.
   useEffect(() => {
     async function muatSemula() {
       const { data } = await supabase.rpc('get_paras_lokasi_by_negeri', {
@@ -38,6 +44,9 @@ export function ParasJejak() {
     return () => clearInterval(poll)
   }, [negeri])
 
+  // Restore an in-progress tracking session, but only if it belongs to
+  // this same negeri — otherwise a stray session for another negeri
+  // shouldn't silently resume on the wrong page.
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (!saved) return
@@ -95,6 +104,10 @@ export function ParasJejak() {
     setRalat('')
     const id = crypto.randomUUID()
 
+    // Wait for the FIRST location request (and its permission prompt) to
+    // actually succeed before starting the repeating interval — starting
+    // the interval immediately would fire overlapping requests while the
+    // prompt is still open, and those get auto-rejected by the browser.
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords
@@ -140,12 +153,13 @@ export function ParasJejak() {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-sky-100 via-sky-50 to-white px-4 py-10">
+      {/* Soft glow blobs behind the glass layer */}
       <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-sky-300/40 blur-3xl" />
       <div className="pointer-events-none absolute right-0 top-1/3 h-80 w-80 rounded-full bg-emerald-200/40 blur-3xl" />
       <div className="pointer-events-none absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-cyan-200/40 blur-3xl" />
 
       <div className="relative mx-auto max-w-2xl">
-        <div className="flex items-center justify-between rounded-2xl border border-white/60 bg-white/40 px-5 py-4 shadow-lg backdrop-blur-md">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/60 bg-white/40 px-5 py-4 shadow-lg backdrop-blur-md">
           <div className="flex items-center gap-3">
             <img src={apmLogo} alt="Logo APM" className="h-10 w-10 object-contain" />
             <h1 className="text-xl font-semibold text-neutral-900">{negeri}</h1>
