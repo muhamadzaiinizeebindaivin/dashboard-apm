@@ -25,19 +25,11 @@ export function ParasJejak() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
-    if (!navigator.geolocation) return
-    navigator.geolocation.getCurrentPosition((position) => {
-      setPosisiSaya([position.coords.latitude, position.coords.longitude])
-    })
-  }, [])
-
-  useEffect(() => {
     async function muatSemula() {
       const { data } = await supabase.rpc('get_paras_lokasi_by_negeri', {
         p_negeri: negeri,
       })
-      const semua = (data as LokasiPoint[]) ?? []
-      setLokasiAwam(semua.filter((p) => p.status === 'aktif'))
+      setLokasiAwam((data as LokasiPoint[]) ?? [])
     }
 
     muatSemula()
@@ -70,18 +62,6 @@ export function ParasJejak() {
     }
   }, [])
 
-  // Warn before an accidental tab close/refresh while tracking is active
-  useEffect(() => {
-    function handleBeforeUnload(e: BeforeUnloadEvent) {
-      if (sedangJejak) {
-        e.preventDefault()
-        e.returnValue = ''
-      }
-    }
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [sedangJejak])
-
   function hantarPosisi() {
     if (!trackingIdRef.current) return
 
@@ -113,13 +93,29 @@ export function ParasJejak() {
 
     setRalat('')
     const id = crypto.randomUUID()
-    trackingIdRef.current = id
-    setSedangJejak(true)
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ id, negeri }))
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords
+        setPosisiSaya([latitude, longitude])
 
-    hantarPosisi()
-    intervalRef.current = setInterval(hantarPosisi, 500)
+        trackingIdRef.current = id
+        setSedangJejak(true)
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ id, negeri }))
+
+        await supabase.rpc('track_paras_lokasi', {
+          p_id: id,
+          p_negeri: negeri,
+          p_latitude: latitude,
+          p_longitude: longitude,
+        })
+
+        intervalRef.current = setInterval(hantarPosisi, 500)
+      },
+      () => {
+        setRalat('Tidak dapat mengesan lokasi. Sila benarkan akses GPS.')
+      },
+    )
   }
 
   async function handleTamatJejak() {
@@ -142,9 +138,13 @@ export function ParasJejak() {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-50 px-4 py-10">
-      <div className="mx-auto max-w-2xl">
-        <div className="flex items-center justify-between">
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-sky-100 via-sky-50 to-white px-4 py-10">
+      <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-sky-300/40 blur-3xl" />
+      <div className="pointer-events-none absolute right-0 top-1/3 h-80 w-80 rounded-full bg-emerald-200/40 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-cyan-200/40 blur-3xl" />
+
+      <div className="relative mx-auto max-w-2xl">
+        <div className="flex items-center justify-between rounded-2xl border border-white/60 bg-white/40 px-5 py-4 shadow-lg backdrop-blur-md">
           <div className="flex items-center gap-3">
             <img src={apmLogo} alt="Logo APM" className="h-10 w-10 object-contain" />
             <h1 className="text-xl font-semibold text-neutral-900">{negeri}</h1>
@@ -152,22 +152,14 @@ export function ParasJejak() {
 
           <button
             onClick={() => navigate('/paras')}
-            disabled={sedangJejak}
-            title={sedangJejak ? 'Tamatkan jejak dahulu sebelum kembali' : undefined}
-            className="flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-600 hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-neutral-200"
+            className="flex items-center gap-1 rounded-full border border-white/60 bg-white/40 px-3 py-1.5 text-xs font-medium text-neutral-700 backdrop-blur-md transition-colors hover:border-emerald-500 hover:text-emerald-700"
           >
             <ArrowLeft size={14} />
             Kembali
           </button>
         </div>
 
-        {sedangJejak && (
-          <p className="mt-2 text-xs text-neutral-400">
-            Sila tekan "Tamat Jejak" sebelum kembali ke senarai negeri.
-          </p>
-        )}
-
-        <div className="mt-6 flex flex-col items-start gap-3 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+        <div className="mt-6 flex flex-col items-start gap-3 rounded-2xl border border-white/60 bg-white/40 p-6 shadow-lg backdrop-blur-md">
           <motion.button
             whileTap={{ scale: 0.97 }}
             onClick={sedangJejak ? handleTamatJejak : handleMulaJejak}
@@ -189,7 +181,7 @@ export function ParasJejak() {
           {ralat && <p className="text-sm text-red-600">{ralat}</p>}
         </div>
 
-        <div className="mt-6">
+        <div className="mt-6 rounded-2xl border border-white/60 bg-white/40 p-4 shadow-lg backdrop-blur-md">
           <h2 className="mb-3 text-sm font-medium text-neutral-900">
             Peta lokasi — {negeri}
           </h2>

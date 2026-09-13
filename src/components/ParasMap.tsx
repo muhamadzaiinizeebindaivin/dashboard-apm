@@ -1,28 +1,52 @@
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { LocateFixed, Maximize2, Minimize2 } from 'lucide-react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
-import markerIcon from 'leaflet/dist/images/marker-icon.png'
-import markerShadow from 'leaflet/dist/images/marker-shadow.png'
+import logoJohor from '../assets/negeri/johor.png'
+import logoKedah from '../assets/negeri/kedah.png'
+import logoKelantan from '../assets/negeri/kelantan.png'
+import logoMelaka from '../assets/negeri/melaka.png'
+import logoNegeriSembilan from '../assets/negeri/negeri_sembilan.png'
+import logoPahang from '../assets/negeri/pahang.png'
+import logoPulauPinang from '../assets/negeri/pulau_pinang.png'
+import logoPerak from '../assets/negeri/perak.png'
+import logoPerlis from '../assets/negeri/perlis.png'
+import logoSabah from '../assets/negeri/sabah.png'
+import logoSarawak from '../assets/negeri/sarawak.png'
+import logoSelangor from '../assets/negeri/selangor.png'
+import logoTerengganu from '../assets/negeri/terengganu.png'
+import logoWilayahPersekutuan from '../assets/negeri/wilayah_persekutuan.png'
 
-// Vite/bundler fix — Leaflet's default marker icon paths break without this
-const defaultIcon = L.icon({
-  iconUrl: markerIcon,
-  iconRetinaUrl: markerIcon2x,
-  shadowUrl: markerShadow,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-})
-L.Marker.prototype.options.icon = defaultIcon
+const NEGERI_LOGOS: Record<string, string> = {
+  Johor: logoJohor,
+  Kedah: logoKedah,
+  Kelantan: logoKelantan,
+  Melaka: logoMelaka,
+  'Negeri Sembilan': logoNegeriSembilan,
+  Pahang: logoPahang,
+  'Pulau Pinang': logoPulauPinang,
+  Perak: logoPerak,
+  Perlis: logoPerlis,
+  Sabah: logoSabah,
+  Sarawak: logoSarawak,
+  Selangor: logoSelangor,
+  Terengganu: logoTerengganu,
+  'Wilayah Persekutuan': logoWilayahPersekutuan,
+}
 
-// Blue "you are here" marker, distinct from the standard pins
-const posisiSayaIcon = L.divIcon({
-  className: '',
-  html: '<div style="width:16px;height:16px;border-radius:9999px;background:#2563eb;border:3px solid white;box-shadow:0 0 0 2px #2563eb66;"></div>',
-  iconSize: [16, 16],
-  iconAnchor: [8, 8],
-})
+function negeriIcon(negeri: string) {
+  const logo = NEGERI_LOGOS[negeri]
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:32px;height:22px;border-radius:4px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.4);">
+      <img src="${logo}" style="width:100%;height:100%;object-fit:cover;" />
+    </div>`,
+    iconSize: [32, 22],
+    iconAnchor: [16, 11],
+    popupAnchor: [0, -11],
+  })
+}
 
 export type LokasiPoint = {
   id: string
@@ -38,44 +62,89 @@ type ParasMapProps = {
   center?: [number, number]
 }
 
-// react-leaflet's MapContainer `center` prop only sets the INITIAL view —
-// it won't re-pan the map when the prop changes later. This helper uses
-// the map instance directly to fly to a new center whenever it updates.
-function RecenterMap({ center }: { center: [number, number] }) {
+function LocateButton({ center }: { center: [number, number] }) {
   const map = useMap()
+
+  return (
+    <button
+      type="button"
+      onClick={() => map.flyTo(center, 15, { duration: 0.8 })}
+      title="Pusatkan pada lokasi saya"
+      className="absolute bottom-4 right-4 z-[1000] flex h-10 w-10 items-center justify-center rounded-full border border-neutral-200 bg-white text-emerald-700 shadow-md hover:bg-neutral-50"
+    >
+      <LocateFixed size={18} />
+    </button>
+  )
+}
+
+function FullscreenResizeHandler() {
+  const map = useMap()
+
   useEffect(() => {
-    map.flyTo(center, map.getZoom(), { duration: 0.8 })
-  }, [center, map])
+    function handleChange() {
+      setTimeout(() => map.invalidateSize(), 100)
+    }
+    document.addEventListener('fullscreenchange', handleChange)
+    return () => document.removeEventListener('fullscreenchange', handleChange)
+  }, [map])
+
   return null
 }
 
 export function ParasMap({ points, center }: ParasMapProps) {
+  const wrapperRef = useRef<HTMLDivElement>(null)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+
+  useEffect(() => {
+    function handleChange() {
+      setIsFullscreen(document.fullscreenElement === wrapperRef.current)
+    }
+    document.addEventListener('fullscreenchange', handleChange)
+    return () => document.removeEventListener('fullscreenchange', handleChange)
+  }, [])
+
+  function toggleFullscreen() {
+    if (document.fullscreenElement) {
+      document.exitFullscreen()
+    } else {
+      wrapperRef.current?.requestFullscreen()
+    }
+  }
+
   const initialCenter: [number, number] =
-    center ?? (points.length > 0 ? [points[0].latitude, points[0].longitude] : [4.2105, 101.9758]) // tengah Malaysia
+    center ?? (points.length > 0 ? [points[0].latitude, points[0].longitude] : [4.2105, 101.9758])
 
   return (
-    <div className="h-96 w-full overflow-hidden rounded-2xl border border-neutral-200">
+    <div
+      ref={wrapperRef}
+      className={`relative overflow-hidden border border-neutral-200 ${
+        isFullscreen ? 'h-screen w-screen rounded-none' : 'h-96 w-full rounded-2xl'
+      }`}
+    >
       <MapContainer center={initialCenter} zoom={center ? 14 : points.length > 0 ? 8 : 6} className="h-full w-full">
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        {center && <RecenterMap center={center} />}
-        {center && (
-          <Marker position={center} icon={posisiSayaIcon}>
-            <Popup>Lokasi anda sekarang</Popup>
-          </Marker>
-        )}
         {points.map((p) => (
-          <Marker key={p.id} position={[p.latitude, p.longitude]}>
+          <Marker key={p.id} position={[p.latitude, p.longitude]} icon={negeriIcon(p.negeri)}>
             <Popup>
               <span className="font-medium">{p.negeri}</span>
-              <br />
-              {new Date(p.created_at).toLocaleString('ms-MY')}
             </Popup>
           </Marker>
         ))}
+        {center && <LocateButton center={center} />}
+        <FullscreenResizeHandler />
       </MapContainer>
+
+      <button
+        type="button"
+        onClick={toggleFullscreen}
+        title={isFullscreen ? 'Keluar skrin penuh' : 'Skrin penuh'}
+        className="absolute right-4 top-4 z-[1000] flex h-10 w-10 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-700 shadow-md hover:bg-neutral-50"
+      >
+        {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+      </button>
     </div>
   )
 }
