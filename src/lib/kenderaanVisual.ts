@@ -39,11 +39,27 @@ export const JENIS_GRADIENT: Record<string, string> = {
   marin: 'from-cyan-400 to-cyan-600',
 }
 
-// Default photo shown when a specific vehicle has no foto_url of its own.
+// Default photo shown when no 3D model is available for this type either.
 export const JENIS_DEFAULT_PHOTO: Record<string, string> = {
   '4wd': photo4wd,
   ambulans: photoAmbulans,
   lori: photoLori,
   motorsikal: photoMotorsikal,
   marin: photoMarin,
+}
+
+// Auto-detect whichever .glb model files exist in this folder — so the
+// app works fine even if you only have some of the 5 types so far. To add
+// one, just drop a file named exactly `<jenis>.glb` in here, e.g.
+// src/assets/kenderaan-model/4wd.glb
+const modelModules = import.meta.glob('../assets/kenderaan-model/*.glb', {
+  eager: true,
+  query: '?url',
+  import: 'default',
+})
+
+export const JENIS_DEFAULT_MODEL: Record<string, string> = {}
+for (const path in modelModules) {
+  const match = path.match(/([^/]+)\.glb$/)
+  if (match) JENIS_DEFAULT_MODEL[match[1]] = modelModules[path] as string
 }

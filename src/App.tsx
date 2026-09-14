@@ -13,6 +13,7 @@ import { LaporanAwal } from './pages/LaporanAwal'
 import { LaporanSemasa } from './pages/LaporanSemasa'
 import { Logistik } from './pages/Logistik'
 import { SenaraiSumbangan } from './pages/SenaraiSumbangan'
+import { SenaraiSumbanganNegeri } from './pages/SenaraiSumbanganNegeri'
 
 // Lazy-loaded: these three pull in Leaflet/react-leaflet, which is a large
 // dependency — only download it when someone actually visits a map page,
@@ -51,6 +52,7 @@ function App() {
                 </Route>
                 <Route path="logistik" element={<Logistik />} />
                 <Route path="senarai-sumbangan" element={<SenaraiSumbangan />} />
+                <Route path="senarai-sumbangan/:negeri" element={<SenaraiSumbanganNegeri />} />
                 <Route path="senarai-paras" element={<SenaraiParas />} />
               </Route>
             </Route>

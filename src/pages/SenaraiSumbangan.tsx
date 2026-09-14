@@ -1,8 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Plus, Home, ChevronRight } from 'lucide-react'
-import { TambahSumbanganModal } from '../components/TambahSumbanganModal'
+import { Home, ChevronRight } from 'lucide-react'
 import { NEGERI_FLAG, NEGERI_LIST } from '../lib/negeriVisual'
 import { supabase } from '../lib/supabase'
 
@@ -10,7 +9,6 @@ export function SenaraiSumbangan() {
   const navigate = useNavigate()
   const [kiraanNegeri, setKiraanNegeri] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
-  const [modalOpen, setModalOpen] = useState(false)
 
   const muatSemula = useCallback(async () => {
     setLoading(true)
@@ -33,23 +31,19 @@ export function SenaraiSumbangan() {
       <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/60 bg-white/40 px-5 py-4 shadow-lg backdrop-blur-md">
         <div>
           <div className="flex items-center gap-1.5 text-sm">
-            <Home size={13} className="text-neutral-400" />
-            <span className="text-neutral-400">Portal</span>
+            <button
+              onClick={() => navigate('/')}
+              className="flex items-center gap-1.5 text-neutral-400 transition-colors hover:text-emerald-700"
+            >
+              <Home size={13} />
+              Portal
+            </button>
             <ChevronRight size={13} className="text-neutral-300" />
             <span className="font-medium text-emerald-700">Sumbangan</span>
           </div>
           <h1 className="text-2xl font-semibold text-neutral-900">Senarai Sumbangan</h1>
           <p className="text-xs text-neutral-500">Pilih negeri untuk lihat senarai</p>
         </div>
-
-        <motion.button
-          whileTap={{ scale: 0.97 }}
-          onClick={() => setModalOpen(true)}
-          className="flex items-center gap-1 rounded-full bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
-        >
-          <Plus size={16} />
-          Tambah
-        </motion.button>
       </div>
 
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
@@ -65,7 +59,9 @@ export function SenaraiSumbangan() {
           >
             <img src={NEGERI_FLAG[negeri]} alt={negeri} className="h-16 w-full rounded object-contain" />
             <span className="text-center leading-tight">{negeri}</span>
-            {!loading && (
+            {loading ? (
+              <span className="h-5 w-8 animate-pulse rounded-full bg-neutral-100" />
+            ) : (
               <span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs font-medium text-neutral-600">
                 {kiraanNegeri[negeri] ?? 0}
               </span>
@@ -73,15 +69,6 @@ export function SenaraiSumbangan() {
           </motion.button>
         ))}
       </div>
-
-      <TambahSumbanganModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSuccess={() => {
-          setModalOpen(false)
-          muatSemula()
-        }}
-      />
     </div>
   )
 }

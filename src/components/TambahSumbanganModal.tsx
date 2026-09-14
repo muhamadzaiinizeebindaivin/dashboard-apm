@@ -6,9 +6,10 @@ type TambahSumbanganModalProps = {
   open: boolean
   onClose: () => void
   onSuccess: () => void
+  negeriTetap?: string
 }
 
-export function TambahSumbanganModal({ open, onClose, onSuccess }: TambahSumbanganModalProps) {
+export function TambahSumbanganModal({ open, onClose, onSuccess, negeriTetap }: TambahSumbanganModalProps) {
   return (
     <AnimatePresence>
       {open && (
@@ -36,7 +37,7 @@ export function TambahSumbanganModal({ open, onClose, onSuccess }: TambahSumbang
 
             <h2 className="mb-6 text-base font-semibold text-neutral-900">Tambah Sumbangan</h2>
 
-            <SumbanganForm onSuccess={onSuccess} />
+            <SumbanganForm onSuccess={onSuccess} negeriTetap={negeriTetap} />
           </motion.div>
         </motion.div>
       )}

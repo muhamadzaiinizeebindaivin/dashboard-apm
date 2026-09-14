@@ -27,13 +27,14 @@ type ItemSumbangan = { id: number; nama: string; kuantiti: string; unit: string 
 
 type SumbanganFormProps = {
   onSuccess?: () => void
+  negeriTetap?: string
 }
 
-export function SumbanganForm({ onSuccess }: SumbanganFormProps) {
+export function SumbanganForm({ onSuccess, negeriTetap }: SumbanganFormProps) {
   const [jenisKumpulan, setJenisKumpulan] = useState('')
   const [namaKumpulan, setNamaKumpulan] = useState('')
   const [noTel, setNoTel] = useState('')
-  const [negeri, setNegeri] = useState('')
+  const [negeri, setNegeri] = useState(negeriTetap ?? '')
   const [jenisSumbangan, setJenisSumbangan] = useState<string>('')
   const [lokasiBantuan, setLokasiBantuan] = useState('')
   const [items, setItems] = useState<ItemSumbangan[]>([{ id: 1, nama: '', kuantiti: '', unit: '' }])
@@ -105,7 +106,7 @@ export function SumbanganForm({ onSuccess }: SumbanganFormProps) {
     setJenisKumpulan('')
     setNamaKumpulan('')
     setNoTel('')
-    setNegeri('')
+    setNegeri(negeriTetap ?? '')
     setJenisSumbangan('')
     setLokasiBantuan('')
     setItems([{ id: 1, nama: '', kuantiti: '', unit: '' }])
@@ -166,7 +167,8 @@ export function SumbanganForm({ onSuccess }: SumbanganFormProps) {
         <select
           value={negeri}
           onChange={(e) => setNegeri(e.target.value)}
-          className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-800 outline-none focus:border-emerald-600"
+          disabled={!!negeriTetap}
+          className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-800 outline-none focus:border-emerald-600 disabled:bg-neutral-50 disabled:text-neutral-500"
         >
           <option value="">Pilih negeri</option>
           {NEGERI_LIST.map((n) => (

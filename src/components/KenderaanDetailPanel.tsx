@@ -3,7 +3,7 @@ import type { ChangeEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Pencil, Trash2, Camera } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { JENIS_KENDERAAN, JENIS_LABEL, JENIS_DEFAULT_PHOTO } from '../lib/kenderaanVisual'
+import { JENIS_KENDERAAN, JENIS_LABEL, JENIS_DEFAULT_PHOTO, JENIS_DEFAULT_MODEL } from '../lib/kenderaanVisual'
 
 export type KenderaanRow = {
   id: string
@@ -41,6 +41,12 @@ export function KenderaanDetailPanel({
   const [menyimpan, setMenyimpan] = useState(false)
   const [ralat, setRalat] = useState('')
   const fotoInputRef = useRef<HTMLInputElement>(null)
+
+  // model-viewer is a large library — only load it when this panel is
+  // actually used, not on every page.
+  useEffect(() => {
+    import('@google/model-viewer')
+  }, [])
 
   useEffect(() => {
     if (!kenderaan) return
@@ -134,6 +140,10 @@ export function KenderaanDetailPanel({
     : fotoPreview ?? kenderaan?.foto_url ?? gambarDefault
   const adaFotoUntukDipadam = !fotoDipadam && (fotoPreview || kenderaan?.foto_url)
 
+  // 3D model per vehicle TYPE (bundled asset), not per-individual-vehicle —
+  // shown automatically whenever one exists for this jenis_kenderaan.
+  const modelTunjuk = kenderaan ? JENIS_DEFAULT_MODEL[kenderaan.jenis_kenderaan] : null
+
   return (
     <AnimatePresence>
       {kenderaan && (
@@ -150,7 +160,7 @@ export function KenderaanDetailPanel({
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'tween', duration: 0.25, ease: 'easeOut' }}
-            className="fixed inset-y-0 right-0 z-50 w-full max-w-lg overflow-y-auto border-l border-white/60 bg-white/95 shadow-2xl backdrop-blur-md"
+            className="fixed inset-y-0 right-0 z-50 w-full max-w-2xl overflow-y-auto border-l border-white/60 bg-white/95 shadow-2xl backdrop-blur-md"
           >
             {/* Header: name, plate, status badge */}
             <div className="flex items-start justify-between border-b border-neutral-100 px-6 py-5">
@@ -181,17 +191,28 @@ export function KenderaanDetailPanel({
             </div>
 
             <div className="p-6">
-              {/* Large photo / default illustration */}
+              {/* 3D model (if one exists for this vehicle type), otherwise photo / default illustration */}
               <div className="relative">
-                <div className="relative flex h-48 w-full items-center justify-center overflow-hidden rounded-2xl bg-neutral-100">
-                  <img
-                    src={fotoTunjuk}
-                    alt={kenderaan.nama_kenderaan}
-                    className={`h-full w-full ${fotoPreview && !fotoDipadam ? 'object-contain' : 'object-cover'}`}
-                  />
+                <div className="relative flex h-96 w-full items-center justify-center overflow-hidden rounded-2xl bg-neutral-100">
+                  {modelTunjuk ? (
+                    <model-viewer
+                      src={modelTunjuk}
+                      alt={kenderaan.nama_kenderaan}
+                      camera-controls
+                      auto-rotate
+                      shadow-intensity="1"
+                      style={{ width: '100%', height: '100%' }}
+                    />
+                  ) : (
+                    <img
+                      src={fotoTunjuk}
+                      alt={kenderaan.nama_kenderaan}
+                      className={`h-full w-full ${fotoPreview && !fotoDipadam ? 'object-contain' : 'object-cover'}`}
+                    />
+                  )}
                 </div>
 
-                {editing && (
+                {editing && !modelTunjuk && (
                   <div className="absolute bottom-3 right-3 flex gap-2">
                     {adaFotoUntukDipadam && (
                       <button
