@@ -23,7 +23,7 @@ const NEGERI_LIST = [
 const JENIS_KUMPULAN = ['NGO', 'CDA', 'PERSATUAN', 'KELAB', 'PERSEKUTUAN']
 const JENIS_SUMBANGAN = ['BAHAN MENTAH', 'PERKHIDMATAN'] as const
 
-type ItemSumbangan = { id: number; keterangan: string }
+type ItemSumbangan = { id: number; nama: string; kuantiti: string; unit: string }
 
 type SumbanganFormProps = {
   onSuccess?: () => void
@@ -32,22 +32,23 @@ type SumbanganFormProps = {
 export function SumbanganForm({ onSuccess }: SumbanganFormProps) {
   const [jenisKumpulan, setJenisKumpulan] = useState('')
   const [namaKumpulan, setNamaKumpulan] = useState('')
+  const [noTel, setNoTel] = useState('')
   const [negeri, setNegeri] = useState('')
   const [jenisSumbangan, setJenisSumbangan] = useState<string>('')
   const [lokasiBantuan, setLokasiBantuan] = useState('')
-  const [items, setItems] = useState<ItemSumbangan[]>([{ id: 1, keterangan: '' }])
+  const [items, setItems] = useState<ItemSumbangan[]>([{ id: 1, nama: '', kuantiti: '', unit: '' }])
   const [dihantar, setDihantar] = useState(false)
   const [menghantar, setMenghantar] = useState(false)
   const [ralat, setRalat] = useState('')
 
-  function updateItem(id: number, value: string) {
-    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, keterangan: value } : it)))
+  function updateItem(id: number, field: 'nama' | 'kuantiti' | 'unit', value: string) {
+    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, [field]: value } : it)))
   }
 
   function addItem() {
     setItems((prev) => [
       ...prev,
-      { id: prev.length ? prev[prev.length - 1].id + 1 : 1, keterangan: '' },
+      { id: prev.length ? prev[prev.length - 1].id + 1 : 1, nama: '', kuantiti: '', unit: '' },
     ])
   }
 
@@ -58,7 +59,7 @@ export function SumbanganForm({ onSuccess }: SumbanganFormProps) {
   async function handleHantar() {
     setRalat('')
 
-    if (!jenisKumpulan || !namaKumpulan || !negeri || !jenisSumbangan || !lokasiBantuan) {
+    if (!jenisKumpulan || !namaKumpulan || !noTel || !negeri || !jenisSumbangan || !lokasiBantuan) {
       setRalat('Sila lengkapkan semua medan sebelum menghantar.')
       return
     }
@@ -71,6 +72,7 @@ export function SumbanganForm({ onSuccess }: SumbanganFormProps) {
       id: sumbanganId,
       jenis_kumpulan: jenisKumpulan,
       nama_kumpulan: namaKumpulan,
+      no_tel: noTel,
       negeri,
       jenis_sumbangan: jenisSumbangan,
       lokasi_bantuan: lokasiBantuan,
@@ -83,8 +85,13 @@ export function SumbanganForm({ onSuccess }: SumbanganFormProps) {
     }
 
     const itemRows = items
-      .filter((it) => it.keterangan.trim() !== '')
-      .map((it) => ({ sumbangan_id: sumbanganId, keterangan: it.keterangan }))
+      .filter((it) => it.nama.trim() !== '')
+      .map((it) => ({
+        sumbangan_id: sumbanganId,
+        nama_item: it.nama,
+        kuantiti: it.kuantiti,
+        unit: it.unit,
+      }))
 
     if (itemRows.length > 0) {
       const { error: itemsError } = await supabase.from('sumbangan_items').insert(itemRows)
@@ -97,10 +104,11 @@ export function SumbanganForm({ onSuccess }: SumbanganFormProps) {
 
     setJenisKumpulan('')
     setNamaKumpulan('')
+    setNoTel('')
     setNegeri('')
     setJenisSumbangan('')
     setLokasiBantuan('')
-    setItems([{ id: 1, keterangan: '' }])
+    setItems([{ id: 1, nama: '', kuantiti: '', unit: '' }])
 
     setMenghantar(false)
     setDihantar(true)
@@ -136,6 +144,19 @@ export function SumbanganForm({ onSuccess }: SumbanganFormProps) {
           value={namaKumpulan}
           onChange={(e) => setNamaKumpulan(e.target.value)}
           placeholder="Contoh: Persatuan Bulan Sabit Merah"
+          className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-800 outline-none focus:border-emerald-600"
+        />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium text-neutral-700">
+          No. Tel dihubungi
+        </label>
+        <input
+          type="tel"
+          value={noTel}
+          onChange={(e) => setNoTel(e.target.value)}
+          placeholder="Contoh: 012-3456789"
           className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-800 outline-none focus:border-emerald-600"
         />
       </div>
@@ -207,10 +228,23 @@ export function SumbanganForm({ onSuccess }: SumbanganFormProps) {
           {items.map((item) => (
             <div key={item.id} className="flex items-center gap-2">
               <input
-                value={item.keterangan}
-                onChange={(e) => updateItem(item.id, e.target.value)}
-                placeholder="Contoh: 15 buah / 15 orang"
+                value={item.nama}
+                onChange={(e) => updateItem(item.id, 'nama', e.target.value)}
+                placeholder="Contoh: Tilam"
                 className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-800 outline-none focus:border-emerald-600"
+              />
+              <input
+                value={item.kuantiti}
+                onChange={(e) => updateItem(item.id, 'kuantiti', e.target.value)}
+                placeholder="15"
+                inputMode="numeric"
+                className="w-20 shrink-0 rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-800 outline-none focus:border-emerald-600"
+              />
+              <input
+                value={item.unit}
+                onChange={(e) => updateItem(item.id, 'unit', e.target.value)}
+                placeholder="orang"
+                className="w-24 shrink-0 rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-800 outline-none focus:border-emerald-600"
               />
               {items.length > 1 && (
                 <button
