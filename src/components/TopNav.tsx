@@ -6,7 +6,6 @@ import apmLogo from '../assets/apm-logo.png'
 import { useAuth } from '../hooks/useAuth'
 import { NAV_TABS } from '../lib/navTabs'
 import { ROLE_LABEL } from '../lib/roles'
-import { AnimatePresence as NavAnimatePresence } from 'framer-motion'
 import { ConfirmModal } from './ConfirmModal'
 
 export function TopNav() {
