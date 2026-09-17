@@ -1,15 +1,17 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { X } from 'lucide-react'
 import { SumbanganForm } from './SumbanganForm'
+import type { ExistingSumbangan } from './SumbanganForm'
 
 type TambahSumbanganModalProps = {
   open: boolean
   onClose: () => void
   onSuccess: () => void
   negeriTetap?: string
+  existing?: ExistingSumbangan
 }
 
-export function TambahSumbanganModal({ open, onClose, onSuccess, negeriTetap }: TambahSumbanganModalProps) {
+export function TambahSumbanganModal({ open, onClose, onSuccess, negeriTetap, existing }: TambahSumbanganModalProps) {
   return (
     <AnimatePresence>
       {open && (
@@ -35,9 +37,11 @@ export function TambahSumbanganModal({ open, onClose, onSuccess, negeriTetap }: 
               <X size={18} />
             </button>
 
-            <h2 className="mb-6 text-base font-semibold text-neutral-900">Tambah Sumbangan</h2>
+            <h2 className="mb-6 text-base font-semibold text-neutral-900">
+              {existing ? 'Kemas Kini Sumbangan' : 'Tambah Sumbangan'}
+            </h2>
 
-            <SumbanganForm onSuccess={onSuccess} negeriTetap={negeriTetap} />
+            <SumbanganForm onSuccess={onSuccess} negeriTetap={negeriTetap} existing={existing} />
           </motion.div>
         </motion.div>
       )}

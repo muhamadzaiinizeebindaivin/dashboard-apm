@@ -3,7 +3,7 @@ import type { ChangeEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Pencil, Trash2, Camera } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { JENIS_KENDERAAN, JENIS_LABEL, JENIS_DEFAULT_PHOTO, JENIS_DEFAULT_MODEL } from '../lib/kenderaanVisual'
+import { JENIS_KENDERAAN, JENIS_LABEL, JENIS_DEFAULT_PHOTO } from '../lib/kenderaanVisual'
 
 export type KenderaanRow = {
   id: string
@@ -41,12 +41,6 @@ export function KenderaanDetailPanel({
   const [menyimpan, setMenyimpan] = useState(false)
   const [ralat, setRalat] = useState('')
   const fotoInputRef = useRef<HTMLInputElement>(null)
-
-  // model-viewer is a large library — only load it when this panel is
-  // actually used, not on every page.
-  useEffect(() => {
-    import('@google/model-viewer')
-  }, [])
 
   useEffect(() => {
     if (!kenderaan) return
@@ -140,10 +134,6 @@ export function KenderaanDetailPanel({
     : fotoPreview ?? kenderaan?.foto_url ?? gambarDefault
   const adaFotoUntukDipadam = !fotoDipadam && (fotoPreview || kenderaan?.foto_url)
 
-  // 3D model per vehicle TYPE (bundled asset), not per-individual-vehicle —
-  // shown automatically whenever one exists for this jenis_kenderaan.
-  const modelTunjuk = kenderaan ? JENIS_DEFAULT_MODEL[kenderaan.jenis_kenderaan] : null
-
   return (
     <AnimatePresence>
       {kenderaan && (
@@ -191,28 +181,17 @@ export function KenderaanDetailPanel({
             </div>
 
             <div className="p-6">
-              {/* 3D model (if one exists for this vehicle type), otherwise photo / default illustration */}
+              {/* Photo / default illustration */}
               <div className="relative">
                 <div className="relative flex h-96 w-full items-center justify-center overflow-hidden rounded-2xl bg-neutral-100">
-                  {modelTunjuk ? (
-                    <model-viewer
-                      src={modelTunjuk}
-                      alt={kenderaan.nama_kenderaan}
-                      camera-controls
-                      auto-rotate
-                      shadow-intensity="1"
-                      style={{ width: '100%', height: '100%' }}
-                    />
-                  ) : (
-                    <img
-                      src={fotoTunjuk}
-                      alt={kenderaan.nama_kenderaan}
-                      className={`h-full w-full ${fotoPreview && !fotoDipadam ? 'object-contain' : 'object-cover'}`}
-                    />
-                  )}
+                  <img
+                    src={fotoTunjuk}
+                    alt={kenderaan.nama_kenderaan}
+                    className={`h-full w-full ${fotoPreview && !fotoDipadam ? 'object-contain' : 'object-cover'}`}
+                  />
                 </div>
 
-                {editing && !modelTunjuk && (
+                {editing && (
                   <div className="absolute bottom-3 right-3 flex gap-2">
                     {adaFotoUntukDipadam && (
                       <button

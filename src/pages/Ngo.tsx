@@ -1,7 +1,9 @@
 import { useState } from 'react'
+import type { FormEvent } from 'react'
 import { motion } from 'framer-motion'
 import { Home, ChevronRight } from 'lucide-react'
 import { DashboardCard } from '../components/DashboardCard'
+import { supabase } from '../lib/supabase'
 
 const NEGERI_LIST = [
   'Johor',
@@ -30,7 +32,9 @@ export function Ngo() {
   const [lokasiBencana, setLokasiBencana] = useState('')
   const [bantuanDipilih, setBantuanDipilih] = useState<string[]>([])
   const [lainLain, setLainLain] = useState('')
+  const [menghantar, setMenghantar] = useState(false)
   const [dihantar, setDihantar] = useState(false)
+  const [ralat, setRalat] = useState('')
 
   function toggleBantuan(jenis: string) {
     setBantuanDipilih((prev) =>
@@ -38,10 +42,41 @@ export function Ngo() {
     )
   }
 
-  function handleHantar() {
-    // TODO: sambungkan ke jadual Supabase sebaik sahaja tab NGO diaktifkan
+  async function handleHantar(e: FormEvent) {
+    e.preventDefault()
+    setRalat('')
+
+    const jenisBantuan = [...bantuanDipilih, ...(lainLain.trim() ? [lainLain.trim()] : [])]
+
+    if (!namaKumpulan || !negeri || !lokasiBencana || jenisBantuan.length === 0) {
+      setRalat('Sila lengkapkan semua medan dan pilih sekurang-kurangnya satu jenis bantuan.')
+      return
+    }
+
+    setMenghantar(true)
+
+    const { error } = await supabase.from('ngo').insert({
+      nama_kumpulan: namaKumpulan,
+      negeri,
+      lokasi_bencana: lokasiBencana,
+      jenis_bantuan: jenisBantuan,
+    })
+
+    setMenghantar(false)
+
+    if (error) {
+      setRalat('Gagal menghantar. Sila cuba lagi.')
+      return
+    }
+
+    setNamaKumpulan('')
+    setNegeri('')
+    setLokasiBencana('')
+    setBantuanDipilih([])
+    setLainLain('')
+
     setDihantar(true)
-    setTimeout(() => setDihantar(false), 2000)
+    setTimeout(() => setDihantar(false), 1500)
   }
 
   return (
@@ -57,7 +92,7 @@ export function Ngo() {
       </div>
 
       <DashboardCard className="mt-6 max-w-xl">
-        <div className="space-y-4">
+        <form onSubmit={handleHantar} className="space-y-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-neutral-700">
               Nama kumpulan
@@ -131,15 +166,17 @@ export function Ngo() {
             />
           </div>
 
+          {ralat && <p className="text-sm text-red-600">{ralat}</p>}
+
           <motion.button
-            type="button"
-            onClick={handleHantar}
+            type="submit"
+            disabled={menghantar}
             whileTap={{ scale: 0.97 }}
-            className="w-full rounded-lg bg-emerald-700 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800"
+            className="w-full rounded-lg bg-emerald-700 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
           >
-            {dihantar ? 'Berjaya dihantar ✓' : 'HANTAR'}
+            {menghantar ? 'Menghantar...' : dihantar ? 'Berjaya dihantar ✓' : 'HANTAR'}
           </motion.button>
-        </div>
+        </form>
       </DashboardCard>
     </div>
   )

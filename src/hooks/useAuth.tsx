@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 
-export type UserRole = 'pkop' | 'pkon' | 'pkod'
+export type UserRole = 'pkop' | 'pkon'
 
 type Profile = {
   id: string

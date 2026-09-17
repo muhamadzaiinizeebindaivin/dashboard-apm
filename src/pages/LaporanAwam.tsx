@@ -11,6 +11,12 @@ const JENIS_LAPORAN = [
   { value: 'semasa', label: 'Laporan Semasa' },
 ] as const
 
+const JENIS_DIBENARKAN = [
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+]
+
 export function LaporanAwam() {
   const navigate = useNavigate()
   const [fail, setFail] = useState<File | null>(null)
@@ -21,16 +27,25 @@ export function LaporanAwam() {
   const [ralat, setRalat] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  function terimaFail(file: File) {
+    if (!JENIS_DIBENARKAN.includes(file.type)) {
+      setRalat('Hanya fail PDF, Word (.docx) atau Excel (.xlsx) dibenarkan.')
+      return
+    }
+    setRalat('')
+    setFail(file)
+  }
+
   function handleDrop(e: DragEvent<HTMLDivElement>) {
     e.preventDefault()
     setDragging(false)
     const dropped = e.dataTransfer.files?.[0]
-    if (dropped) setFail(dropped)
+    if (dropped) terimaFail(dropped)
   }
 
   function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
     const picked = e.target.files?.[0]
-    if (picked) setFail(picked)
+    if (picked) terimaFail(picked)
   }
 
   async function handleHantar() {
@@ -38,6 +53,10 @@ export function LaporanAwam() {
 
     if (!fail) {
       setRalat('Sila muat naik fail terlebih dahulu.')
+      return
+    }
+    if (!JENIS_DIBENARKAN.includes(fail.type)) {
+      setRalat('Hanya fail PDF, Word (.docx) atau Excel (.xlsx) dibenarkan.')
       return
     }
     if (!jenis) {
@@ -124,6 +143,7 @@ export function LaporanAwam() {
                 <input
                   ref={fileInputRef}
                   type="file"
+                  accept="application/pdf,.docx,.xlsx"
                   onChange={handleFileChange}
                   className="hidden"
                 />
@@ -149,6 +169,7 @@ export function LaporanAwam() {
                     <p className="text-sm text-neutral-600">
                       Seret &amp; lepas fail di sini, atau <span className="font-medium text-emerald-700">klik untuk pilih</span>
                     </p>
+                    <p className="text-xs text-neutral-400">Format PDF, Word (.docx) atau Excel (.xlsx) sahaja</p>
                   </>
                 )}
               </div>

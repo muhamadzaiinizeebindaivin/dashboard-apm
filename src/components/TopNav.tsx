@@ -4,26 +4,16 @@ import { NavLink } from 'react-router-dom'
 import { Search, Mail, Bell, LogOut, Menu, X } from 'lucide-react'
 import apmLogo from '../assets/apm-logo.png'
 import { useAuth } from '../hooks/useAuth'
-
-const TABS = [
-  { to: '/', label: 'Laman Utama' },
-  { to: '/ngo', label: 'NGO' },
-  { to: '/bencana', label: 'Bencana' },
-  { to: '/sekretariat', label: 'Sekretariat' },
-  { to: '/logistik', label: 'Logistik' },
-  { to: '/senarai-sumbangan', label: 'Sumbangan' },
-  { to: '/senarai-paras', label: 'PARAS' },
-]
-
-const ROLE_LABEL: Record<string, string> = {
-  pkop: 'Super Admin (PKOP)',
-  pkon: 'Admin (PKON)',
-  pkod: 'Operator (PKOD)',
-}
+import { NAV_TABS } from '../lib/navTabs'
+import { ROLE_LABEL } from '../lib/roles'
+import { AnimatePresence as NavAnimatePresence } from 'framer-motion'
+import { ConfirmModal } from './ConfirmModal'
 
 export function TopNav() {
   const { profile, signOut } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [confirmSignOut, setConfirmSignOut] = useState(false)
+  const TABS = NAV_TABS.filter((tab) => profile && tab.allow.includes(profile.role))
 
   return (
     <header className="px-4 py-4 sm:px-8 sm:py-5">
@@ -33,26 +23,52 @@ export function TopNav() {
 
           {/* Desktop nav — hidden below lg, since 7 tabs need real room */}
           <nav className="hidden items-center gap-1 rounded-full border border-white/60 bg-white/40 p-1 shadow-md backdrop-blur-md lg:flex">
-            {TABS.map((tab) => (
-              <NavLink key={tab.to} to={tab.to} end={tab.to === '/'} className="relative">
-                {({ isActive }) => (
-                  <span
-                    className={`relative z-10 block rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                      isActive ? 'text-white' : 'text-neutral-600 hover:text-neutral-900'
-                    }`}
-                  >
-                    {isActive && (
-                      <motion.span
-                        layoutId="active-tab-pill"
-                        className="absolute inset-0 -z-10 rounded-full bg-emerald-700"
-                        transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-                      />
-                    )}
-                    {tab.label}
-                  </span>
-                )}
-              </NavLink>
-            ))}
+            <AnimatePresence mode="wait">
+              {!profile ? (
+                <motion.div
+                  key="skeleton"
+                  exit={{ opacity: 0 }}
+                  className="flex items-center gap-1.5 px-3 py-1.5"
+                >
+                  {[16, 12, 20, 16, 14].map((w, i) => (
+                    <span
+                      key={i}
+                      style={{ width: w * 4 }}
+                      className="h-3 animate-pulse rounded-full bg-neutral-300/60"
+                    />
+                  ))}
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="tabs"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.2 }}
+                  className="flex items-center gap-1"
+                >
+                  {TABS.map((tab) => (
+                    <NavLink key={tab.to} to={tab.to} end={tab.to === '/'} className="relative">
+                      {({ isActive }) => (
+                        <span
+                          className={`relative z-10 block rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+                            isActive ? 'text-white' : 'text-neutral-600 hover:text-neutral-900'
+                          }`}
+                        >
+                          {isActive && (
+                            <motion.span
+                              layoutId="active-tab-pill"
+                              className="absolute inset-0 -z-10 rounded-full bg-emerald-700"
+                              transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                            />
+                          )}
+                          {tab.label}
+                        </span>
+                      )}
+                    </NavLink>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </nav>
         </div>
 
@@ -79,7 +95,7 @@ export function TopNav() {
           )}
 
           <button
-            onClick={signOut}
+            onClick={() => setConfirmSignOut(true)}
             title="Log keluar"
             className="rounded-full border border-white/60 bg-white/40 p-2 text-neutral-600 shadow-md backdrop-blur-md hover:text-red-600"
           >
@@ -137,7 +153,7 @@ export function TopNav() {
                   </span>
                 )}
                 <button
-                  onClick={signOut}
+                  onClick={() => setConfirmSignOut(true)}
                   className="flex items-center gap-1.5 text-sm font-medium text-red-600"
                 >
                   <LogOut size={16} />
@@ -148,6 +164,19 @@ export function TopNav() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <ConfirmModal
+        open={confirmSignOut}
+        title="Log Keluar"
+        message="Adakah anda pasti mahu log keluar?"
+        confirmLabel="Log Keluar"
+        danger
+        onConfirm={() => {
+          setConfirmSignOut(false)
+          signOut()
+        }}
+        onCancel={() => setConfirmSignOut(false)}
+      />
     </header>
   )
 }

@@ -1,11 +1,17 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, ChevronLeft, ChevronRight, Home, Plus, Search } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight, Home, Plus, Search, Pencil, Trash2 } from 'lucide-react'
 import { DashboardCard } from '../components/DashboardCard'
 import { TambahSumbanganModal } from '../components/TambahSumbanganModal'
+import { SumbanganDetailModal } from '../components/SumbanganDetailModal'
+import { ConfirmModal } from '../components/ConfirmModal'
+import { Toast } from '../components/Toast'
+import type { ToastState } from '../components/Toast'
 import { NEGERI_FLAG } from '../lib/negeriVisual'
 import { supabase } from '../lib/supabase'
+import { STATUS_LIST, STATUS_LABEL, STATUS_BADGE_CLASS } from '../lib/sumbanganStatus'
+import type { SumbanganStatus } from '../lib/sumbanganStatus'
 
 type SumbanganRow = {
   id: string
@@ -14,6 +20,7 @@ type SumbanganRow = {
   no_tel: string | null
   jenis_sumbangan: string
   lokasi_bantuan: string
+  status: SumbanganStatus
   created_at: string
 }
 
@@ -33,12 +40,23 @@ export function SenaraiSumbanganNegeri() {
   const [tapisJenisSumbangan, setTapisJenisSumbangan] = useState('')
   const [halaman, setHalaman] = useState(1)
   const [modalOpen, setModalOpen] = useState(false)
+  const [selectedRow, setSelectedRow] = useState<SumbanganRow | null>(null)
+  const [tapisStatus, setTapisStatus] = useState('')
+  const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [editingRow, setEditingRow] = useState<SumbanganRow | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<SumbanganRow | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+  const [fadingId, setFadingId] = useState<string | null>(null)
+  const [toast, setToast] = useState<ToastState>(null)
 
   const muatSemula = useCallback(async () => {
     setLoading(true)
     const { data } = await supabase
       .from('sumbangan')
-      .select('id, jenis_kumpulan, nama_kumpulan, no_tel, jenis_sumbangan, lokasi_bantuan, created_at')
+      .select(
+        'id, jenis_kumpulan, nama_kumpulan, no_tel, jenis_sumbangan, lokasi_bantuan, status, created_at',
+      )
       .eq('negeri', negeri)
       .order('created_at', { ascending: false })
 
@@ -46,13 +64,48 @@ export function SenaraiSumbanganNegeri() {
     setLoading(false)
   }, [negeri])
 
+  async function handleStatusChange(row: SumbanganRow, status: SumbanganStatus) {
+    setUpdatingId(row.id)
+    const { error } = await supabase.from('sumbangan').update({ status }).eq('id', row.id)
+    setUpdatingId(null)
+    if (!error) {
+      setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, status } : r)))
+    }
+  }
+
+  async function confirmDelete() {
+    if (!pendingDelete) return
+    setDeleteError('')
+    setDeleting(true)
+
+    const { error } = await supabase.from('sumbangan').delete().eq('id', pendingDelete.id)
+    setDeleting(false)
+
+    if (error) {
+      setDeleteError('Gagal memadam. Sila cuba lagi.')
+      return
+    }
+
+    const id = pendingDelete.id
+    setPendingDelete(null)
+    setToast({ type: 'success', message: 'Sumbangan berjaya dipadam.' })
+
+    // Fade the row out before actually removing it from the list, instead
+    // of having it just vanish the instant the delete succeeds.
+    setFadingId(id)
+    setTimeout(() => {
+      setRows((prev) => prev.filter((r) => r.id !== id))
+      setFadingId(null)
+    }, 300)
+  }
+
   useEffect(() => {
     muatSemula()
   }, [muatSemula])
 
   useEffect(() => {
     setHalaman(1)
-  }, [carian, tapisJenisKumpulan, tapisJenisSumbangan])
+  }, [carian, tapisJenisKumpulan, tapisJenisSumbangan, tapisStatus])
 
   const rowsTertapis = rows.filter((row) => {
     const carianRendah = carian.trim().toLowerCase()
@@ -62,7 +115,8 @@ export function SenaraiSumbanganNegeri() {
       (row.no_tel ?? '').toLowerCase().includes(carianRendah)
     const cocokJenisKumpulan = tapisJenisKumpulan === '' || row.jenis_kumpulan === tapisJenisKumpulan
     const cocokJenisSumbangan = tapisJenisSumbangan === '' || row.jenis_sumbangan === tapisJenisSumbangan
-    return cocokCarian && cocokJenisKumpulan && cocokJenisSumbangan
+    const cocokStatus = tapisStatus === '' || row.status === tapisStatus
+    return cocokCarian && cocokJenisKumpulan && cocokJenisSumbangan && cocokStatus
   })
 
   const jumlahHalaman = Math.max(1, Math.ceil(rowsTertapis.length / SAIZ_HALAMAN))
@@ -179,6 +233,33 @@ export function SenaraiSumbanganNegeri() {
             </button>
           ))}
         </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-neutral-500">Status:</span>
+          <button
+            onClick={() => setTapisStatus('')}
+            className={`rounded-full border px-3 py-1 text-xs font-medium backdrop-blur-md transition-colors ${
+              tapisStatus === ''
+                ? 'border-emerald-700 bg-emerald-700 text-white'
+                : 'border-white/60 bg-white/40 text-neutral-600 hover:border-emerald-400'
+            }`}
+          >
+            Semua
+          </button>
+          {STATUS_LIST.map((s) => (
+            <button
+              key={s}
+              onClick={() => setTapisStatus(tapisStatus === s ? '' : s)}
+              className={`rounded-full border px-3 py-1 text-xs font-medium backdrop-blur-md transition-colors ${
+                tapisStatus === s
+                  ? 'border-emerald-700 bg-emerald-700 text-white'
+                  : 'border-white/60 bg-white/40 text-neutral-600 hover:border-emerald-400'
+              }`}
+            >
+              {STATUS_LABEL[s]}
+            </button>
+          ))}
+        </div>
       </div>
 
       <DashboardCard className="mt-6 overflow-x-auto">
@@ -196,19 +277,68 @@ export function SenaraiSumbanganNegeri() {
                   <th className="pb-2 pr-4 font-medium">No. Tel</th>
                   <th className="pb-2 pr-4 font-medium">Jenis Sumbangan</th>
                   <th className="pb-2 pr-4 font-medium">Lokasi Bantuan</th>
-                  <th className="pb-2 font-medium">Tarikh</th>
+                  <th className="pb-2 pr-4 font-medium">Status</th>
+                  <th className="pb-2 pr-4 font-medium">Tarikh</th>
+                  <th className="pb-2 font-medium" />
                 </tr>
               </thead>
               <tbody>
                 {rowsHalamanIni.map((row) => (
-                  <tr key={row.id} className="border-b border-neutral-100 last:border-0">
+                  <tr
+                    key={row.id}
+                    onClick={() => setSelectedRow(row)}
+                    className={`cursor-pointer border-b border-neutral-100 transition-all duration-300 last:border-0 hover:bg-emerald-50/60 ${
+                      fadingId === row.id ? 'opacity-0' : 'opacity-100'
+                    }`}
+                  >
                     <td className="py-2 pr-4 text-neutral-800">{row.jenis_kumpulan}</td>
                     <td className="py-2 pr-4 text-neutral-800">{row.nama_kumpulan}</td>
                     <td className="py-2 pr-4 text-neutral-600">{row.no_tel ?? '—'}</td>
                     <td className="py-2 pr-4 text-neutral-600">{row.jenis_sumbangan}</td>
                     <td className="py-2 pr-4 text-neutral-600">{row.lokasi_bantuan}</td>
-                    <td className="py-2 text-neutral-400">
+                    <td className="py-2 pr-4">
+                      <select
+                        value={row.status}
+                        disabled={updatingId === row.id}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) =>
+                          handleStatusChange(row, e.target.value as SumbanganStatus)
+                        }
+                        className={`rounded-full border-0 px-2.5 py-1 text-xs font-medium outline-none disabled:opacity-60 ${STATUS_BADGE_CLASS[row.status]}`}
+                      >
+                        {STATUS_LIST.map((s) => (
+                          <option key={s} value={s}>
+                            {STATUS_LABEL[s]}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="py-2 pr-4 text-neutral-400">
                       {new Date(row.created_at).toLocaleDateString('ms-MY')}
+                    </td>
+                    <td className="py-2">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setEditingRow(row)
+                          }}
+                          title="Kemas kini"
+                          className="rounded-full p-1.5 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-emerald-700"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setPendingDelete(row)
+                          }}
+                          title="Padam"
+                          className="rounded-full p-1.5 text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -251,6 +381,41 @@ export function SenaraiSumbanganNegeri() {
         }}
         negeriTetap={negeri}
       />
+
+      <TambahSumbanganModal
+        open={!!editingRow}
+        onClose={() => setEditingRow(null)}
+        onSuccess={() => {
+          setEditingRow(null)
+          muatSemula()
+        }}
+        negeriTetap={negeri}
+        existing={editingRow ?? undefined}
+      />
+
+      <SumbanganDetailModal
+        open={!!selectedRow}
+        row={selectedRow}
+        onClose={() => setSelectedRow(null)}
+      />
+
+      <ConfirmModal
+        open={!!pendingDelete}
+        title="Padam Sumbangan"
+        message={`Padam sumbangan daripada "${pendingDelete?.nama_kumpulan}"? Tindakan ini tidak boleh dibatalkan.`}
+        confirmLabel="Padam"
+        loadingLabel="Memadam..."
+        danger
+        loading={deleting}
+        error={deleteError}
+        onConfirm={confirmDelete}
+        onCancel={() => {
+          setPendingDelete(null)
+          setDeleteError('')
+        }}
+      />
+
+      <Toast toast={toast} onDismiss={() => setToast(null)} />
     </div>
   )
 }

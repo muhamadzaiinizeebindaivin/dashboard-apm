@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Plus, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -25,22 +25,53 @@ const JENIS_SUMBANGAN = ['BAHAN MENTAH', 'PERKHIDMATAN'] as const
 
 type ItemSumbangan = { id: number; nama: string; kuantiti: string; unit: string }
 
+export type ExistingSumbangan = {
+  id: string
+  jenis_kumpulan: string
+  nama_kumpulan: string
+  no_tel: string | null
+  jenis_sumbangan: string
+  lokasi_bantuan: string
+}
+
 type SumbanganFormProps = {
   onSuccess?: () => void
   negeriTetap?: string
+  existing?: ExistingSumbangan
 }
 
-export function SumbanganForm({ onSuccess, negeriTetap }: SumbanganFormProps) {
-  const [jenisKumpulan, setJenisKumpulan] = useState('')
-  const [namaKumpulan, setNamaKumpulan] = useState('')
-  const [noTel, setNoTel] = useState('')
+export function SumbanganForm({ onSuccess, negeriTetap, existing }: SumbanganFormProps) {
+  const [jenisKumpulan, setJenisKumpulan] = useState(existing?.jenis_kumpulan ?? '')
+  const [namaKumpulan, setNamaKumpulan] = useState(existing?.nama_kumpulan ?? '')
+  const [noTel, setNoTel] = useState(existing?.no_tel ?? '')
   const [negeri, setNegeri] = useState(negeriTetap ?? '')
-  const [jenisSumbangan, setJenisSumbangan] = useState<string>('')
-  const [lokasiBantuan, setLokasiBantuan] = useState('')
+  const [jenisSumbangan, setJenisSumbangan] = useState<string>(existing?.jenis_sumbangan ?? '')
+  const [lokasiBantuan, setLokasiBantuan] = useState(existing?.lokasi_bantuan ?? '')
   const [items, setItems] = useState<ItemSumbangan[]>([{ id: 1, nama: '', kuantiti: '', unit: '' }])
   const [dihantar, setDihantar] = useState(false)
   const [menghantar, setMenghantar] = useState(false)
   const [ralat, setRalat] = useState('')
+
+  useEffect(() => {
+    if (!existing) return
+    supabase
+      .from('sumbangan_items')
+      .select('id, nama_item, kuantiti, unit')
+      .eq('sumbangan_id', existing.id)
+      .then(({ data }) => {
+        const rows = (data as { id: string; nama_item: string; kuantiti: string | null; unit: string | null }[]) ?? []
+        if (rows.length > 0) {
+          setItems(
+            rows.map((r, i) => ({
+              id: i + 1,
+              nama: r.nama_item,
+              kuantiti: r.kuantiti ?? '',
+              unit: r.unit ?? '',
+            })),
+          )
+        }
+      })
+  }, [existing])
 
   function updateItem(id: number, field: 'nama' | 'kuantiti' | 'unit', value: string) {
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, [field]: value } : it)))
@@ -67,22 +98,31 @@ export function SumbanganForm({ onSuccess, negeriTetap }: SumbanganFormProps) {
 
     setMenghantar(true)
 
-    const sumbanganId = crypto.randomUUID()
+    const sumbanganId = existing?.id ?? crypto.randomUUID()
 
-    const { error: sumbanganError } = await supabase.from('sumbangan').insert({
-      id: sumbanganId,
+    const payload = {
       jenis_kumpulan: jenisKumpulan,
       nama_kumpulan: namaKumpulan,
       no_tel: noTel,
       negeri,
       jenis_sumbangan: jenisSumbangan,
       lokasi_bantuan: lokasiBantuan,
-    })
+    }
+
+    const { error: sumbanganError } = existing
+      ? await supabase.from('sumbangan').update(payload).eq('id', existing.id)
+      : await supabase.from('sumbangan').insert({ id: sumbanganId, ...payload })
 
     if (sumbanganError) {
       setRalat('Gagal menghantar. Sila cuba lagi.')
       setMenghantar(false)
       return
+    }
+
+    // Replacing all items on each save is simpler than diffing individual
+    // rows, and this list is always short (a handful of line items).
+    if (existing) {
+      await supabase.from('sumbangan_items').delete().eq('sumbangan_id', sumbanganId)
     }
 
     const itemRows = items
@@ -103,13 +143,15 @@ export function SumbanganForm({ onSuccess, negeriTetap }: SumbanganFormProps) {
       }
     }
 
-    setJenisKumpulan('')
-    setNamaKumpulan('')
-    setNoTel('')
-    setNegeri(negeriTetap ?? '')
-    setJenisSumbangan('')
-    setLokasiBantuan('')
-    setItems([{ id: 1, nama: '', kuantiti: '', unit: '' }])
+    if (!existing) {
+      setJenisKumpulan('')
+      setNamaKumpulan('')
+      setNoTel('')
+      setNegeri(negeriTetap ?? '')
+      setJenisSumbangan('')
+      setLokasiBantuan('')
+      setItems([{ id: 1, nama: '', kuantiti: '', unit: '' }])
+    }
 
     setMenghantar(false)
     setDihantar(true)
@@ -164,19 +206,24 @@ export function SumbanganForm({ onSuccess, negeriTetap }: SumbanganFormProps) {
 
       <div>
         <label className="mb-1 block text-sm font-medium text-neutral-700">Negeri</label>
-        <select
-          value={negeri}
-          onChange={(e) => setNegeri(e.target.value)}
-          disabled={!!negeriTetap}
-          className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-800 outline-none focus:border-emerald-600 disabled:bg-neutral-50 disabled:text-neutral-500"
-        >
-          <option value="">Pilih negeri</option>
-          {NEGERI_LIST.map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-        </select>
+        {negeriTetap ? (
+          <div className="w-full rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-600">
+            {negeriTetap}
+          </div>
+        ) : (
+          <select
+            value={negeri}
+            onChange={(e) => setNegeri(e.target.value)}
+            className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-800 outline-none focus:border-emerald-600"
+          >
+            <option value="">Pilih negeri</option>
+            {NEGERI_LIST.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       <div>
@@ -280,7 +327,15 @@ export function SumbanganForm({ onSuccess, negeriTetap }: SumbanganFormProps) {
         whileTap={{ scale: 0.97 }}
         className="w-full rounded-lg bg-emerald-700 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
       >
-        {menghantar ? 'Menghantar...' : dihantar ? 'Berjaya dihantar ✓' : 'HANTAR'}
+        {menghantar
+          ? 'Menyimpan...'
+          : dihantar
+            ? existing
+              ? 'Berjaya dikemas kini ✓'
+              : 'Berjaya dihantar ✓'
+            : existing
+              ? 'KEMAS KINI'
+              : 'HANTAR'}
       </motion.button>
     </div>
   )

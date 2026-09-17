@@ -1,47 +1,148 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
+import { NavLink } from 'react-router-dom'
+import { ShieldCheck, HandCoins, MapPin, FileWarning, Users, AlertTriangle, ClipboardList, Truck, UserCog, ChevronRight } from 'lucide-react'
 import { LoginModal } from '../components/LoginModal'
-import { StatCard } from '../components/StatCard'
 import { AppShell } from '../components/AppShell'
+import { DokumenAwamCard } from '../components/DokumenAwamCard'
 import { useAuth } from '../hooks/useAuth'
+import { NAV_TABS } from '../lib/navTabs'
+import { ROLE_LABEL } from '../lib/roles'
 import apmLogo from '../assets/apm-logo.png'
 
-function Kandungan({ session }: { session: boolean }) {
+const PUBLIC_LINKS = [
+  { to: '/sumbangan', label: 'Sumbangan', desc: 'Hantar sumbangan bantuan', icon: HandCoins },
+  { to: '/paras', label: 'PARAS', desc: 'Semak paras air terkini', icon: MapPin },
+  { to: '/laporan', label: 'Laporan', desc: 'Hantar laporan awam', icon: FileWarning },
+]
+
+const MODULE_META: Record<string, { icon: typeof HandCoins; className: string }> = {
+  '/ngo': { icon: Users, className: 'bg-sky-100 text-sky-700' },
+  '/bencana': { icon: AlertTriangle, className: 'bg-red-100 text-red-700' },
+  '/sekretariat': { icon: ClipboardList, className: 'bg-violet-100 text-violet-700' },
+  '/logistik': { icon: Truck, className: 'bg-amber-100 text-amber-700' },
+  '/senarai-sumbangan': { icon: HandCoins, className: 'bg-emerald-100 text-emerald-700' },
+  '/senarai-paras': { icon: MapPin, className: 'bg-cyan-100 text-cyan-700' },
+  '/admin': { icon: UserCog, className: 'bg-neutral-200 text-neutral-700' },
+}
+
+function SectionTitle({ eyebrow, title }: { eyebrow: string; title: string }) {
+  return (
+    <div className="mb-3">
+      <span className="text-xs font-semibold uppercase tracking-wide text-emerald-700">{eyebrow}</span>
+      <h2 className="text-base font-semibold text-neutral-900">{title}</h2>
+    </div>
+  )
+}
+
+function KandunganAwam() {
   return (
     <>
-      {!session && (
-        <>
-          <img src={apmLogo} alt="Logo APM" className="mx-auto h-24 w-24 object-contain" />
-          <h1 className="mt-6 text-2xl font-semibold text-neutral-900">
-            APM Bahagian Pengurusan Bencana Operasi
-          </h1>
-          <p className="mx-auto mt-2 max-w-sm text-sm text-neutral-500">
-            Sistem pengurusan operasi bencana — NGO, Bencana, Sekretariat dan Logistik dalam
-            satu portal.
-          </p>
-        </>
-      )}
-
-      {/* Data di bawah adalah contoh (fictif) untuk paparan sahaja */}
-      <div className="mx-auto mt-10 grid max-w-2xl grid-cols-1 gap-4 text-left sm:grid-cols-3">
-        <StatCard label="Negeri diliputi" value="16" detail="Semua negeri dan wilayah persekutuan di Malaysia." />
-        <StatCard label="Kes aktif" value="238" detail="Kes bencana yang sedang dipantau di seluruh negara." />
-        <StatCard label="NGO berdaftar" value="42" detail="Kumpulan NGO yang menyumbang bantuan bencana." />
+      <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-emerald-50 to-sky-50 shadow-inner">
+        <img src={apmLogo} alt="Logo APM" className="h-16 w-16 object-contain" />
       </div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1, duration: 0.2 }}
-        className="mx-auto mt-4 max-w-2xl rounded-2xl border border-white/60 bg-white/40 p-6 text-left shadow-lg backdrop-blur-md"
-      >
-        <h2 className="text-sm font-medium text-neutral-900">Aktiviti terkini</h2>
-        <ul className="mt-3 space-y-2 text-sm text-neutral-500">
-          <li>• Laporan awal banjir — Kedah, dihantar 2 jam lalu</li>
-          <li>• 3 kumpulan NGO baru berdaftar minggu ini</li>
-          <li>• Bantuan makanan dihantar ke Pahang — status: selesai</li>
-        </ul>
-      </motion.div>
+      <div className="mx-auto mt-5 flex items-center justify-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-emerald-700">
+        <ShieldCheck size={14} />
+        Sistem Rasmi APM
+      </div>
+
+      <h1 className="mt-2 text-2xl font-semibold text-neutral-900 sm:text-3xl">
+        Bahagian Pengurusan Bencana Operasi
+      </h1>
+      <p className="mx-auto mt-2 max-w-sm text-sm text-neutral-500">
+        Sistem pengurusan operasi bencana — NGO, Bencana, Sekretariat dan Logistik dalam
+        satu portal.
+      </p>
+
+      <div className="mx-auto mt-10 grid max-w-2xl grid-cols-1 gap-4 text-left sm:grid-cols-3">
+        {PUBLIC_LINKS.map(({ to, label, desc, icon: Icon }, i) => (
+          <motion.div
+            key={to}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0, transition: { delay: i * 0.05, duration: 0.2 } }}
+            whileHover={{ y: -2, transition: { type: 'spring', stiffness: 400, damping: 25 } }}
+          >
+            <NavLink
+              to={to}
+              className="flex h-full flex-col gap-2 rounded-2xl border border-white/60 bg-white/40 p-4 shadow-lg backdrop-blur-md transition-colors hover:border-emerald-500"
+            >
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+                <Icon size={17} />
+              </span>
+              <span className="text-sm font-semibold text-neutral-900">{label}</span>
+              <span className="text-xs text-neutral-500">{desc}</span>
+            </NavLink>
+          </motion.div>
+        ))}
+      </div>
+
+      <div className="mx-auto mt-10 max-w-2xl text-left">
+        <SectionTitle eyebrow="Rujukan" title="Dokumen Rasmi" />
+        <DokumenAwamCard />
+      </div>
+    </>
+  )
+}
+
+function KandunganLogMasuk() {
+  const { profile } = useAuth()
+  const modul = NAV_TABS.filter((tab) => tab.to !== '/' && profile && tab.allow.includes(profile.role))
+  const jam = new Date().getHours()
+  const salam = jam < 12 ? 'Selamat pagi' : jam < 18 ? 'Selamat tengah hari' : 'Selamat petang'
+
+  return (
+    <>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/60 bg-white/40 px-5 py-4 shadow-lg backdrop-blur-md">
+        <div>
+          <p className="text-sm text-neutral-500">{salam},</p>
+          <h1 className="text-xl font-semibold text-neutral-900">
+            {profile?.full_name || 'Pengguna'}
+          </h1>
+        </div>
+        {profile && (
+          <span className="rounded-full bg-emerald-700/90 px-3 py-1 text-xs font-medium text-white shadow-md">
+            {ROLE_LABEL[profile.role] ?? profile.role}
+          </span>
+        )}
+      </div>
+
+      <div className="mt-8">
+        <SectionTitle eyebrow="Navigasi Pantas" title="Modul Anda" />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {modul.map((tab, i) => {
+            const meta = MODULE_META[tab.to] ?? { icon: ClipboardList, className: 'bg-neutral-100 text-neutral-600' }
+            const Icon = meta.icon
+            return (
+              <motion.div
+                key={tab.to}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0, transition: { delay: i * 0.04, duration: 0.2 } }}
+                whileHover={{ y: -2, transition: { type: 'spring', stiffness: 400, damping: 25 } }}
+              >
+                <NavLink
+                  to={tab.to}
+                  className="group flex h-full items-center gap-3 rounded-2xl border border-white/60 bg-white/40 p-4 shadow-lg backdrop-blur-md transition-colors hover:border-emerald-500"
+                >
+                  <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${meta.className}`}>
+                    <Icon size={18} />
+                  </span>
+                  <span className="min-w-0 flex-1 text-sm font-medium text-neutral-800">{tab.label}</span>
+                  <ChevronRight
+                    size={15}
+                    className="shrink-0 text-neutral-300 transition-colors group-hover:text-emerald-600"
+                  />
+                </NavLink>
+              </motion.div>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="mt-8">
+        <SectionTitle eyebrow="Rujukan" title="Dokumen Rasmi" />
+        <DokumenAwamCard />
+      </div>
     </>
   )
 }
@@ -53,9 +154,7 @@ export function HomeScreen() {
   if (session) {
     return (
       <AppShell>
-        <div className="text-center">
-          <Kandungan session />
-        </div>
+        <KandunganLogMasuk />
       </AppShell>
     )
   }
@@ -79,7 +178,7 @@ export function HomeScreen() {
         </header>
 
         <main className="mx-auto max-w-4xl px-4 pb-16 pt-8 text-center">
-          <Kandungan session={false} />
+          <KandunganAwam />
         </main>
       </div>
 
