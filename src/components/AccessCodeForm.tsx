@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
+import { simpanKod } from '../lib/accessCode'
 
 type AccessCodeFormProps = {
   page: string
@@ -30,6 +31,7 @@ export function AccessCodeForm({ page, label, onSuccess }: AccessCodeFormProps) 
       return
     }
 
+    simpanKod(page, code)
     onSuccess()
   }
 

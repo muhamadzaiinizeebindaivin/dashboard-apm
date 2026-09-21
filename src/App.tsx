@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './hooks/useAuth'
 import { RequireAuth } from './components/RequireAuth'
 import { RequireRole } from './components/RequireRole'
+import { RequireCode } from './components/RequireCode'
 import { Layout } from './components/Layout'
 import { HomeScreen } from './pages/HomeScreen'
 import { Sumbangan } from './pages/Sumbangan'
@@ -44,7 +45,14 @@ function App() {
             <Route path="/sumbangan" element={<Sumbangan />} />
             <Route path="/paras" element={<Paras />} />
             <Route path="/paras/jejak/:negeri" element={<ParasJejak />} />
-            <Route path="/laporan" element={<LaporanAwam />} />
+            <Route
+              path="/laporan"
+              element={
+                <RequireCode page="laporan" label="Laporan">
+                  <LaporanAwam />
+                </RequireCode>
+              }
+            />
             <Route path="/set-password" element={<SetPassword />} />
 
             <Route element={<RequireAuth />}>

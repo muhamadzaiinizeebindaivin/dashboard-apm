@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { NavLink } from 'react-router-dom'
-import { ShieldCheck, HandCoins, MapPin, FileWarning, Users, AlertTriangle, ClipboardList, Truck, UserCog, ChevronRight } from 'lucide-react'
+import { ShieldCheck, HandCoins, MapPin, Users, AlertTriangle, ClipboardList, Truck, UserCog, ChevronRight } from 'lucide-react'
 import { LoginModal } from '../components/LoginModal'
 import { AppShell } from '../components/AppShell'
 import { DokumenAwamCard } from '../components/DokumenAwamCard'
@@ -10,11 +10,7 @@ import { NAV_TABS } from '../lib/navTabs'
 import { ROLE_LABEL } from '../lib/roles'
 import apmLogo from '../assets/apm-logo.png'
 
-const PUBLIC_LINKS = [
-  { to: '/sumbangan', label: 'Sumbangan', desc: 'Hantar sumbangan bantuan', icon: HandCoins },
-  { to: '/paras', label: 'PARAS', desc: 'Semak paras air terkini', icon: MapPin },
-  { to: '/laporan', label: 'Laporan', desc: 'Hantar laporan awam', icon: FileWarning },
-]
+
 
 const MODULE_META: Record<string, { icon: typeof HandCoins; className: string }> = {
   '/ngo': { icon: Users, className: 'bg-sky-100 text-sky-700' },
@@ -55,27 +51,7 @@ function KandunganAwam() {
         satu portal.
       </p>
 
-      <div className="mx-auto mt-10 grid max-w-2xl grid-cols-1 gap-4 text-left sm:grid-cols-3">
-        {PUBLIC_LINKS.map(({ to, label, desc, icon: Icon }, i) => (
-          <motion.div
-            key={to}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0, transition: { delay: i * 0.05, duration: 0.2 } }}
-            whileHover={{ y: -2, transition: { type: 'spring', stiffness: 400, damping: 25 } }}
-          >
-            <NavLink
-              to={to}
-              className="flex h-full flex-col gap-2 rounded-2xl border border-white/60 bg-white/40 p-4 shadow-lg backdrop-blur-md transition-colors hover:border-emerald-500"
-            >
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
-                <Icon size={17} />
-              </span>
-              <span className="text-sm font-semibold text-neutral-900">{label}</span>
-              <span className="text-xs text-neutral-500">{desc}</span>
-            </NavLink>
-          </motion.div>
-        ))}
-      </div>
+
 
       <div className="mx-auto mt-10 max-w-2xl text-left">
         <SectionTitle eyebrow="Rujukan" title="Dokumen Rasmi" />
