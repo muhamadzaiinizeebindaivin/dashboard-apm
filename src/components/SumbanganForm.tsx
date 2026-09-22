@@ -17,7 +17,9 @@ const NEGERI_LIST = [
   'Sarawak',
   'Selangor',
   'Terengganu',
-  'Wilayah Persekutuan',
+  'Kuala Lumpur',
+  'Putrajaya',
+  'Labuan',
 ]
 
 const JENIS_KUMPULAN = ['NGO', 'CDA', 'PERSATUAN', 'KELAB', 'PERSEKUTUAN']

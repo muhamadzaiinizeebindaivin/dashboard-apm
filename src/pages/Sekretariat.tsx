@@ -1,10 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { FileText, FileClock, Home, ChevronRight } from 'lucide-react'
+import { FileText, FileClock, FileDown, Home, ChevronRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { Toast } from '../components/Toast'
 import type { ToastState } from '../components/Toast'
 import { DashboardCard } from '../components/DashboardCard'
+import { useAuth } from '../hooks/useAuth'
+import { ambilLaporanNasional } from '../lib/laporanNasional'
+import { bangunLaporanNasionalDoc } from '../lib/janaLaporanNasional'
+import type { jsPDF } from 'jspdf'
 
 const PILIHAN = [
   {
@@ -50,8 +54,13 @@ const JENIS_BADGE: Record<'awal' | 'semasa', { label: string; className: string 
 export function Sekretariat() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { profile } = useAuth()
   const onLanding = location.pathname === '/sekretariat'
   const [toast, setToast] = useState<ToastState>(null)
+  const [menjanaLaporan, setMenjanaLaporan] = useState(false)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [previewNamaFail, setPreviewNamaFail] = useState('')
+  const docRef = useRef<jsPDF | null>(null)
   const [senarai, setSenarai] = useState<BarisTerkini[]>([])
   const [loadingSenarai, setLoadingSenarai] = useState(true)
 
@@ -80,6 +89,41 @@ export function Sekretariat() {
     }
   }, [onLanding])
 
+  // Release the previewed PDF's blob URL whenever it's replaced or the page is left.
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
+    }
+  }, [previewUrl])
+
+  async function handleJanaLaporanNasional() {
+    setMenjanaLaporan(true)
+    try {
+      const items = await ambilLaporanNasional()
+      if (items.length === 0) {
+        setToast({ type: 'error', message: 'Tiada data untuk dijana.' })
+        return
+      }
+      const { doc, namaFail } = await bangunLaporanNasionalDoc(items)
+      docRef.current = doc
+      setPreviewNamaFail(namaFail)
+      setPreviewUrl(doc.output('bloburl') as unknown as string)
+    } catch {
+      setToast({ type: 'error', message: 'Gagal menjana laporan. Sila cuba lagi.' })
+    } finally {
+      setMenjanaLaporan(false)
+    }
+  }
+
+  function muatTurunLaporan() {
+    docRef.current?.save(previewNamaFail)
+  }
+
+  function tutupPratonton() {
+    setPreviewUrl(null)
+    docRef.current = null
+  }
+
   return (
     <div>
       {onLanding && (
@@ -91,6 +135,19 @@ export function Sekretariat() {
             <span className="font-medium text-emerald-700">Sekretariat</span>
           </div>
           <h1 className="text-2xl font-semibold text-neutral-900">Sekretariat</h1>
+        </div>
+      )}
+
+      {onLanding && profile?.role === 'pkop' && (
+        <div className="mt-4 flex justify-end">
+          <button
+            onClick={handleJanaLaporanNasional}
+            disabled={menjanaLaporan}
+            className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-emerald-800 disabled:opacity-60"
+          >
+            <FileDown size={15} />
+            {menjanaLaporan ? 'Menjana...' : 'Jana Laporan Bencana Nasional'}
+          </button>
         </div>
       )}
 
@@ -112,6 +169,34 @@ export function Sekretariat() {
             </Link>
           ))}
         </div>
+      )}
+
+      {onLanding && previewUrl && (
+        <DashboardCard className="mt-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 pb-4">
+            <h2 className="text-base font-semibold text-neutral-900">Pratonton Laporan Bencana Nasional</h2>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={muatTurunLaporan}
+                className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-emerald-800"
+              >
+                <FileDown size={15} />
+                Muat Turun PDF
+              </button>
+              <button
+                onClick={tutupPratonton}
+                className="rounded-lg border border-neutral-200 px-3 py-1.5 text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-50"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+          <iframe
+            src={previewUrl}
+            title="Pratonton Laporan Bencana Nasional"
+            className="mt-4 h-[600px] w-full rounded-lg border border-neutral-200"
+          />
+        </DashboardCard>
       )}
 
       {onLanding && (

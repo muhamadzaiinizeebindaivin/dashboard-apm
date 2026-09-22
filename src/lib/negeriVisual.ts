@@ -11,7 +11,9 @@ import logoSabah from '../assets/negeri/sabah.png'
 import logoSarawak from '../assets/negeri/sarawak.png'
 import logoSelangor from '../assets/negeri/selangor.png'
 import logoTerengganu from '../assets/negeri/terengganu.png'
-import logoWilayahPersekutuan from '../assets/negeri/wilayah_persekutuan.png'
+import logoKualaLumpur from '../assets/negeri/kuala_lumpur.png'
+import logoPutrajaya from '../assets/negeri/putrajaya.png'
+import logoLabuan from '../assets/negeri/labuan.png'
 
 export const NEGERI_FLAG: Record<string, string> = {
   Johor: logoJohor,
@@ -27,7 +29,9 @@ export const NEGERI_FLAG: Record<string, string> = {
   Sarawak: logoSarawak,
   Selangor: logoSelangor,
   Terengganu: logoTerengganu,
-  'Wilayah Persekutuan': logoWilayahPersekutuan,
+  'Kuala Lumpur': logoKualaLumpur,
+  Putrajaya: logoPutrajaya,
+  Labuan: logoLabuan,
 }
 
 export const NEGERI_LIST = [
@@ -44,5 +48,7 @@ export const NEGERI_LIST = [
   'Sarawak',
   'Selangor',
   'Terengganu',
-  'Wilayah Persekutuan',
+  'Kuala Lumpur',
+  'Putrajaya',
+  'Labuan',
 ]

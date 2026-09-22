@@ -15,7 +15,9 @@ import logoSabah from '../assets/negeri/sabah.png'
 import logoSarawak from '../assets/negeri/sarawak.png'
 import logoSelangor from '../assets/negeri/selangor.png'
 import logoTerengganu from '../assets/negeri/terengganu.png'
-import logoWilayahPersekutuan from '../assets/negeri/wilayah_persekutuan.png'
+import logoKualaLumpur from '../assets/negeri/kuala_lumpur.png'
+import logoPutrajaya from '../assets/negeri/putrajaya.png'
+import logoLabuan from '../assets/negeri/labuan.png'
 
 const NEGERI_LIST = [
   { nama: 'Johor', logo: logoJohor },
@@ -31,7 +33,9 @@ const NEGERI_LIST = [
   { nama: 'Sarawak', logo: logoSarawak },
   { nama: 'Selangor', logo: logoSelangor },
   { nama: 'Terengganu', logo: logoTerengganu },
-  { nama: 'Wilayah Persekutuan', logo: logoWilayahPersekutuan },
+  { nama: 'Kuala Lumpur', logo: logoKualaLumpur },
+  { nama: 'Putrajaya', logo: logoPutrajaya },
+  { nama: 'Labuan', logo: logoLabuan },
 ]
 
 export function Paras() {

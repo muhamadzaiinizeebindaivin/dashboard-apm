@@ -16,7 +16,9 @@ import logoSabah from '../assets/negeri/sabah.png'
 import logoSarawak from '../assets/negeri/sarawak.png'
 import logoSelangor from '../assets/negeri/selangor.png'
 import logoTerengganu from '../assets/negeri/terengganu.png'
-import logoWilayahPersekutuan from '../assets/negeri/wilayah_persekutuan.png'
+import logoKualaLumpur from '../assets/negeri/kuala_lumpur.png'
+import logoPutrajaya from '../assets/negeri/putrajaya.png'
+import logoLabuan from '../assets/negeri/labuan.png'
 
 const NEGERI_LOGOS: Record<string, string> = {
   Johor: logoJohor,
@@ -32,7 +34,9 @@ const NEGERI_LOGOS: Record<string, string> = {
   Sarawak: logoSarawak,
   Selangor: logoSelangor,
   Terengganu: logoTerengganu,
-  'Wilayah Persekutuan': logoWilayahPersekutuan,
+  'Kuala Lumpur': logoKualaLumpur,
+  Putrajaya: logoPutrajaya,
+  Labuan: logoLabuan,
 }
 
 const NEGERI_ICONS: Record<string, L.DivIcon> = Object.fromEntries(

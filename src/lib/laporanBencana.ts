@@ -12,7 +12,7 @@ export type FieldDef = {
   no?: string
   label: string
   en?: string
-  type?: 'text' | 'textarea' | 'select' | 'datetime'
+  type?: 'text' | 'textarea' | 'select' | 'datetime' | 'number'
   options?: string[]
   required?: boolean
   wide?: boolean
@@ -67,4 +67,72 @@ export const PERHATIAN_FIELDS: FieldDef[] = [
   { key: 'perhatian_jawatan', label: 'Jawatan' },
   { key: 'perhatian_telefon', label: 'No. Telefon' },
   { key: 'perhatian_masa', label: 'Masa & Tarikh', type: 'datetime' },
+]
+
+export const ZON_NEGERI: Record<string, string> = {
+  Perlis: 'Utara',
+  Kedah: 'Utara',
+  'Pulau Pinang': 'Utara',
+  Perak: 'Utara',
+  Selangor: 'Tengah',
+  'Kuala Lumpur': 'Tengah',
+  Putrajaya: 'Tengah',
+  'Negeri Sembilan': 'Selatan',
+  Melaka: 'Selatan',
+  Johor: 'Selatan',
+  Kelantan: 'Timur',
+  Terengganu: 'Timur',
+  Pahang: 'Timur',
+  Sabah: 'Borneo',
+  Sarawak: 'Borneo',
+  Labuan: 'Borneo',
+}
+
+export function cariZon(negeri: string): string {
+  return ZON_NEGERI[negeri] ?? '—'
+}
+
+export const RINGKASAN_STATUS = [
+  { value: 'ada_perubahan', label: 'Ada Perubahan' },
+  { value: 'tiada_perubahan', label: 'Tiada Perubahan' },
+] as const
+
+export const JENIS_BENCANA_SEMASA = [
+  'Ribut',
+  'Banjir',
+  'Ombak Besar',
+  'Kebakaran',
+  'Tanah Runtuh',
+  'Pencemaran',
+  'Bangunan Runtuh',
+]
+
+export const TREND_LABEL: Record<string, { label: string; className: string }> = {
+  naik: { label: 'Naik', className: 'bg-red-100 text-red-700' },
+  turun: { label: 'Turun', className: 'bg-emerald-100 text-emerald-700' },
+  kekal: { label: 'Kekal', className: 'bg-neutral-100 text-neutral-600' },
+}
+
+export const SEMASA_MAKLUMAT_FIELDS: FieldDef[] = [
+  { key: 'jenis_bencana', label: 'Jenis Bencana', type: 'select', options: JENIS_BENCANA_SEMASA, required: true },
+  { key: 'nama_bencana', label: 'Nama Bencana', required: true },
+  { key: 'negeri', label: 'Negeri', type: 'select', options: NEGERI_LIST, required: true },
+]
+
+export const SEMASA_PENYEDIA_FIELDS = PENYEDIA_FIELDS.filter((f) => f.type !== 'datetime')
+export const SEMASA_PERHATIAN_FIELDS = PERHATIAN_FIELDS.filter((f) => f.type !== 'datetime')
+
+export const PPS_FIELDS: FieldDef[] = [
+  { key: 'pps_negeri', label: 'Negeri', type: 'select', options: NEGERI_LIST, required: true },
+  { key: 'pps_daerah', label: 'Daerah', required: true },
+  {
+    key: 'pps_pps',
+    label: 'Pusat Pemindahan Sementara (PPS)',
+    en: 'boleh senaraikan lebih daripada satu, satu baris setiap PPS',
+    type: 'textarea',
+    wide: true,
+    required: true,
+  },
+  { key: 'pps_jumlah_mangsa', label: 'Jumlah Mangsa (keseluruhan)', type: 'number', required: true },
+  { key: 'pps_jumlah_keluarga', label: 'Jumlah Keluarga (keseluruhan)', type: 'number', required: true },
 ]
