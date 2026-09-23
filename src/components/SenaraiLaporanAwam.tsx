@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   FileText,
+  FileDown,
   Trash2,
   Home,
   ChevronRight,
@@ -25,6 +26,7 @@ import { TARIKH_MASA_FIELD, KEJADIAN_FIELDS, HAL_LAIN_FIELD, PENYEDIA_FIELDS } f
 import { SEMASA_MAKLUMAT_FIELDS, SEMASA_PENYEDIA_FIELDS, TREND_LABEL } from '../lib/laporanBencana'
 import type { FieldDef, LaporanBencanaRow } from '../lib/laporanBencana'
 import { NEGERI_LIST } from '../lib/negeriVisual'
+import { janaRekodKejadian } from '../lib/janaRekodKejadian'
 
 type SenaraiLaporanAwamProps = {
   jenis: 'awal' | 'semasa'
@@ -138,6 +140,19 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
 
   const rowsTapis = tapisNegeri ? rows.filter((r) => r.negeri === tapisNegeri) : rows
 
+  const [menjanaPdf, setMenjanaPdf] = useState(false)
+
+  async function handleJanaPdf() {
+    setMenjanaPdf(true)
+    try {
+      await janaRekodKejadian(rowsTapis, jenis, label, tapisNegeri)
+    } catch {
+      setToast({ type: 'error', message: 'Gagal menjana PDF. Sila cuba lagi.' })
+    } finally {
+      setMenjanaPdf(false)
+    }
+  }
+
   function pengesahanBlok(row: LaporanBencanaRow) {
     if (row.perhatian_nama) {
       return (
@@ -196,8 +211,6 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
       setLoadingPps((p) => ({ ...p, [id]: false }))
     }
   }
-
-
 
   function bukaSahkan(row: LaporanBencanaRow) {
     setSahkanId(row.id)
@@ -325,6 +338,14 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
                 </option>
               ))}
             </select>
+            <button
+              onClick={handleJanaPdf}
+              disabled={menjanaPdf || rowsTapis.length === 0}
+              className="flex h-9 items-center gap-1.5 rounded-lg bg-emerald-700 px-3 text-sm font-medium text-white transition-colors hover:bg-emerald-800 disabled:opacity-60"
+            >
+              <FileDown size={15} />
+              {menjanaPdf ? 'Menjana...' : 'Jana PDF'}
+            </button>
           </div>
         </div>
 
@@ -427,9 +448,7 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
                             const t = TREND_LABEL[row.trend] ?? TREND_LABEL.kekal
                             const Ikon = row.trend === 'naik' ? TrendingUp : row.trend === 'turun' ? TrendingDown : Minus
                             return (
-                              <span
-                                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${t.className}`}
-                              >
+                              <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${t.className}`}>
                                 <Ikon size={12} />
                                 {t.label}
                               </span>

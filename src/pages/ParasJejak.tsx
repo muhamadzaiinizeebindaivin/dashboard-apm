@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Navigation } from 'lucide-react'
+import { ArrowLeft, Navigation, Loader2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { ParasMap } from '../components/ParasMap'
 import type { LokasiPoint } from '../components/ParasMap'
@@ -17,6 +17,7 @@ export function ParasJejak() {
   const negeri = decodeURIComponent(negeriParam ?? '')
 
   const [sedangJejak, setSedangJejak] = useState(false)
+  const [mendapatkanGps, setMendapatkanGps] = useState(false)
   const [ralat, setRalat] = useState('')
   const [lokasiAwam, setLokasiAwam] = useState<LokasiPoint[]>([])
   const [posisiSaya, setPosisiSaya] = useState<[number, number] | null>(null)
@@ -79,6 +80,10 @@ export function ParasJejak() {
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
+        // Tracking may have been stopped while this GPS fix was still
+        // in flight — don't let a late update reactivate it.
+        if (trackingIdRef.current !== id) return
+
         const { latitude, longitude } = position.coords
         setPosisiSaya([latitude, longitude])
         await supabase.rpc('track_paras_lokasi', {
@@ -102,6 +107,7 @@ export function ParasJejak() {
     }
 
     setRalat('')
+    setMendapatkanGps(true)
     const id = crypto.randomUUID()
 
     // Wait for the FIRST location request (and its permission prompt) to
@@ -112,6 +118,7 @@ export function ParasJejak() {
       async (position) => {
         const { latitude, longitude } = position.coords
         setPosisiSaya([latitude, longitude])
+        setMendapatkanGps(false)
 
         trackingIdRef.current = id
         setSedangJejak(true)
@@ -127,6 +134,7 @@ export function ParasJejak() {
         intervalRef.current = setInterval(hantarPosisi, 500)
       },
       () => {
+        setMendapatkanGps(false)
         setRalat('Tidak dapat mengesan lokasi. Sila benarkan akses GPS.')
       },
     )
@@ -136,10 +144,15 @@ export function ParasJejak() {
     if (intervalRef.current) clearInterval(intervalRef.current)
     intervalRef.current = null
 
-    if (trackingIdRef.current) {
-      const { error } = await supabase.rpc('stop_paras_lokasi', {
-        p_id: trackingIdRef.current,
-      })
+    const id = trackingIdRef.current
+    trackingIdRef.current = null // stop any in-flight GPS update from reviving this session
+
+    if (id) {
+      // Remove the pin straight away rather than waiting up to 3s for the
+      // next poll — the RPC call below still confirms it on the server.
+      setLokasiAwam((prev) => prev.filter((p) => p.id !== id))
+
+      const { error } = await supabase.rpc('stop_paras_lokasi', { p_id: id })
       if (error) {
         setRalat('Gagal mengemaskini status. Sila cuba lagi.')
         console.error(error)
@@ -147,7 +160,6 @@ export function ParasJejak() {
     }
 
     localStorage.removeItem(STORAGE_KEY)
-    trackingIdRef.current = null
     setSedangJejak(false)
   }
 
@@ -178,19 +190,32 @@ export function ParasJejak() {
           <motion.button
             whileTap={{ scale: 0.97 }}
             onClick={sedangJejak ? handleTamatJejak : handleMulaJejak}
-            className={`flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-white ${
+            disabled={mendapatkanGps}
+            className={`flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-70 ${
               sedangJejak ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-700 hover:bg-emerald-800'
             }`}
           >
-            {sedangJejak && (
+            {mendapatkanGps ? (
               <motion.span
-                animate={{ opacity: [1, 0.3, 1] }}
-                transition={{ duration: 1, repeat: Infinity }}
-                className="h-2 w-2 rounded-full bg-white"
-              />
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                className="flex"
+              >
+                <Loader2 size={16} />
+              </motion.span>
+            ) : (
+              <>
+                {sedangJejak && (
+                  <motion.span
+                    animate={{ opacity: [1, 0.3, 1] }}
+                    transition={{ duration: 1, repeat: Infinity }}
+                    className="h-2 w-2 rounded-full bg-white"
+                  />
+                )}
+                <Navigation size={16} />
+              </>
             )}
-            <Navigation size={16} />
-            {sedangJejak ? 'Tamat Jejak' : 'Mula Jejak'}
+            {mendapatkanGps ? 'Mendapatkan GPS...' : sedangJejak ? 'Tamat Jejak' : 'Mula Jejak'}
           </motion.button>
 
           {ralat && <p className="text-sm text-red-600">{ralat}</p>}
