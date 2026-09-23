@@ -36,7 +36,7 @@ export function Sekretariat() {
   const { profile } = useAuth()
   const onLanding = location.pathname === '/sekretariat'
   const [toast, setToast] = useState<ToastState>(null)
-  const [menjanaLaporan, setMenjanaLaporan] = useState(false)
+  const [, setMenjanaLaporan] = useState(false)
   const [menMuatTurun, setMenMuatTurun] = useState(false)
   const [menjanaGraf, setMenjanaGraf] = useState(false)
   const [tapisNegeri, setTapisNegeri] = useState('')
