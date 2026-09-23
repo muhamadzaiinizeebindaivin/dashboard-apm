@@ -1,14 +1,20 @@
-import { useEffect, useRef, useState } from 'react'
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, Outlet, useLocation } from 'react-router-dom'
 import { FileText, FileClock, FileDown, Home, ChevronRight } from 'lucide-react'
-import { supabase } from '../lib/supabase'
 import { Toast } from '../components/Toast'
 import type { ToastState } from '../components/Toast'
 import { DashboardCard } from '../components/DashboardCard'
+import { LaporanNasionalPreview } from '../components/LaporanNasionalPreview'
 import { useAuth } from '../hooks/useAuth'
 import { ambilLaporanNasional } from '../lib/laporanNasional'
+import type { ItemLaporanNasional } from '../lib/laporanNasional'
+import { ambilDataGraf } from '../lib/laporanNasionalGraf'
+import type { TitikGraf } from '../lib/laporanNasionalGraf'
 import { bangunLaporanNasionalDoc } from '../lib/janaLaporanNasional'
-import type { jsPDF } from 'jspdf'
+import { JENIS_BENCANA_SEMASA } from '../lib/laporanBencana'
+import { NEGERI_LIST } from '../lib/negeriVisual'
+
+const ZON_LIST = ['Utara', 'Tengah', 'Selatan', 'Timur', 'Borneo']
 
 const PILIHAN = [
   {
@@ -25,76 +31,27 @@ const PILIHAN = [
   },
 ]
 
-type BarisTerkini = {
-  id: string
-  created_at: string
-  jenis_laporan: 'awal' | 'semasa'
-  negeri: string | null
-  daerah: string | null
-  jenis_bencana: string | null
-  nama_bencana: string | null
-  level: string | null
-  penyedia_nama: string | null
-}
-
-async function muatSepuluh(): Promise<BarisTerkini[]> {
-  const { data } = await supabase
-    .from('laporan_bencana')
-    .select('id, created_at, jenis_laporan, negeri, daerah, jenis_bencana, nama_bencana, level, penyedia_nama')
-    .order('created_at', { ascending: false })
-    .limit(10)
-  return (data as BarisTerkini[]) ?? []
-}
-
-const JENIS_BADGE: Record<'awal' | 'semasa', { label: string; className: string }> = {
-  awal: { label: 'Laporan Awal', className: 'bg-sky-100 text-sky-700' },
-  semasa: { label: 'Laporan Semasa', className: 'bg-amber-100 text-amber-700' },
-}
-
 export function Sekretariat() {
   const location = useLocation()
-  const navigate = useNavigate()
   const { profile } = useAuth()
   const onLanding = location.pathname === '/sekretariat'
   const [toast, setToast] = useState<ToastState>(null)
   const [menjanaLaporan, setMenjanaLaporan] = useState(false)
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const [previewNamaFail, setPreviewNamaFail] = useState('')
-  const docRef = useRef<jsPDF | null>(null)
-  const [senarai, setSenarai] = useState<BarisTerkini[]>([])
-  const [loadingSenarai, setLoadingSenarai] = useState(true)
+  const [menMuatTurun, setMenMuatTurun] = useState(false)
+  const [menjanaGraf, setMenjanaGraf] = useState(false)
+  const [tapisNegeri, setTapisNegeri] = useState('')
+  const [tapisJenis, setTapisJenis] = useState('')
+  const [tapisZon, setTapisZon] = useState('')
+  const [previewData, setPreviewData] = useState<{ items: ItemLaporanNasional[]; masaJana: Date } | null>(null)
+  const [dataGraf, setDataGraf] = useState<{ duaJam: TitikGraf[]; harian: TitikGraf[] } | null>(null)
 
+  // Load the national report's content automatically as soon as the page opens.
   useEffect(() => {
-    if (!onLanding) return
-
-    muatSepuluh().then((rows) => {
-      setSenarai(rows)
-      setLoadingSenarai(false)
-    })
-
-    const channel = supabase
-      .channel('sekretariat-terkini')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'laporan_bencana' }, (payload) => {
-        const baru = payload.new as BarisTerkini
-        setSenarai((prev) => (prev.some((r) => r.id === baru.id) ? prev : [baru, ...prev].slice(0, 10)))
-        setToast({ type: 'success', message: 'Laporan baru diterima.' })
-      })
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'laporan_bencana' }, () => {
-        muatSepuluh().then(setSenarai)
-      })
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
+    if (onLanding && profile?.role === 'pkop') {
+      handleJanaLaporanNasional()
     }
-  }, [onLanding])
-
-  // Release the previewed PDF's blob URL whenever it's replaced or the page is left.
-  useEffect(() => {
-    return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl)
-    }
-  }, [previewUrl])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onLanding, profile?.role])
 
   async function handleJanaLaporanNasional() {
     setMenjanaLaporan(true)
@@ -104,10 +61,10 @@ export function Sekretariat() {
         setToast({ type: 'error', message: 'Tiada data untuk dijana.' })
         return
       }
-      const { doc, namaFail } = await bangunLaporanNasionalDoc(items)
-      docRef.current = doc
-      setPreviewNamaFail(namaFail)
-      setPreviewUrl(doc.output('bloburl') as unknown as string)
+      setPreviewData({ items, masaJana: new Date() })
+      setTapisNegeri('')
+      setTapisJenis('')
+      setTapisZon('')
     } catch {
       setToast({ type: 'error', message: 'Gagal menjana laporan. Sila cuba lagi.' })
     } finally {
@@ -115,13 +72,49 @@ export function Sekretariat() {
     }
   }
 
-  function muatTurunLaporan() {
-    docRef.current?.save(previewNamaFail)
-  }
+  // The graphs replay history across every disaster, so a filter change
+  // re-runs that replay with the same filter — this is what keeps the
+  // graphs, the table/map, and the downloaded PDF all showing the same slice.
+  useEffect(() => {
+    if (!previewData) return
+    let dibatalkan = false
+    setMenjanaGraf(true)
+    ambilDataGraf({
+      negeri: tapisNegeri || undefined,
+      jenis: tapisJenis || undefined,
+      zon: tapisZon || undefined,
+    })
+      .then((hasil) => {
+        if (!dibatalkan) setDataGraf(hasil)
+      })
+      .finally(() => {
+        if (!dibatalkan) setMenjanaGraf(false)
+      })
+    return () => {
+      dibatalkan = true
+    }
+  }, [previewData, tapisNegeri, tapisJenis, tapisZon])
 
-  function tutupPratonton() {
-    setPreviewUrl(null)
-    docRef.current = null
+  const itemsTertapis = previewData
+    ? previewData.items.filter(
+        (i) =>
+          (!tapisNegeri || i.negeri === tapisNegeri) &&
+          (!tapisJenis || i.jenisBencana === tapisJenis) &&
+          (!tapisZon || i.zon === tapisZon),
+      )
+    : []
+
+  async function muatTurunLaporan() {
+    if (!previewData) return
+    setMenMuatTurun(true)
+    try {
+      const { doc, namaFail } = await bangunLaporanNasionalDoc(itemsTertapis)
+      doc.save(namaFail)
+    } catch {
+      setToast({ type: 'error', message: 'Gagal menjana PDF. Sila cuba lagi.' })
+    } finally {
+      setMenMuatTurun(false)
+    }
   }
 
   return (
@@ -135,19 +128,6 @@ export function Sekretariat() {
             <span className="font-medium text-emerald-700">Sekretariat</span>
           </div>
           <h1 className="text-2xl font-semibold text-neutral-900">Sekretariat</h1>
-        </div>
-      )}
-
-      {onLanding && profile?.role === 'pkop' && (
-        <div className="mt-4 flex justify-end">
-          <button
-            onClick={handleJanaLaporanNasional}
-            disabled={menjanaLaporan}
-            className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-emerald-800 disabled:opacity-60"
-          >
-            <FileDown size={15} />
-            {menjanaLaporan ? 'Menjana...' : 'Jana Laporan Bencana Nasional'}
-          </button>
         </div>
       )}
 
@@ -171,100 +151,90 @@ export function Sekretariat() {
         </div>
       )}
 
-      {onLanding && previewUrl && (
+      {onLanding && previewData && (
         <DashboardCard className="mt-6">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 pb-4">
-            <h2 className="text-base font-semibold text-neutral-900">Pratonton Laporan Bencana Nasional</h2>
+            <h2 className="text-base font-semibold text-neutral-900">Laporan Bencana Nasional</h2>
             <div className="flex items-center gap-2">
               <button
                 onClick={muatTurunLaporan}
-                className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-emerald-800"
+                disabled={menMuatTurun}
+                className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-emerald-800 disabled:opacity-60"
               >
                 <FileDown size={15} />
-                Muat Turun PDF
+                {menMuatTurun ? 'Menjana PDF...' : 'Muat Turun PDF'}
               </button>
               <button
-                onClick={tutupPratonton}
+                onClick={() => {
+                  setPreviewData(null)
+                  setDataGraf(null)
+                }}
                 className="rounded-lg border border-neutral-200 px-3 py-1.5 text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-50"
               >
                 Tutup
               </button>
             </div>
           </div>
-          <iframe
-            src={previewUrl}
-            title="Pratonton Laporan Bencana Nasional"
-            className="mt-4 h-[600px] w-full rounded-lg border border-neutral-200"
-          />
-        </DashboardCard>
-      )}
 
-      {onLanding && (
-        <DashboardCard className="mt-6">
-          <h2 className="text-base font-medium text-neutral-900">10 Laporan Terkini</h2>
+          <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100 py-3">
+            <select
+              value={tapisNegeri}
+              onChange={(e) => setTapisNegeri(e.target.value)}
+              className="h-9 rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-700 outline-none focus:border-emerald-600"
+            >
+              <option value="">Semua Negeri</option>
+              {NEGERI_LIST.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+            <select
+              value={tapisJenis}
+              onChange={(e) => setTapisJenis(e.target.value)}
+              className="h-9 rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-700 outline-none focus:border-emerald-600"
+            >
+              <option value="">Semua Jenis Bencana</option>
+              {JENIS_BENCANA_SEMASA.map((j) => (
+                <option key={j} value={j}>
+                  {j}
+                </option>
+              ))}
+            </select>
+            <select
+              value={tapisZon}
+              onChange={(e) => setTapisZon(e.target.value)}
+              className="h-9 rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-700 outline-none focus:border-emerald-600"
+            >
+              <option value="">Semua Zon</option>
+              {ZON_LIST.map((z) => (
+                <option key={z} value={z}>
+                  {z}
+                </option>
+              ))}
+            </select>
+            {(tapisNegeri || tapisJenis || tapisZon) && (
+              <button
+                onClick={() => {
+                  setTapisNegeri('')
+                  setTapisJenis('')
+                  setTapisZon('')
+                }}
+                className="text-sm font-medium text-neutral-500 hover:text-emerald-700"
+              >
+                Kosongkan tapisan
+              </button>
+            )}
+            {menjanaGraf && <span className="text-xs text-neutral-400">Mengemas kini graf...</span>}
+          </div>
 
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-neutral-200 text-xs uppercase tracking-wide text-neutral-500">
-                  <th className="py-2 pr-4 font-medium">Masa Diterima</th>
-                  <th className="py-2 pr-4 font-medium">Jenis</th>
-                  <th className="py-2 pr-4 font-medium">Negeri</th>
-                  <th className="py-2 pr-4 font-medium">Daerah</th>
-                  <th className="py-2 pr-4 font-medium">Jenis Bencana</th>
-                  <th className="py-2 pr-4 font-medium">Nama Bencana</th>
-                  <th className="py-2 pr-4 font-medium">Level</th>
-                  <th className="py-2 font-medium">Disediakan Oleh</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100">
-                {loadingSenarai ? (
-                  [0, 1, 2, 3, 4].map((i) => (
-                    <tr key={i}>
-                      <td colSpan={8} className="py-3">
-                        <span className="block h-3 w-full animate-pulse rounded-full bg-neutral-200" />
-                      </td>
-                    </tr>
-                  ))
-                ) : senarai.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="py-4 text-sm italic text-neutral-400">
-                      Tiada laporan lagi
-                    </td>
-                  </tr>
-                ) : (
-                  senarai.map((row) => {
-                    const badge = JENIS_BADGE[row.jenis_laporan]
-                    return (
-                      <tr
-                        key={row.id}
-                        onClick={() =>
-                          navigate(row.jenis_laporan === 'awal' ? '/sekretariat/laporan-awal' : '/sekretariat/laporan-semasa')
-                        }
-                        className="cursor-pointer transition-colors hover:bg-white/60"
-                      >
-                        <td className="whitespace-nowrap py-2.5 pr-4 text-neutral-600">
-                          {new Date(row.created_at).toLocaleString('ms-MY')}
-                        </td>
-                        <td className="py-2.5 pr-4">
-                          <span
-                            className={`whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ${badge.className}`}
-                          >
-                            {badge.label}
-                          </span>
-                        </td>
-                        <td className="py-2.5 pr-4 text-neutral-800">{row.negeri || '—'}</td>
-                        <td className="py-2.5 pr-4 text-neutral-800">{row.daerah || '—'}</td>
-                        <td className="py-2.5 pr-4 text-neutral-800">{row.jenis_bencana || '—'}</td>
-                        <td className="py-2.5 pr-4 text-neutral-800">{row.nama_bencana || '—'}</td>
-                        <td className="py-2.5 pr-4 text-neutral-800">{row.level || '—'}</td>
-                        <td className="py-2.5 text-neutral-800">{row.penyedia_nama || '—'}</td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
+          <div className="mt-4">
+            <LaporanNasionalPreview
+              items={itemsTertapis}
+              duaJam={dataGraf?.duaJam ?? []}
+              harian={dataGraf?.harian ?? []}
+              masaJana={previewData.masaJana}
+            />
           </div>
         </DashboardCard>
       )}

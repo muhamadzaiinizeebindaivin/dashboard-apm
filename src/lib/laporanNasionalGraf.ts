@@ -3,6 +3,7 @@ import { supabase } from './supabase'
 type BarisSemasa = {
   id: string
   nama_bencana: string | null
+  jenis_bencana: string | null
   ringkasan_status: string | null
   created_at: string
 }
@@ -10,6 +11,7 @@ type BarisSemasa = {
 type BarisPps = {
   laporan_id: string
   negeri: string | null
+  zon: string | null
   pps: string | null
   jumlah_mangsa: number | null
   jumlah_keluarga: number | null
@@ -23,14 +25,22 @@ export type TitikGraf = {
   negeri: number
 }
 
+export type TapisGraf = {
+  negeri?: string
+  jenis?: string
+  zon?: string
+}
+
 // The state of the report "as of" a given moment — same carry-forward rule
 // as the current snapshot (ambilLaporanNasional), just re-run at an earlier
 // point in time: for each disaster, use its most recent report at or before
-// `masa` that actually carried PPS data.
+// `masa` that actually carried PPS data. `tapis` applies the same
+// Negeri/Jenis Bencana/Zon filter the on-page report and PDF use.
 function snapshotPadaMasa(
   masa: Date,
   barisAsc: BarisSemasa[],
   pps: BarisPps[],
+  tapis: TapisGraf,
 ): { mangsa: number; keluarga: number; pps: number; negeri: number } {
   const had = barisAsc.filter((b) => new Date(b.created_at).getTime() <= masa.getTime())
 
@@ -51,8 +61,11 @@ function snapshotPadaMasa(
     // backwards to find the latest one that actually had PPS data.
     const sumber = [...arr].reverse().find((r) => r.ringkasan_status === 'ada_perubahan')
     if (!sumber) continue
+    if (tapis.jenis && sumber.jenis_bencana !== tapis.jenis) continue
 
     for (const p of pps.filter((x) => x.laporan_id === sumber.id)) {
+      if (tapis.negeri && p.negeri !== tapis.negeri) continue
+      if (tapis.zon && p.zon !== tapis.zon) continue
       mangsa += p.jumlah_mangsa ?? 0
       keluarga += p.jumlah_keluarga ?? 0
       ppsCount += p.pps ? p.pps.split('\n').filter((s) => s.trim()).length : 0
@@ -66,14 +79,14 @@ function snapshotPadaMasa(
 const pad = (n: number) => String(n).padStart(2, '0')
 const NAMA_BULAN = ['Jan', 'Feb', 'Mac', 'Apr', 'Mei', 'Jun', 'Jul', 'Ogo', 'Sep', 'Okt', 'Nov', 'Dis']
 
-export async function ambilDataGraf(): Promise<{ duaJam: TitikGraf[]; harian: TitikGraf[] }> {
+export async function ambilDataGraf(tapis: TapisGraf = {}): Promise<{ duaJam: TitikGraf[]; harian: TitikGraf[] }> {
   const [{ data: semasaData }, { data: ppsData }] = await Promise.all([
     supabase
       .from('laporan_bencana')
-      .select('id, nama_bencana, ringkasan_status, created_at')
+      .select('id, nama_bencana, jenis_bencana, ringkasan_status, created_at')
       .eq('jenis_laporan', 'semasa')
       .order('created_at', { ascending: true }),
-    supabase.from('laporan_pps').select('laporan_id, negeri, pps, jumlah_mangsa, jumlah_keluarga'),
+    supabase.from('laporan_pps').select('laporan_id, negeri, zon, pps, jumlah_mangsa, jumlah_keluarga'),
   ])
 
   const baris = (semasaData as BarisSemasa[]) ?? []
@@ -88,7 +101,7 @@ export async function ambilDataGraf(): Promise<{ duaJam: TitikGraf[]; harian: Ti
   const duaJam: TitikGraf[] = []
   for (let i = 11; i >= 0; i--) {
     const masa = new Date(jamGenap.getTime() - i * 2 * 60 * 60 * 1000)
-    const s = snapshotPadaMasa(masa, baris, pps)
+    const s = snapshotPadaMasa(masa, baris, pps, tapis)
     duaJam.push({ label: `${pad(masa.getHours())}${pad(masa.getMinutes())}H`, ...s })
   }
 
@@ -99,7 +112,7 @@ export async function ambilDataGraf(): Promise<{ duaJam: TitikGraf[]; harian: Ti
       masa.setDate(masa.getDate() - i)
       masa.setHours(23, 59, 59, 999)
     }
-    const s = snapshotPadaMasa(masa, baris, pps)
+    const s = snapshotPadaMasa(masa, baris, pps, tapis)
     harian.push({ label: `${masa.getDate()}-${NAMA_BULAN[masa.getMonth()]}`, ...s })
   }
 
