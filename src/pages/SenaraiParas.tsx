@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Home, ChevronRight, AlertTriangle, BellOff, Bell, History } from 'lucide-react'
+import { Home, ChevronRight, AlertTriangle, BellOff, Bell, History, MapPinOff } from 'lucide-react'
 import { RekodParasPanel } from '../components/RekodParasPanel'
 import { supabase } from '../lib/supabase'
 import { ParasMap } from '../components/ParasMap'
@@ -201,11 +201,45 @@ export function SenaraiParas() {
 
       <div className="mt-6 min-h-[24rem] flex-1">
         {loading ? (
-          <p className="text-sm text-neutral-400">Memuatkan...</p>
-        ) : negeriAktif.length === 0 ? (
-          <p className="text-sm text-neutral-400">Tiada negeri aktif dijejak buat masa ini.</p>
+          <div className="h-full animate-pulse rounded-2xl border border-white/60 bg-white/40 shadow-lg" />
         ) : (
-          <ParasMap points={negeriAktif} className="h-full" />
+          <div className="relative h-full">
+            <ParasMap points={negeriAktif} className="h-full" />
+
+            {negeriAktif.length === 0 && (
+              // pointer-events-none on the layer so the map stays pannable;
+              // the card itself re-enables clicks for its button.
+              <div className="pointer-events-none absolute inset-0 z-[500] flex items-center justify-center rounded-2xl bg-white/30 p-4">
+                <div className="pointer-events-auto w-full max-w-sm rounded-2xl border border-white/60 bg-white/85 px-6 py-7 text-center shadow-xl backdrop-blur-md">
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-emerald-50 to-sky-50 text-emerald-700 shadow-inner">
+                    <MapPinOff size={24} />
+                  </div>
+
+                  <h2 className="mt-4 text-base font-semibold text-neutral-900">Tiada PARAS aktif</h2>
+                  <p className="mt-1 text-sm text-neutral-500">
+                    Tiada pasukan sedang dijejak buat masa ini. Lokasi akan muncul di peta secara automatik sebaik
+                    sahaja penjejakan bermula.
+                  </p>
+
+                  <div className="mt-3 flex items-center justify-center gap-1.5 text-xs font-medium text-emerald-700">
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-600" />
+                    </span>
+                    Memantau secara langsung
+                  </div>
+
+                  <button
+                    onClick={() => setPanelBuka(true)}
+                    className="mt-5 inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-white px-4 py-2 text-sm font-medium text-emerald-700 transition-colors hover:border-emerald-500 hover:bg-emerald-50"
+                  >
+                    <History size={15} />
+                    Lihat Rekod PARAS
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>
