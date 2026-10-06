@@ -3,28 +3,29 @@ import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { AccessCodeForm } from './AccessCodeForm'
-import { ambilKod } from '../lib/accessCode'
+import { ambilKod, ambilPetugas } from '../lib/accessCode'
 import apmLogo from '../assets/apm-logo.png'
 
 type RequireCodeProps = {
   page: string
   label: string
   children: ReactNode
+  withPetugas?: boolean
 }
 
-export function RequireCode({ page, label, children }: RequireCodeProps) {
+export function RequireCode({ page, label, children, withPetugas = false }: RequireCodeProps) {
   const navigate = useNavigate()
-  const [ok, setOk] = useState(() => !!ambilKod(page))
+  const [ok, setOk] = useState(() => !!ambilKod(page) && (!withPetugas || !!ambilPetugas()))
 
   if (ok) return <>{children}</>
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-sky-100 via-sky-50 to-white px-4">
-      <div className="w-full max-w-sm rounded-2xl border border-white/60 bg-white/60 p-8 shadow-xl backdrop-blur-md">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-white/60 bg-white/60 p-8 shadow-xl backdrop-blur-md sm:p-10">
         <div className="mb-5 flex justify-center">
           <img src={apmLogo} alt="Logo APM" className="h-14 w-14 object-contain" />
         </div>
-        <AccessCodeForm page={page} label={label} onSuccess={() => setOk(true)} />
+        <AccessCodeForm page={page} label={label} withPetugas={withPetugas} onSuccess={() => setOk(true)} />
         <button
           onClick={() => navigate('/')}
           className="mt-4 flex items-center gap-1 text-xs font-medium text-neutral-500 hover:text-neutral-700"

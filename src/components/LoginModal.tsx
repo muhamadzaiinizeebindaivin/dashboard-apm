@@ -14,13 +14,13 @@ type LoginModalProps = {
 
 const QUICK_LINKS = [
   { page: 'sumbangan', to: '/sumbangan', label: 'Sumbangan', icon: HandCoins },
-  { page: 'paras', to: '/paras', label: 'PARAS', icon: MapPin },
+  { page: 'paras', to: '/paras', label: 'PARAS', icon: MapPin, withPetugas: true },
   { page: 'laporan', to: '/laporan', label: 'Laporan', icon: FileWarning },
 ]
 
 export function LoginModal({ open, onClose, onSuccess }: LoginModalProps) {
   const navigate = useNavigate()
-  const [pending, setPending] = useState<{ page: string; to: string; label: string } | null>(null)
+  const [pending, setPending] = useState<{ page: string; to: string; label: string; withPetugas?: boolean } | null>(null)
 
   function handleClose() {
     setPending(null)
@@ -51,7 +51,7 @@ export function LoginModal({ open, onClose, onSuccess }: LoginModalProps) {
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
             transition={{ duration: 0.15 }}
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-sm rounded-3xl border border-white/60 bg-white/40 p-8 shadow-2xl backdrop-blur-xl"
+            className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl border border-white/60 bg-white/40 p-8 shadow-2xl backdrop-blur-xl sm:p-10"
           >
             <button
               onClick={handleClose}
@@ -90,6 +90,7 @@ export function LoginModal({ open, onClose, onSuccess }: LoginModalProps) {
                   <AccessCodeForm
                     page={pending.page}
                     label={pending.label}
+                    withPetugas={pending.withPetugas}
                     onSuccess={handleAccessGranted}
                   />
                 </motion.div>
@@ -104,10 +105,10 @@ export function LoginModal({ open, onClose, onSuccess }: LoginModalProps) {
                   <LoginForm onSuccess={onSuccess} />
 
                   <div className="mt-6 grid grid-cols-3 gap-2 border-t border-neutral-100 pt-5">
-                    {QUICK_LINKS.map(({ to, label, page, icon: Icon }) => (
+                    {QUICK_LINKS.map(({ to, label, page, icon: Icon, withPetugas }) => (
                       <button
                         key={to}
-                        onClick={() => setPending({ page, to, label })}
+                        onClick={() => setPending({ page, to, label, withPetugas })}
                         className="flex flex-col items-center gap-1.5 rounded-xl border border-white/60 bg-white/30 px-2 py-3 text-xs font-medium text-neutral-700 backdrop-blur-md transition-colors hover:border-emerald-500 hover:bg-emerald-700/10 hover:text-emerald-800"
                       >
                         <Icon size={18} />

@@ -1,15 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Navigation, Loader2 } from 'lucide-react'
+import { ArrowLeft, Navigation, Loader2, Coffee, Siren } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { ambilPetugas } from '../lib/accessCode'
+import { ConfirmModal } from '../components/ConfirmModal'
 import { ParasMap } from '../components/ParasMap'
 import type { LokasiPoint } from '../components/ParasMap'
 import apmLogo from '../assets/apm-logo.png'
 
 const STORAGE_KEY = 'paras_jejak_active'
 
-type SesiJejak = { id: string; negeri: string }
+type Keadaan = 'biasa' | 'rehat' | 'kecemasan'
+
+type SesiJejak = { id: string; negeri: string; keadaan?: Keadaan }
 
 export function ParasJejak() {
   const navigate = useNavigate()
@@ -21,6 +25,9 @@ export function ParasJejak() {
   const [ralat, setRalat] = useState('')
   const [lokasiAwam, setLokasiAwam] = useState<LokasiPoint[]>([])
   const [posisiSaya, setPosisiSaya] = useState<[number, number] | null>(null)
+  const [keadaan, setKeadaan] = useState<Keadaan>('biasa')
+  const [sahkanKecemasan, setSahkanKecemasan] = useState(false)
+  const [menukarKeadaan, setMenukarKeadaan] = useState(false)
 
   const trackingIdRef = useRef<string | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -58,6 +65,7 @@ export function ParasJejak() {
 
       trackingIdRef.current = sesi.id
       setSedangJejak(true)
+      setKeadaan(sesi.keadaan ?? 'biasa')
 
       hantarPosisi()
       intervalRef.current = setInterval(hantarPosisi, 500)
@@ -86,11 +94,15 @@ export function ParasJejak() {
 
         const { latitude, longitude } = position.coords
         setPosisiSaya([latitude, longitude])
+        const petugas = ambilPetugas()
         await supabase.rpc('track_paras_lokasi', {
           p_id: id,
           p_negeri: negeri,
           p_latitude: latitude,
           p_longitude: longitude,
+          p_nama: petugas?.nama ?? null,
+          p_pangkat: petugas?.pangkat ?? null,
+          p_no_tel: petugas?.noTel ?? null,
         })
       },
       () => {
@@ -124,11 +136,15 @@ export function ParasJejak() {
         setSedangJejak(true)
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ id, negeri }))
 
+        const petugas = ambilPetugas()
         await supabase.rpc('track_paras_lokasi', {
           p_id: id,
           p_negeri: negeri,
           p_latitude: latitude,
           p_longitude: longitude,
+          p_nama: petugas?.nama ?? null,
+          p_pangkat: petugas?.pangkat ?? null,
+          p_no_tel: petugas?.noTel ?? null,
         })
 
         intervalRef.current = setInterval(hantarPosisi, 500)
@@ -138,6 +154,37 @@ export function ParasJejak() {
         setRalat('Tidak dapat mengesan lokasi. Sila benarkan akses GPS.')
       },
     )
+  }
+
+  async function tukarKeadaan(baru: Keadaan) {
+    const id = trackingIdRef.current
+    if (!id) return
+
+    const lama = keadaan
+    setKeadaan(baru) // optimistic
+    setMenukarKeadaan(true)
+    setRalat('')
+
+    const { error } = await supabase.rpc('set_paras_keadaan', { p_id: id, p_keadaan: baru })
+    setMenukarKeadaan(false)
+
+    if (error) {
+      setKeadaan(lama)
+      setRalat('Gagal mengemaskini keadaan. Sila cuba lagi.')
+      return
+    }
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ id, negeri, keadaan: baru }))
+  }
+
+  function tekanRehat() {
+    tukarKeadaan(keadaan === 'rehat' ? 'biasa' : 'rehat')
+  }
+
+  function tekanKecemasan() {
+    // Turning an emergency OFF is immediate; turning it ON asks first.
+    if (keadaan === 'kecemasan') tukarKeadaan('biasa')
+    else setSahkanKecemasan(true)
   }
 
   async function handleTamatJejak() {
@@ -161,6 +208,7 @@ export function ParasJejak() {
 
     localStorage.removeItem(STORAGE_KEY)
     setSedangJejak(false)
+    setKeadaan('biasa')
   }
 
   return (
@@ -186,7 +234,7 @@ export function ParasJejak() {
           </button>
         </div>
 
-        <div className="mt-6 flex flex-col items-start gap-3 rounded-2xl border border-white/60 bg-white/40 p-6 shadow-lg backdrop-blur-md">
+        <div className="mt-6 flex flex-col items-center gap-3 rounded-2xl border border-white/60 bg-white/40 p-6 shadow-lg backdrop-blur-md">
           <motion.button
             whileTap={{ scale: 0.97 }}
             onClick={sedangJejak ? handleTamatJejak : handleMulaJejak}
@@ -218,6 +266,40 @@ export function ParasJejak() {
             {mendapatkanGps ? 'Mendapatkan GPS...' : sedangJejak ? 'Tamat Jejak' : 'Mula Jejak'}
           </motion.button>
 
+          {sedangJejak && (
+            <div className="flex w-full flex-wrap gap-2">
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.97 }}
+                onClick={tekanRehat}
+                disabled={menukarKeadaan || keadaan === 'kecemasan'}
+                className={`flex flex-1 items-center justify-center gap-2 rounded-full border px-5 py-2.5 text-sm font-semibold transition-colors disabled:opacity-50 ${
+                  keadaan === 'rehat'
+                    ? 'border-amber-500 bg-amber-500 text-white'
+                    : 'border-amber-300 bg-white/60 text-amber-700 hover:bg-amber-50'
+                }`}
+              >
+                <Coffee size={16} />
+                REHAT
+              </motion.button>
+
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.97 }}
+                onClick={tekanKecemasan}
+                disabled={menukarKeadaan}
+                className={`flex flex-1 items-center justify-center gap-2 rounded-full border px-5 py-2.5 text-sm font-semibold transition-colors disabled:opacity-50 ${
+                  keadaan === 'kecemasan'
+                    ? 'animate-pulse border-red-600 bg-red-600 text-white'
+                    : 'border-red-300 bg-white/60 text-red-700 hover:bg-red-50'
+                }`}
+              >
+                <Siren size={16} />
+                KECEMASAN
+              </motion.button>
+            </div>
+          )}
+
           {ralat && <p className="text-sm text-red-600">{ralat}</p>}
         </div>
 
@@ -227,6 +309,19 @@ export function ParasJejak() {
           </h2>
           <ParasMap points={lokasiAwam} center={posisiSaya ?? undefined} />
         </div>
+
+        <ConfirmModal
+          open={sahkanKecemasan}
+          title="Isyarat Kecemasan"
+          message="Hantar isyarat KECEMASAN kepada Pusat Kawalan? Gunakan hanya dalam keadaan sebenar."
+          confirmLabel="Hantar"
+          danger
+          onConfirm={() => {
+            setSahkanKecemasan(false)
+            tukarKeadaan('kecemasan')
+          }}
+          onCancel={() => setSahkanKecemasan(false)}
+        />
       </div>
     </div>
   )

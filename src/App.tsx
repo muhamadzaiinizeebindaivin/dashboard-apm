@@ -43,8 +43,22 @@ function App() {
           <Routes>
             <Route path="/" element={<HomeScreen />} />
             <Route path="/sumbangan" element={<Sumbangan />} />
-            <Route path="/paras" element={<Paras />} />
-            <Route path="/paras/jejak/:negeri" element={<ParasJejak />} />
+            <Route
+              path="/paras"
+              element={
+                <RequireCode page="paras" label="PARAS" withPetugas>
+                  <Paras />
+                </RequireCode>
+              }
+            />
+            <Route
+              path="/paras/jejak/:negeri"
+              element={
+                <RequireCode page="paras" label="PARAS" withPetugas>
+                  <ParasJejak />
+                </RequireCode>
+              }
+            />
             <Route
               path="/laporan"
               element={
