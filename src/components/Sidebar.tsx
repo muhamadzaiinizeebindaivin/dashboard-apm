@@ -7,6 +7,7 @@ import { useAuth } from '../hooks/useAuth'
 import { NAV_TABS } from '../lib/navTabs'
 import { ROLE_LABEL } from '../lib/roles'
 import { ConfirmModal } from './ConfirmModal'
+import { Skeleton } from './Memuatkan'
 
 type SidebarContentProps = {
   onNavigate?: () => void
@@ -33,11 +34,7 @@ export function SidebarContent({ onNavigate }: SidebarContentProps) {
           {!profile ? (
             <motion.div key="skeleton" exit={{ opacity: 0 }} className="flex flex-col gap-2 px-4 py-2">
               {[70, 50, 65, 55, 60, 45, 50].map((w, i) => (
-                <span
-                  key={i}
-                  style={{ width: `${w}%` }}
-                  className="h-3 animate-pulse rounded-full bg-neutral-300/50"
-                />
+                <Skeleton key={i} style={{ width: `${w}%` }} className="h-3 rounded-full" />
               ))}
             </motion.div>
           ) : (

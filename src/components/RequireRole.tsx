@@ -1,6 +1,7 @@
 import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import type { UserRole } from '../hooks/useAuth'
+import { PemuatHalaman } from './Memuatkan'
 
 type RequireRoleProps = {
   allow: UserRole[]
@@ -13,11 +14,8 @@ export function RequireRole({ allow }: RequireRoleProps) {
   // the profile (and therefore the role) hasn't arrived yet — wait for it
   // instead of bouncing the user out before we actually know their role.
   if (!profile) {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-neutral-400">
-        Memuatkan...
-      </div>
-    )
+    // Rendered inside the AppShell, so not full-screen
+    return <PemuatHalaman penuh={false} />
   }
 
   if (!allow.includes(profile.role)) {

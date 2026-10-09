@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Loader2, MapPin, MapPinned } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { ambilKod, padamKod } from '../lib/accessCode'
 import apmLogo from '../assets/apm-logo.png'
@@ -19,6 +19,10 @@ import {
   cariZon,
 } from '../lib/laporanBencana'
 import type { FieldDef } from '../lib/laporanBencana'
+import { SenaraiPpsInput } from '../components/SenaraiPpsInput'
+import { PilihLokasiModal } from '../components/PilihLokasiModal'
+import { normalNamaPps, ppsKosong, semakPps } from '../lib/ppsPusat'
+import type { PpsInput, PpsSediaAda } from '../lib/ppsPusat'
 
 const AWAL_FIELD: FieldDef[] = [
   TARIKH_MASA_FIELD,
@@ -84,14 +88,138 @@ function Bahagian({ tajuk, anak, children }: { tajuk: string; anak?: ReactNode; 
   )
 }
 
+type Berjaya = { jenis: string; nama: string; masa: Date }
+
+type KejayaanHantarProps = { berjaya: Berjaya; onLagi: () => void; onKeluar: () => void }
+
+// Shown in place of the form after a successful submit, until the user
+// chooses what to do next (no auto-dismiss).
+function KejayaanHantar({ berjaya, onLagi, onKeluar }: KejayaanHantarProps) {
+  const labelJenis = JENIS_LAPORAN.find((j) => j.value === berjaya.jenis)?.label ?? 'Laporan'
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25 }}
+      role="status"
+      aria-live="polite"
+      className="flex flex-col items-center py-6 text-center"
+    >
+      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 ring-8 ring-emerald-50">
+        <CheckCircle2 size={28} />
+      </span>
+
+      <h2 className="mt-5 text-lg font-semibold text-neutral-900">Laporan berjaya dihantar</h2>
+      <p className="mt-1 max-w-sm text-sm text-neutral-500">
+        Terima kasih. Laporan anda telah diterima dan boleh dilihat oleh Sekretariat.
+      </p>
+
+      <dl className="mt-5 w-full max-w-sm divide-y divide-neutral-900/5 rounded-xl border border-white/70 bg-white/60 text-left text-sm">
+        <div className="flex justify-between gap-4 px-4 py-2.5">
+          <dt className="text-neutral-500">Jenis laporan</dt>
+          <dd className="font-medium text-neutral-800">{labelJenis}</dd>
+        </div>
+        {berjaya.nama && (
+          <div className="flex justify-between gap-4 px-4 py-2.5">
+            <dt className="text-neutral-500">Nama bencana</dt>
+            <dd className="text-right font-medium text-neutral-800">{berjaya.nama}</dd>
+          </div>
+        )}
+        <div className="flex justify-between gap-4 px-4 py-2.5">
+          <dt className="text-neutral-500">Masa dihantar</dt>
+          <dd className="font-medium text-neutral-800">
+            {berjaya.masa.toLocaleString('ms-MY', {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="mt-6 flex w-full max-w-sm flex-col gap-2 sm:flex-row">
+        <button
+          type="button"
+          onClick={onLagi}
+          className="flex-1 rounded-lg bg-emerald-700 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-800"
+        >
+          Hantar laporan lain
+        </button>
+        <button
+          type="button"
+          onClick={onKeluar}
+          className="flex-1 rounded-lg border border-neutral-200 bg-white/70 py-2.5 text-sm font-medium text-neutral-700 transition-colors hover:bg-white"
+        >
+          Keluar
+        </button>
+      </div>
+    </motion.div>
+  )
+}
+
 export function LaporanAwam() {
   const navigate = useNavigate()
   const [jenis, setJenis] = useState<string>('')
   const [nilai, setNilai] = useState<Record<string, string>>({})
   const [ringkasan, setRingkasan] = useState<string>('')
   const [menghantar, setMenghantar] = useState(false)
-  const [dihantar, setDihantar] = useState(false)
+  const [berjaya, setBerjaya] = useState<Berjaya | null>(null)
   const [ralat, setRalat] = useState('')
+  const [senaraiPps, setSenaraiPps] = useState<PpsInput[]>(() => [ppsKosong()])
+  const [lokasiBencana, setLokasiBencana] = useState<[number, number] | null>(null)
+  const [petaBuka, setPetaBuka] = useState(false)
+  const [memuatPps, setMemuatPps] = useState(false)
+
+  // Prefill the PPS still open for this disaster + negeri, so the reporter
+  // updates their numbers instead of retyping names (avoids duplicates and
+  // false "cadangan tutup" flags for PPS they forgot to list).
+  const namaBencana = (nilai.nama_bencana ?? '').trim()
+  const negeriPps = nilai.pps_negeri ?? ''
+  const daerahPps = (nilai.pps_daerah ?? '').trim()
+
+  useEffect(() => {
+    if (jenis !== 'semasa' || ringkasan !== 'ada_perubahan' || !namaBencana || !negeriPps || !daerahPps) return
+
+    let batal = false
+    const t = setTimeout(async () => {
+      setMemuatPps(true)
+      const { data, error } = await supabase.rpc('senarai_pps_bencana', {
+        p_code: ambilKod('laporan'),
+        p_nama_bencana: namaBencana,
+        p_negeri: negeriPps,
+        p_daerah: daerahPps,
+      })
+      setMemuatPps(false)
+      if (batal || error || !data) return
+
+      const sedia: PpsInput[] = (data as PpsSediaAda[]).map((p) => ({
+        kunci: crypto.randomUUID(),
+        nama: p.nama,
+        mangsa: String(p.jumlah_mangsa ?? 0),
+        keluarga: String(p.jumlah_keluarga ?? 0),
+        latitude: p.latitude,
+        longitude: p.longitude,
+        sedia: true,
+      }))
+
+      setSenaraiPps((prev) => {
+        // Keep PPS the reporter added by hand, replace previously prefilled ones
+        const tambahan = prev.filter(
+          (r) => !r.sedia && r.nama.trim() && !sedia.some((s) => normalNamaPps(s.nama) === normalNamaPps(r.nama)),
+        )
+        const gabung = [...sedia, ...tambahan]
+        return gabung.length > 0 ? gabung : [ppsKosong()]
+      })
+    }, 500)
+
+    return () => {
+      batal = true
+      clearTimeout(t)
+    }
+  }, [jenis, ringkasan, namaBencana, negeriPps, daerahPps])
 
   function renderMedan(def: FieldDef) {
     return (
@@ -109,6 +237,8 @@ export function LaporanAwam() {
     setNilai({})
     setRingkasan('')
     setRalat('')
+    setSenaraiPps([ppsKosong()])
+    setLokasiBencana(null)
   }
 
   async function handleHantar() {
@@ -120,7 +250,7 @@ export function LaporanAwam() {
     }
 
     const rekod: Record<string, string | null> = { jenis_laporan: jenis }
-    let pps: Record<string, string | number>[] = []
+    let pps: Record<string, unknown>[] = []
 
     if (jenis === 'awal') {
       const tiadaIsi = AWAL_FIELD.find((f) => f.required && !nilai[f.key]?.trim())
@@ -128,10 +258,16 @@ export function LaporanAwam() {
         setRalat(`Sila isi ruangan "${tiadaIsi.label}".`)
         return
       }
+      if (!lokasiBencana) {
+        setRalat('Sila pilih lokasi bencana di peta.')
+        return
+      }
       for (const f of AWAL_FIELD) {
         const v = (nilai[f.key] ?? '').trim()
         rekod[f.key] = !v ? null : f.type === 'datetime' ? new Date(v).toISOString() : v
       }
+      rekod.latitude = String(lokasiBencana[0])
+      rekod.longitude = String(lokasiBencana[1])
     } else {
       const tiadaIsi = SEMASA_FIELD.find((f) => f.required && !nilai[f.key]?.trim())
       if (tiadaIsi) {
@@ -149,14 +285,31 @@ export function LaporanAwam() {
           setRalat(`Sila isi ruangan "${tiadaPps.label}".`)
           return
         }
+        const ralatPps = semakPps(senaraiPps)
+        if (ralatPps) {
+          setRalat(ralatPps)
+          return
+        }
+
+        const items = senaraiPps.map((r) => ({
+          nama: r.nama.trim().replace(/\s+/g, ' '),
+          jumlah_mangsa: Number(r.mangsa),
+          jumlah_keluarga: Number(r.keluarga),
+          latitude: r.latitude,
+          longitude: r.longitude,
+        }))
+
         pps = [
           {
             negeri: nilai.pps_negeri,
             daerah: nilai.pps_daerah,
-            pps: nilai.pps_pps,
-            jumlah_mangsa: Number(nilai.pps_jumlah_mangsa),
-            jumlah_keluarga: Number(nilai.pps_jumlah_keluarga),
             zon: cariZon(nilai.pps_negeri),
+            // Legacy group fields, still read by the daily report until phase 3
+            pps: items.map((i) => i.nama).join('\n'),
+            jumlah_mangsa: items.reduce((n, i) => n + i.jumlah_mangsa, 0),
+            jumlah_keluarga: items.reduce((n, i) => n + i.jumlah_keluarga, 0),
+            // New: one entry per PPS
+            items,
           },
         ]
       }
@@ -187,9 +340,9 @@ export function LaporanAwam() {
       return
     }
 
+    setBerjaya({ jenis, nama: (nilai.nama_bencana ?? '').trim(), masa: new Date() })
     pilihJenis('')
-    setDihantar(true)
-    setTimeout(() => setDihantar(false), 4000)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const zonPps = nilai.pps_negeri ? cariZon(nilai.pps_negeri) : ''
@@ -220,6 +373,9 @@ export function LaporanAwam() {
         </div>
 
         <div className="mt-6 rounded-2xl border border-white/60 bg-white/40 p-6 shadow-lg backdrop-blur-md">
+          {berjaya ? (
+            <KejayaanHantar berjaya={berjaya} onLagi={() => setBerjaya(null)} onKeluar={() => navigate('/')} />
+          ) : (
           <div className="space-y-6">
             <div>
               <label className="mb-2 block text-sm font-medium text-neutral-700">
@@ -250,6 +406,50 @@ export function LaporanAwam() {
               <>
                 <div className="grid gap-4 sm:grid-cols-2">{renderMedan(TARIKH_MASA_FIELD)}</div>
                 <Bahagian tajuk="Maklumat Kejadian">{KEJADIAN_FIELDS.map(renderMedan)}</Bahagian>
+
+                <Bahagian tajuk="Lokasi Bencana">
+                  <div className="sm:col-span-2">
+                    <p className="mb-2 text-xs text-neutral-500">
+                      Lokasi ini akan dipaparkan sebagai titik bencana pada Peta Bencana.{' '}
+                      <span className="text-red-500">*</span>
+                    </p>
+                    {lokasiBencana ? (
+                      <div className="flex flex-wrap items-center gap-2 text-sm text-emerald-700">
+                        <MapPin size={15} />
+                        {lokasiBencana[0].toFixed(5)}, {lokasiBencana[1].toFixed(5)}
+                        <button
+                          type="button"
+                          onClick={() => setPetaBuka(true)}
+                          className="rounded-full border border-emerald-200 px-2.5 py-0.5 text-xs font-medium hover:bg-emerald-50"
+                        >
+                          Ubah
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setPetaBuka(true)}
+                        className="flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm font-medium text-neutral-700 transition-colors hover:border-emerald-500 hover:text-emerald-700"
+                      >
+                        <MapPinned size={15} />
+                        Pilih lokasi di peta
+                      </button>
+                    )}
+                  </div>
+                </Bahagian>
+
+                <PilihLokasiModal
+                  open={petaBuka}
+                  tajuk="Pilih Lokasi Bencana"
+                  negeri={nilai.negeri}
+                  cadangan={nilai.alamat || nilai.mukim || nilai.daerah}
+                  awal={lokasiBencana}
+                  onClose={() => setPetaBuka(false)}
+                  onSimpan={(lat, lng) => {
+                    setLokasiBencana([lat, lng])
+                    setPetaBuka(false)
+                  }}
+                />
                 <Bahagian tajuk="Hal-hal Lain">{renderMedan(HAL_LAIN_FIELD)}</Bahagian>
                 <Bahagian tajuk="Disediakan Oleh">{PENYEDIA_FIELDS.map(renderMedan)}</Bahagian>
               </>
@@ -299,6 +499,12 @@ export function LaporanAwam() {
                     }
                   >
                     {PPS_FIELDS.map(renderMedan)}
+                    <SenaraiPpsInput
+                      rows={senaraiPps}
+                      onChange={setSenaraiPps}
+                      memuat={memuatPps}
+                      negeri={nilai.pps_negeri}
+                    />
                   </Bahagian>
                 )}
 
@@ -309,27 +515,22 @@ export function LaporanAwam() {
 
             {ralat && <p className="text-sm text-red-600">{ralat}</p>}
 
-            {dihantar && (
-              <motion.div
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
+            {jenis ? (
+              <motion.button
+                type="button"
+                onClick={handleHantar}
+                disabled={menghantar}
+                whileTap={{ scale: 0.97 }}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-700 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
               >
-                <CheckCircle2 size={18} className="shrink-0 text-emerald-600" />
-                Laporan anda berjaya dihantar. Terima kasih!
-              </motion.div>
+                {menghantar && <Loader2 size={16} className="animate-spin" />}
+                {menghantar ? 'Menghantar...' : 'HANTAR'}
+              </motion.button>
+            ) : (
+              <p className="text-center text-xs text-neutral-400">Pilih jenis laporan untuk bermula.</p>
             )}
-
-            <motion.button
-              type="button"
-              onClick={handleHantar}
-              disabled={menghantar}
-              whileTap={{ scale: 0.97 }}
-              className="w-full rounded-lg bg-emerald-700 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
-            >
-              {menghantar ? 'Menghantar...' : dihantar ? 'Berjaya dihantar ✓' : 'HANTAR'}
-            </motion.button>
           </div>
+          )}
         </div>
       </div>
     </div>

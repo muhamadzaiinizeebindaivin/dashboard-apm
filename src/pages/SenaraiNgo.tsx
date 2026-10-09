@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { Home, ChevronRight } from 'lucide-react'
 import { NEGERI_FLAG, NEGERI_LIST } from '../lib/negeriVisual'
 import { supabase } from '../lib/supabase'
+import { Skeleton } from '../components/Memuatkan'
 
 export function SenaraiNgo() {
   const navigate = useNavigate()
@@ -60,7 +61,7 @@ export function SenaraiNgo() {
             <img src={NEGERI_FLAG[negeri]} alt={negeri} className="h-16 w-full rounded object-contain" />
             <span className="text-center leading-tight">{negeri}</span>
             {loading ? (
-              <span className="h-5 w-8 animate-pulse rounded-full bg-neutral-100" />
+              <Skeleton className="h-5 w-8 rounded-full" />
             ) : (
               <span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs font-medium text-neutral-600">
                 {kiraanNegeri[negeri] ?? 0}

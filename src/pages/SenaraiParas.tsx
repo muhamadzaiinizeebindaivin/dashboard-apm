@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Home, ChevronRight, AlertTriangle, BellOff, Bell, History, MapPinOff } from 'lucide-react'
 import { RekodParasPanel } from '../components/RekodParasPanel'
+import { Memuat, Skeleton } from '../components/Memuatkan'
 import { supabase } from '../lib/supabase'
 import { ParasMap } from '../components/ParasMap'
 import type { LokasiPoint } from '../components/ParasMap'
@@ -201,7 +202,9 @@ export function SenaraiParas() {
 
       <div className="mt-6 min-h-[24rem] flex-1">
         {loading ? (
-          <div className="h-full animate-pulse rounded-2xl border border-white/60 bg-white/40 shadow-lg" />
+          <Memuat label="Memuatkan peta" className="h-full">
+            <Skeleton className="h-full rounded-2xl" />
+          </Memuat>
         ) : (
           <div className="relative h-full">
             <ParasMap points={negeriAktif} className="h-full" />

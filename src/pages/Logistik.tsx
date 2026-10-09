@@ -21,6 +21,7 @@ import { KenderaanDetailPanel } from '../components/KenderaanDetailPanel'
 import type { KenderaanRow } from '../components/KenderaanDetailPanel'
 import { JENIS_KENDERAAN, JENIS_LABEL, JENIS_DEFAULT_PHOTO } from '../lib/kenderaanVisual'
 import { supabase } from '../lib/supabase'
+import { Memuat, SkeletonDokumen, SkeletonKenderaan } from '../components/Memuatkan'
 
 type DokumenRow = {
   id: string
@@ -278,7 +279,9 @@ export function Logistik() {
 
         <div className="mt-4">
           {loadingDokumen ? (
-            <p className="text-sm text-neutral-400">Memuatkan...</p>
+            <Memuat label="Memuatkan dokumen">
+              <SkeletonDokumen />
+            </Memuat>
           ) : !dokumen ? (
             <p className="text-sm text-neutral-500">Tiada dokumen dimuat naik lagi.</p>
           ) : (
@@ -395,7 +398,9 @@ export function Logistik() {
         </div>
 
         {loadingKenderaan ? (
-          <p className="text-sm text-neutral-400">Memuatkan...</p>
+          <Memuat label="Memuatkan kenderaan">
+            <SkeletonKenderaan />
+          </Memuat>
         ) : kenderaan.length === 0 ? (
           <DashboardCard>
             <p className="text-sm text-neutral-500">Tiada kenderaan direkodkan lagi.</p>

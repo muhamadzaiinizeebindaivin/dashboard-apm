@@ -1,9 +1,9 @@
 import apmLogo from '../assets/apm-logo.png'
 import petaMalaysia from '../assets/peta-malaysia.png'
 import { JENIS_BENCANA_SEMASA } from './laporanBencana'
-import type { ItemLaporanNasional } from './laporanNasional'
+import type { ItemLaporanNasional, PpsDitutup } from './laporanNasional'
 import { ambilDataGraf } from './laporanNasionalGraf'
-import type { TitikGraf } from './laporanNasionalGraf'
+import type { TapisGraf, TitikGraf } from './laporanNasionalGraf'
 import type { jsPDF } from 'jspdf'
 
 async function muatGambar(src: string): Promise<string | null> {
@@ -284,6 +284,8 @@ function lukisCarta(
 
 export async function bangunLaporanNasionalDoc(
   items: ItemLaporanNasional[],
+  ditutup: PpsDitutup[] = [],
+  tapis: TapisGraf = {},
 ): Promise<{ doc: jsPDF; namaFail: string }> {
   const { default: JsPDF } = await import('jspdf')
   const { default: autoTable } = await import('jspdf-autotable')
@@ -588,6 +590,41 @@ export async function bangunLaporanNasionalDoc(
   doc.text(String(jumlahMangsaKeseluruhan), tengahKolum(4), akhirY + 5.5, { align: 'center' })
   doc.text(String(jumlahKeluargaKeseluruhan), tengahKolum(5), akhirY + 5.5, { align: 'center' })
 
+  // --- PPS closed in the last 24 hours ---
+  let mulaDitutup = akhirY + 18
+  if (mulaDitutup + 30 > tinggi) {
+    doc.addPage()
+    mulaDitutup = 24
+  }
+  doc.setTextColor(0, 0, 0)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(10)
+  doc.text(`PPS DITUTUP (24 JAM LEPAS): ${ditutup.length}`, margin, mulaDitutup)
+
+  if (ditutup.length > 0) {
+    autoTable(doc, {
+      startY: mulaDitutup + 3,
+      head: [['PPS', 'NEGERI', 'DAERAH', 'BENCANA', 'MASA DITUTUP', 'CATATAN']],
+      body: ditutup.map((p) => [
+        p.nama,
+        p.negeri,
+        p.daerah ?? '—',
+        p.nama_bencana,
+        new Date(p.ditutup_pada).toLocaleString('ms-MY', {
+          day: '2-digit',
+          month: 'short',
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        p.catatan_tutup || '—',
+      ]),
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 2, valign: 'middle' },
+      headStyles: { fillColor: '#4b5563', textColor: '#ffffff' },
+      margin: { left: margin, right: margin },
+    })
+  }
+
   // --- Graf Laporan Bencana ---
   doc.addPage()
   doc.setFillColor(11, 42, 92)
@@ -597,7 +634,8 @@ export async function bangunLaporanNasionalDoc(
   doc.setFontSize(12)
   doc.text('GRAF LAPORAN BENCANA', margin, 12)
 
-  const dataGraf = await ambilDataGraf()
+  // Same filter as the table/map, so the PDF graphs show the same slice
+  const dataGraf = await ambilDataGraf(tapis)
 
   const carta = (titik: TitikGraf[]) => ({
     kategori: titik.map((t) => t.label),

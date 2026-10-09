@@ -9,6 +9,7 @@ import { Toast } from '../components/Toast'
 import type { ToastState } from '../components/Toast'
 import { useAuth } from '../hooks/useAuth'
 import type { UserRole } from '../hooks/useAuth'
+import { SkeletonBarisJadual } from '../components/Memuatkan'
 
 type ProfileRow = {
   id: string
@@ -120,11 +121,7 @@ export function Admin() {
           </thead>
           <tbody>
             {loading ? (
-              <tr>
-                <td colSpan={4} className="px-5 py-6 text-center text-neutral-400">
-                  Memuatkan...
-                </td>
-              </tr>
+              <SkeletonBarisJadual baris={5} lajur={4} />
             ) : (
               users.map((user) => (
                 <tr

@@ -25,6 +25,19 @@ export type LaporanBencanaRow = {
   [key: string]: string | null
 }
 
+// Shared by Laporan Awal and Laporan Semasa. Declared before the field lists
+// that use it (a const used before its declaration crashes at load time).
+// Labels match kategori_bencana so a Laporan Awal maps to a map category.
+export const JENIS_BENCANA = [
+  'Ribut',
+  'Banjir',
+  'Ombak Besar',
+  'Kebakaran',
+  'Tanah Runtuh',
+  'Pencemaran',
+  'Bangunan Runtuh',
+]
+
 export const TARIKH_MASA_FIELD: FieldDef = {
   key: 'tarikh_masa',
   label: 'Tarikh/ Masa',
@@ -32,7 +45,15 @@ export const TARIKH_MASA_FIELD: FieldDef = {
 }
 
 export const KEJADIAN_FIELDS: FieldDef[] = [
-  { key: 'jenis_bencana', no: '1.1', label: 'Jenis Bencana', en: 'Type of Disaster', required: true },
+  {
+    key: 'jenis_bencana',
+    no: '1.1',
+    label: 'Jenis Bencana',
+    en: 'Type of Disaster',
+    type: 'select',
+    options: JENIS_BENCANA,
+    required: true,
+  },
   { key: 'level', no: '1.2', label: 'Level', en: 'Level', type: 'select', options: ['1', '2', '3'] },
   { key: 'nama_bencana', no: '1.3', label: 'Nama Bencana', en: 'Disaster Name' },
   { key: 'bidang_kuasa', no: '1.4', label: 'Bidang Kuasa', en: 'Jurisdiction' },
@@ -97,15 +118,7 @@ export const RINGKASAN_STATUS = [
   { value: 'tiada_perubahan', label: 'Tiada Perubahan' },
 ] as const
 
-export const JENIS_BENCANA_SEMASA = [
-  'Ribut',
-  'Banjir',
-  'Ombak Besar',
-  'Kebakaran',
-  'Tanah Runtuh',
-  'Pencemaran',
-  'Bangunan Runtuh',
-]
+export const JENIS_BENCANA_SEMASA = JENIS_BENCANA
 
 export const TREND_LABEL: Record<string, { label: string; className: string }> = {
   naik: { label: 'Naik', className: 'bg-red-100 text-red-700' },
@@ -122,17 +135,9 @@ export const SEMASA_MAKLUMAT_FIELDS: FieldDef[] = [
 export const SEMASA_PENYEDIA_FIELDS = PENYEDIA_FIELDS.filter((f) => f.type !== 'datetime')
 export const SEMASA_PERHATIAN_FIELDS = PERHATIAN_FIELDS.filter((f) => f.type !== 'datetime')
 
+// The PPS themselves (name + counts + location per PPS) are now entered
+// through <SenaraiPpsInput>; only the group-level location stays here.
 export const PPS_FIELDS: FieldDef[] = [
   { key: 'pps_negeri', label: 'Negeri', type: 'select', options: NEGERI_LIST, required: true },
   { key: 'pps_daerah', label: 'Daerah', required: true },
-  {
-    key: 'pps_pps',
-    label: 'Pusat Pemindahan Sementara (PPS)',
-    en: 'boleh senaraikan lebih daripada satu, satu baris setiap PPS',
-    type: 'textarea',
-    wide: true,
-    required: true,
-  },
-  { key: 'pps_jumlah_mangsa', label: 'Jumlah Mangsa (keseluruhan)', type: 'number', required: true },
-  { key: 'pps_jumlah_keluarga', label: 'Jumlah Keluarga (keseluruhan)', type: 'number', required: true },
 ]

@@ -9,7 +9,7 @@ export type NavTab = {
 export const NAV_TABS: NavTab[] = [
   { to: '/', label: 'Laman Utama', allow: ['pkop', 'pkon'] },
   { to: '/ngo', label: 'NGO', allow: ['pkop'] },
-  { to: '/bencana', label: 'Bencana', allow: ['pkop'] },
+  { to: '/bencana', label: 'Bencana', allow: ['pkop', 'pkon'] },
   { to: '/sekretariat', label: 'Sekretariat', allow: ['pkop', 'pkon'] },
   { to: '/logistik', label: 'Logistik', allow: ['pkop', 'pkon'] },
   { to: '/senarai-sumbangan', label: 'Sumbangan', allow: ['pkop'] },

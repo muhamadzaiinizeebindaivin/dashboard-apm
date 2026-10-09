@@ -52,3 +52,25 @@ export const NEGERI_LIST = [
   'Putrajaya',
   'Labuan',
 ]
+
+// Approximate centre + zoom per negeri, used to frame maps
+export const NEGERI_PUSAT: Record<string, { pusat: [number, number]; zoom: number }> = {
+  Johor: { pusat: [1.9, 103.4], zoom: 8 },
+  Kedah: { pusat: [6.0, 100.6], zoom: 9 },
+  Kelantan: { pusat: [5.3, 102.0], zoom: 8 },
+  Melaka: { pusat: [2.25, 102.3], zoom: 10 },
+  'Negeri Sembilan': { pusat: [2.75, 102.1], zoom: 9 },
+  Pahang: { pusat: [3.8, 102.6], zoom: 8 },
+  'Pulau Pinang': { pusat: [5.4, 100.35], zoom: 10 },
+  Perak: { pusat: [4.6, 101.0], zoom: 8 },
+  Perlis: { pusat: [6.5, 100.25], zoom: 10 },
+  Sabah: { pusat: [5.4, 117.0], zoom: 7 },
+  Sarawak: { pusat: [2.5, 113.0], zoom: 7 },
+  Selangor: { pusat: [3.3, 101.5], zoom: 9 },
+  Terengganu: { pusat: [4.9, 103.0], zoom: 8 },
+  'Kuala Lumpur': { pusat: [3.14, 101.69], zoom: 11 },
+  Putrajaya: { pusat: [2.93, 101.69], zoom: 12 },
+  Labuan: { pusat: [5.3, 115.22], zoom: 11 },
+}
+
+export const PUSAT_MALAYSIA: { pusat: [number, number]; zoom: number } = { pusat: [4.2, 108.0], zoom: 5 }

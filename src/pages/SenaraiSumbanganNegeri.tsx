@@ -12,6 +12,7 @@ import { NEGERI_FLAG } from '../lib/negeriVisual'
 import { supabase } from '../lib/supabase'
 import { STATUS_LIST, STATUS_LABEL, STATUS_BADGE_CLASS } from '../lib/sumbanganStatus'
 import type { SumbanganStatus } from '../lib/sumbanganStatus'
+import { Memuat, SkeletonJadual } from '../components/Memuatkan'
 
 type SumbanganRow = {
   id: string
@@ -264,7 +265,9 @@ export function SenaraiSumbanganNegeri() {
 
       <DashboardCard className="mt-6 overflow-x-auto">
         {loading ? (
-          <p className="text-sm text-neutral-400">Memuatkan...</p>
+          <Memuat label="Memuatkan sumbangan">
+            <SkeletonJadual baris={6} lajur={6} />
+          </Memuat>
         ) : rowsTertapis.length === 0 ? (
           <p className="text-sm text-neutral-500">Tiada sumbangan sepadan.</p>
         ) : (

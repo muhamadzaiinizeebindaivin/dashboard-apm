@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AlertTriangle, Loader2 } from 'lucide-react'
@@ -14,6 +15,7 @@ type ConfirmModalProps = {
   error?: string
   onConfirm: () => void
   onCancel: () => void
+  children?: ReactNode
 }
 
 export function ConfirmModal({
@@ -28,6 +30,7 @@ export function ConfirmModal({
   error,
   onConfirm,
   onCancel,
+  children,
 }: ConfirmModalProps) {
   return createPortal(
     <AnimatePresence>
@@ -58,6 +61,7 @@ export function ConfirmModal({
               <div>
                 <h2 className="text-sm font-semibold text-neutral-900">{title}</h2>
                 <p className="mt-1 text-sm text-neutral-600">{message}</p>
+                {children}
                 {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
               </div>
             </div>

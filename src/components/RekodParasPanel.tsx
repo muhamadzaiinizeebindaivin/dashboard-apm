@@ -18,6 +18,7 @@ import {
 } from '../lib/rekodParas'
 import type { LogKeadaan, RekodParas, TapisRekodParas } from '../lib/rekodParas'
 import { janaRekodParas } from '../lib/janaRekodParas'
+import { Memuat, SkeletonKad } from './Memuatkan'
 
 const SAIZ_HALAMAN = 10
 
@@ -254,7 +255,11 @@ export function RekodParasPanel({ open, onClose }: RekodParasPanelProps) {
               {ralat && <p className="text-sm text-red-600">{ralat}</p>}
 
               {loading && rows.length === 0 ? (
-                <p className="text-sm text-neutral-400">Memuatkan...</p>
+                <Memuat label="Memuatkan rekod" className="space-y-3">
+                  {[0, 1, 2].map((i) => (
+                    <SkeletonKad key={i} />
+                  ))}
+                </Memuat>
               ) : rows.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 py-12 text-sm text-neutral-400">
                   <Inbox size={28} />

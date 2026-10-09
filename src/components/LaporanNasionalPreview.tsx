@@ -1,7 +1,7 @@
 import { Fragment } from 'react'
 import type { ReactNode } from 'react'
 import { JENIS_BENCANA_SEMASA } from '../lib/laporanBencana'
-import type { ItemLaporanNasional } from '../lib/laporanNasional'
+import type { ItemLaporanNasional, PpsDitutup } from '../lib/laporanNasional'
 import type { TitikGraf } from '../lib/laporanNasionalGraf'
 import petaMalaysia from '../assets/peta-malaysia.png'
 
@@ -183,6 +183,7 @@ type LaporanNasionalPreviewProps = {
   duaJam: TitikGraf[]
   harian: TitikGraf[]
   masaJana: Date
+  ditutup?: PpsDitutup[]
 }
 
 function jejakTitik(mulaX: number, mulaY: number, delta: [number, number][]): [number, number][] {
@@ -439,7 +440,7 @@ function PetaLaporan({ items, negeriAktif }: { items: ItemLaporanNasional[]; neg
   )
 }
 
-export function LaporanNasionalPreview({ items, duaJam, harian, masaJana }: LaporanNasionalPreviewProps) {
+export function LaporanNasionalPreview({ items, duaJam, harian, masaJana, ditutup = [] }: LaporanNasionalPreviewProps) {
   const negeriSet = new Set(items.map((i) => i.negeri).filter(Boolean))
   const daerahSet = new Set(items.filter((i) => i.daerah).map((i) => `${i.negeri}|${i.daerah}`))
   const ppsCount = items.reduce((n, i) => n + kiraPps(i.pps), 0)
@@ -484,6 +485,9 @@ export function LaporanNasionalPreview({ items, duaJam, harian, masaJana }: Lapo
             </div>
           ))}
         </div>
+        <p className="mt-2 text-xs text-neutral-500">
+          PPS ditutup (24 jam lepas): <span className="font-semibold text-neutral-800">{ditutup.length}</span>
+        </p>
       </div>
 
       <div>
@@ -574,6 +578,45 @@ export function LaporanNasionalPreview({ items, duaJam, harian, masaJana }: Lapo
         <span>Mangsa: {jumlahMangsa}</span>
         <span>Keluarga: {jumlahKeluarga}</span>
       </div>
+
+      {ditutup.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-700">
+            PPS Ditutup (24 Jam Lepas)
+          </h3>
+          <div className="overflow-x-auto rounded-lg border border-neutral-200">
+            <table className="w-full min-w-[640px] text-left text-sm">
+              <thead>
+                <tr className="bg-neutral-600 text-xs text-white">
+                  <th className="px-3 py-2 font-medium">PPS</th>
+                  <th className="px-3 py-2 font-medium">Negeri / Daerah</th>
+                  <th className="px-3 py-2 font-medium">Bencana</th>
+                  <th className="px-3 py-2 font-medium">Ditutup</th>
+                  <th className="px-3 py-2 font-medium">Catatan</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ditutup.map((p, i) => (
+                  <tr key={`${p.nama_bencana}-${p.nama}-${i}`} className="border-t border-neutral-100 bg-white/70">
+                    <td className="px-3 py-2 font-medium text-neutral-800">{p.nama}</td>
+                    <td className="px-3 py-2 text-neutral-600">{[p.negeri, p.daerah].filter(Boolean).join(' / ')}</td>
+                    <td className="px-3 py-2 text-neutral-600">{p.nama_bencana}</td>
+                    <td className="px-3 py-2 text-neutral-600">
+                      {new Date(p.ditutup_pada).toLocaleString('ms-MY', {
+                        day: '2-digit',
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </td>
+                    <td className="px-3 py-2 text-neutral-500">{p.catatan_tutup || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-700">Graf Laporan Bencana</h3>

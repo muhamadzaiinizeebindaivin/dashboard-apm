@@ -14,6 +14,7 @@ import { Bencana } from './pages/Bencana'
 import { Sekretariat } from './pages/Sekretariat'
 import { LaporanAwal } from './pages/LaporanAwal'
 import { LaporanSemasa } from './pages/LaporanSemasa'
+import { PengurusanPps } from './pages/PengurusanPps'
 import { Logistik } from './pages/Logistik'
 import { SenaraiSumbangan } from './pages/SenaraiSumbangan'
 import { SenaraiSumbanganNegeri } from './pages/SenaraiSumbanganNegeri'
@@ -27,19 +28,13 @@ const Paras = lazy(() => import('./pages/Paras').then((m) => ({ default: m.Paras
 const ParasJejak = lazy(() => import('./pages/ParasJejak').then((m) => ({ default: m.ParasJejak })))
 const SenaraiParas = lazy(() => import('./pages/SenaraiParas').then((m) => ({ default: m.SenaraiParas })))
 
-function Memuatkan() {
-  return (
-    <div className="flex min-h-screen items-center justify-center text-sm text-neutral-400">
-      Memuatkan...
-    </div>
-  )
-}
+import { PemuatHalaman } from './components/Memuatkan'
 
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Suspense fallback={<Memuatkan />}>
+        <Suspense fallback={<PemuatHalaman latar />}>
           <Routes>
             <Route path="/" element={<HomeScreen />} />
             <Route path="/sumbangan" element={<Sumbangan />} />
@@ -74,14 +69,15 @@ function App() {
                 <Route path="sekretariat" element={<Sekretariat />}>
                   <Route path="laporan-awal" element={<LaporanAwal />} />
                   <Route path="laporan-semasa" element={<LaporanSemasa />} />
+                  <Route path="pps" element={<PengurusanPps />} />
                 </Route>
                 <Route path="logistik" element={<Logistik />} />
+                <Route path="bencana" element={<Bencana />} />
 
                 {/* Super Admin only — Admin (pkon) has no access to these */}
                 <Route element={<RequireRole allow={['pkop']} />}>
                   <Route path="ngo" element={<SenaraiNgo />} />
                   <Route path="ngo/:negeri" element={<SenaraiNgoNegeri />} />
-                  <Route path="bencana" element={<Bencana />} />
                   <Route path="senarai-sumbangan" element={<SenaraiSumbangan />} />
                   <Route path="senarai-sumbangan/:negeri" element={<SenaraiSumbanganNegeri />} />
                   <Route path="senarai-paras" element={<SenaraiParas />} />

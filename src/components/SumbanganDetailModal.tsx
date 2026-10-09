@@ -4,6 +4,7 @@ import { X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { STATUS_LABEL, STATUS_BADGE_CLASS } from '../lib/sumbanganStatus'
 import type { SumbanganStatus } from '../lib/sumbanganStatus'
+import { PemuatSebaris } from './Memuatkan'
 
 type SumbanganRow = {
   id: string
@@ -116,7 +117,7 @@ export function SumbanganDetailModal({ open, row, onClose }: SumbanganDetailModa
             <div className="mt-6 border-t border-neutral-200 pt-4">
               <h3 className="mb-2 text-xs font-medium text-neutral-500">Jumlah Sumbangan</h3>
               {loading ? (
-                <p className="text-sm text-neutral-400">Memuatkan...</p>
+                <PemuatSebaris />
               ) : items.length === 0 ? (
                 <p className="text-sm text-neutral-400">Tiada butiran tambahan.</p>
               ) : (

@@ -27,6 +27,7 @@ import { SEMASA_MAKLUMAT_FIELDS, SEMASA_PENYEDIA_FIELDS, TREND_LABEL } from '../
 import type { FieldDef, LaporanBencanaRow } from '../lib/laporanBencana'
 import { NEGERI_LIST } from '../lib/negeriVisual'
 import { janaRekodKejadian } from '../lib/janaRekodKejadian'
+import { Memuat, PemuatSebaris, SkeletonBaris } from './Memuatkan'
 
 type SenaraiLaporanAwamProps = {
   jenis: 'awal' | 'semasa'
@@ -350,17 +351,7 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
         </div>
 
         {loading ? (
-          <div className="mt-4 space-y-3">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="flex items-center gap-3 rounded-xl border border-white/60 bg-white/40 p-4 backdrop-blur-md">
-                <span className="h-10 w-10 shrink-0 animate-pulse rounded-xl bg-neutral-200" />
-                <div className="space-y-1.5">
-                  <span className="block h-3 w-40 animate-pulse rounded-full bg-neutral-200" />
-                  <span className="block h-2.5 w-24 animate-pulse rounded-full bg-neutral-200" />
-                </div>
-              </div>
-            ))}
-          </div>
+                            <PemuatSebaris teks="Memuatkan PPS" />
         ) : rowsTapis.length === 0 ? (
           <div className="mt-6 flex flex-col items-center gap-2 py-8 text-center">
             <Inbox size={28} className="text-neutral-300" />

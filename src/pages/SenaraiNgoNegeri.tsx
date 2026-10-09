@@ -10,6 +10,7 @@ import { Toast } from '../components/Toast'
 import type { ToastState } from '../components/Toast'
 import { NEGERI_FLAG } from '../lib/negeriVisual'
 import { supabase } from '../lib/supabase'
+import { Memuat, SkeletonJadual } from '../components/Memuatkan'
 
 type NgoRow = {
   id: string
@@ -184,7 +185,9 @@ export function SenaraiNgoNegeri() {
 
       <DashboardCard className="mt-6 overflow-x-auto">
         {loading ? (
-          <p className="text-sm text-neutral-400">Memuatkan...</p>
+          <Memuat label="Memuatkan senarai NGO">
+            <SkeletonJadual baris={6} lajur={5} />
+          </Memuat>
         ) : rowsTertapis.length === 0 ? (
           <p className="text-sm text-neutral-500">Tiada NGO {negeri} yang direkodkan.</p>
         ) : (
