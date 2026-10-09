@@ -351,7 +351,11 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
         </div>
 
         {loading ? (
-                            <PemuatSebaris teks="Memuatkan PPS" />
+          <Memuat label="Memuatkan laporan" className="mt-4 space-y-3">
+            {[0, 1, 2].map((i) => (
+              <SkeletonBaris key={i} />
+            ))}
+          </Memuat>
         ) : rowsTapis.length === 0 ? (
           <div className="mt-6 flex flex-col items-center gap-2 py-8 text-center">
             <Inbox size={28} className="text-neutral-300" />
@@ -463,7 +467,7 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
                       {row.ringkasan_status === 'ada_perubahan' && (
                         <Seksyen tajuk="Pusat Pemindahan Sementara">
                           {loadingPps[row.id] ? (
-                            <p className="text-xs text-neutral-400">Memuatkan...</p>
+                            <PemuatSebaris teks="Memuatkan PPS" />
                           ) : (ppsMap[row.id]?.length ?? 0) === 0 ? (
                             <p className="text-xs text-neutral-400">Tiada rekod PPS.</p>
                           ) : (
