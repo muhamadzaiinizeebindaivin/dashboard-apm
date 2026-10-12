@@ -19,6 +19,10 @@ export function EditPpsModal({ pps, onClose, onSaved }: EditPpsModalProps) {
   const [daerah, setDaerah] = useState(pps.daerah ?? '')
   const [mangsa, setMangsa] = useState(String(pps.jumlah_mangsa))
   const [keluarga, setKeluarga] = useState(String(pps.jumlah_keluarga))
+  const [mukim, setMukim] = useState(pps.mukim ?? '')
+  const [pengurusNama, setPengurusNama] = useState(pps.pengurus_nama ?? '')
+  const [pengurusJawatan, setPengurusJawatan] = useState(pps.pengurus_jawatan ?? '')
+  const [pengurusTelefon, setPengurusTelefon] = useState(pps.pengurus_telefon ?? '')
   const [lokasi, setLokasi] = useState<[number, number] | null>(
     pps.latitude != null && pps.longitude != null ? [pps.latitude, pps.longitude] : null,
   )
@@ -48,6 +52,10 @@ export function EditPpsModal({ pps, onClose, onSaved }: EditPpsModalProps) {
       p_keluarga: Number(keluarga),
       p_latitude: lokasi?.[0] ?? null,
       p_longitude: lokasi?.[1] ?? null,
+      p_mukim: mukim.trim(),
+      p_pengurus_nama: pengurusNama.trim(),
+      p_pengurus_jawatan: pengurusJawatan.trim(),
+      p_pengurus_telefon: pengurusTelefon.trim(),
     })
     setMenyimpan(false)
 
@@ -92,9 +100,13 @@ export function EditPpsModal({ pps, onClose, onSaved }: EditPpsModalProps) {
               </label>
               <input value={nama} onChange={(e) => setNama(e.target.value)} className={inputClass} />
             </div>
-            <div className="sm:col-span-2">
+            <div>
               <label className="mb-1 block text-sm font-medium text-neutral-700">Daerah</label>
               <input value={daerah} onChange={(e) => setDaerah(e.target.value)} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-neutral-700">Mukim</label>
+              <input value={mukim} onChange={(e) => setMukim(e.target.value)} className={inputClass} />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-neutral-700">
@@ -121,6 +133,35 @@ export function EditPpsModal({ pps, onClose, onSaved }: EditPpsModalProps) {
                 onChange={(e) => setKeluarga(e.target.value)}
                 className={inputClass}
               />
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-700">Pengurus PPS</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-sm font-medium text-neutral-700">Nama</label>
+                <input value={pengurusNama} onChange={(e) => setPengurusNama(e.target.value)} className={inputClass} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-neutral-700">Jawatan</label>
+                <input
+                  value={pengurusJawatan}
+                  onChange={(e) => setPengurusJawatan(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-neutral-700">No. Telefon</label>
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  value={pengurusTelefon}
+                  onChange={(e) => setPengurusTelefon(e.target.value)}
+                  placeholder="cth. 013-7567487"
+                  className={inputClass}
+                />
+              </div>
             </div>
           </div>
 

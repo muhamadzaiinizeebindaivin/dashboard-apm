@@ -2,7 +2,17 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, CheckCircle2, Loader2, MapPin, MapPinned, FileText, Upload, AlertTriangle } from 'lucide-react'
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Loader2,
+  MapPin,
+  MapPinned,
+  FileText,
+  Upload,
+  AlertTriangle,
+  Trash2,
+} from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { ambilKod, padamKod } from '../lib/accessCode'
 import apmLogo from '../assets/apm-logo.png'
@@ -14,16 +24,22 @@ import {
   PENYEDIA_FIELDS,
   SEMASA_MAKLUMAT_FIELDS,
   SEMASA_PENYEDIA_FIELDS,
+  SEMASA_PERHATIAN_FIELDS,
   RINGKASAN_STATUS,
-  PPS_FIELDS,
   cariZon,
 } from '../lib/laporanBencana'
 import type { FieldDef } from '../lib/laporanBencana'
 import { SenaraiPpsInput } from '../components/SenaraiPpsInput'
 import { PilihLokasiModal } from '../components/PilihLokasiModal'
 import { bacaLaporanAwal } from '../lib/bacaLaporanAwal'
-import { normalNamaPps, ppsKosong, semakPps } from '../lib/ppsPusat'
-import type { PpsInput, PpsSediaAda } from '../lib/ppsPusat'
+import { bacaLaporanSemasa } from '../lib/bacaLaporanSemasa'
+import type { PpsExcel } from '../lib/bacaLaporanSemasa'
+import { lampiranUntukHantar, pilihanAsal } from '../lib/bacaLampiranSemasa'
+import type { KunciLampiran, Lampiran } from '../lib/bacaLampiranSemasa'
+import { SemakLampiran } from '../components/SemakLampiran'
+import { kunci } from '../lib/normalisasi'
+import { semakPps } from '../lib/ppsPusat'
+import type { PpsInput } from '../lib/ppsPusat'
 
 const AWAL_FIELD: FieldDef[] = [
   TARIKH_MASA_FIELD,
@@ -32,17 +48,46 @@ const AWAL_FIELD: FieldDef[] = [
   ...PENYEDIA_FIELDS,
 ]
 
+// Free-text summary written by the state ("Ringkasan Laporan" in the Excel)
+const RINGKASAN_TEKS_FIELD: FieldDef = { key: 'kandungan', label: 'Ringkasan Laporan', type: 'textarea', wide: true }
+
 const SEMASA_FIELD: FieldDef[] = [
   ...SEMASA_MAKLUMAT_FIELDS,
   TARIKH_MASA_FIELD,
+  RINGKASAN_TEKS_FIELD,
   HAL_LAIN_FIELD,
   ...SEMASA_PENYEDIA_FIELDS,
+  ...SEMASA_PERHATIAN_FIELDS,
 ]
+
+// Accepted file per report type
+const FAIL_LAPORAN = {
+  awal: {
+    tajuk: 'Muat Naik Laporan Awal',
+    nama: 'Laporan Awal NDCC',
+    jenisFail: 'Fail Word (.docx) sahaja · maksimum 5 MB',
+    accept: '.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  },
+  semasa: {
+    tajuk: 'Muat Naik Laporan Semasa',
+    nama: 'Laporan Situasi Bencana NDCC',
+    jenisFail: 'Fail Excel (.xlsx) sahaja · maksimum 10 MB',
+    accept: '.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  },
+} as const
 
 const SENARAI_NAMA_ID = 'senarai-nama-bencana'
 
 const inputClass =
   'w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 outline-none focus:border-emerald-600'
+
+// PPS read from the Excel, grouped by district (one RPC group per district)
+type KumpulanPps = { kunci: string; daerah: string; rows: PpsInput[] }
+// Excel details kept per PPS row (by PpsInput.kunci), sent with the counts
+type MetaPps = Pick<
+  PpsExcel,
+  'mukim' | 'dibukaPada' | 'ditutup' | 'tutupPada' | 'pengurusNama' | 'pengurusJawatan' | 'pengurusTelefon'
+>
 
 type MedanProps = { def: FieldDef; value: string; onChange: (v: string) => void; amaran?: string }
 
@@ -95,6 +140,95 @@ function Bahagian({ tajuk, anak, children }: { tajuk: string; anak?: ReactNode; 
         {anak}
       </div>
       <div className="grid gap-4 sm:grid-cols-2">{children}</div>
+    </div>
+  )
+}
+
+type ZonMuatNaikProps = {
+  jenis: 'awal' | 'semasa'
+  membaca: boolean
+  ralat: string
+  onPilih: (fail: File) => void
+}
+
+// Step 1 of both report types: drop or choose the NDCC file
+function ZonMuatNaik({ jenis, membaca, ralat, onPilih }: ZonMuatNaikProps) {
+  const f = FAIL_LAPORAN[jenis]
+  return (
+    <Bahagian tajuk={f.tajuk}>
+      <div className="space-y-3 sm:col-span-2">
+        <p className="text-sm text-neutral-600">
+          Muat naik fail <span className="font-medium">{f.nama}</span> yang telah diisi. Maklumat dalam fail akan dibaca
+          secara automatik untuk anda semak sebelum dihantar.
+        </p>
+        <label
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault()
+            const fail = e.dataTransfer.files[0]
+            if (fail && !membaca) onPilih(fail)
+          }}
+          className={`flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-emerald-300 bg-emerald-50/40 px-6 py-10 text-center transition-colors hover:bg-emerald-50 ${
+            membaca ? 'pointer-events-none opacity-60' : ''
+          }`}
+        >
+          {membaca ? (
+            <Loader2 size={28} className="animate-spin text-emerald-700" />
+          ) : (
+            <Upload size={28} className="text-emerald-700" />
+          )}
+          <span className="text-sm font-medium text-neutral-800">
+            {membaca ? 'Membaca fail...' : 'Klik untuk pilih fail, atau seret fail ke sini'}
+          </span>
+          <span className="text-xs text-neutral-500">{f.jenisFail}</span>
+          <input
+            type="file"
+            accept={f.accept}
+            className="hidden"
+            onChange={(e) => {
+              const fail = e.target.files?.[0]
+              if (fail) onPilih(fail)
+              e.target.value = ''
+            }}
+          />
+        </label>
+        {ralat && <p className="text-sm text-red-600">{ralat}</p>}
+      </div>
+    </Bahagian>
+  )
+}
+
+type BannerSemakProps = { fail: File; bilAmaran: number; nota: string[]; onTukar: () => void }
+
+// Step 2 of both report types: reminder to check what was read
+function BannerSemak({ fail, bilAmaran, nota, onTukar }: BannerSemakProps) {
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-900">
+      <p className="flex items-center gap-2 font-semibold">
+        <AlertTriangle size={16} className="shrink-0" />
+        Sila periksa maklumat sebelum menghantar
+      </p>
+      <p className="mt-1 text-amber-800">
+        Maklumat di bawah telah dibaca secara automatik daripada fail. Semak setiap ruangan dan betulkan jika ada
+        kesilapan.
+      </p>
+      {(bilAmaran > 0 || nota.length > 0) && (
+        <ul className="mt-2 list-disc space-y-0.5 pl-5 text-amber-800">
+          {bilAmaran > 0 && <li>{bilAmaran} ruangan bertanda amaran perlu diperiksa.</li>}
+          {nota.map((n) => (
+            <li key={n}>{n}</li>
+          ))}
+        </ul>
+      )}
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+        <span className="flex min-w-0 items-center gap-1.5 rounded-full bg-white px-3 py-1 font-medium text-neutral-700 ring-1 ring-amber-200">
+          <FileText size={13} className="shrink-0" />
+          <span className="truncate">{fail.name}</span>
+        </span>
+        <button type="button" onClick={onTukar} className="font-medium text-amber-900 underline underline-offset-2">
+          Tukar fail
+        </button>
+      </div>
     </div>
   )
 }
@@ -173,21 +307,25 @@ function KejayaanHantar({ berjaya, onLagi, onKeluar }: KejayaanHantarProps) {
 
 export function LaporanAwam() {
   const navigate = useNavigate()
-  const [jenis, setJenis] = useState<string>('')
+  const [jenis, setJenis] = useState<'' | 'awal' | 'semasa'>('')
   const [nilai, setNilai] = useState<Record<string, string>>({})
   const [ringkasan, setRingkasan] = useState<string>('')
   const [menghantar, setMenghantar] = useState(false)
   const [berjaya, setBerjaya] = useState<Berjaya | null>(null)
   const [ralat, setRalat] = useState('')
-  const [senaraiPps, setSenaraiPps] = useState<PpsInput[]>(() => [ppsKosong()])
   const [lokasiBencana, setLokasiBencana] = useState<[number, number] | null>(null)
   const [petaBuka, setPetaBuka] = useState(false)
-  // Laporan Awal: uploaded Word file + what the operator must check
-  const [failAwal, setFailAwal] = useState<File | null>(null)
+  // Uploaded NDCC file (Word for Awal, Excel for Semasa) + what to check
+  const [fail, setFail] = useState<File | null>(null)
   const [amaran, setAmaran] = useState<Record<string, string>>({})
   const [membacaFail, setMembacaFail] = useState(false)
   const [ralatFail, setRalatFail] = useState('')
-  const [memuatPps, setMemuatPps] = useState(false)
+  // Laporan Semasa: PPS read from the Excel
+  const [kumpulanPps, setKumpulanPps] = useState<KumpulanPps[]>([])
+  const [metaPps, setMetaPps] = useState<Record<string, MetaPps>>({})
+  // Laporan Semasa: other Excel sheets + which ones to include
+  const [lampiran, setLampiran] = useState<Lampiran | null>(null)
+  const [pilihanLampiran, setPilihanLampiran] = useState<Record<KunciLampiran, boolean> | null>(null)
   const [cadanganNama, setCadanganNama] = useState<string[]>([])
 
   // Existing disaster names (last 90 days) for the Nama Bencana suggestions
@@ -200,54 +338,6 @@ export function LaporanAwam() {
       batal = true
     }
   }, [])
-
-  // Prefill the PPS still open for this disaster + negeri, so the reporter
-  // updates their numbers instead of retyping names (avoids duplicates and
-  // false "cadangan tutup" flags for PPS they forgot to list).
-  const namaBencana = (nilai.nama_bencana ?? '').trim()
-  const negeriPps = nilai.pps_negeri ?? ''
-  const daerahPps = (nilai.pps_daerah ?? '').trim()
-
-  useEffect(() => {
-    if (jenis !== 'semasa' || ringkasan !== 'ada_perubahan' || !namaBencana || !negeriPps || !daerahPps) return
-
-    let batal = false
-    const t = setTimeout(async () => {
-      setMemuatPps(true)
-      const { data, error } = await supabase.rpc('senarai_pps_bencana', {
-        p_code: ambilKod('laporan'),
-        p_nama_bencana: namaBencana,
-        p_negeri: negeriPps,
-        p_daerah: daerahPps,
-      })
-      setMemuatPps(false)
-      if (batal || error || !data) return
-
-      const sedia: PpsInput[] = (data as PpsSediaAda[]).map((p) => ({
-        kunci: crypto.randomUUID(),
-        nama: p.nama,
-        mangsa: String(p.jumlah_mangsa ?? 0),
-        keluarga: String(p.jumlah_keluarga ?? 0),
-        latitude: p.latitude,
-        longitude: p.longitude,
-        sedia: true,
-      }))
-
-      setSenaraiPps((prev) => {
-        // Keep PPS the reporter added by hand, replace previously prefilled ones
-        const tambahan = prev.filter(
-          (r) => !r.sedia && r.nama.trim() && !sedia.some((s) => normalNamaPps(s.nama) === normalNamaPps(r.nama)),
-        )
-        const gabung = [...sedia, ...tambahan]
-        return gabung.length > 0 ? gabung : [ppsKosong()]
-      })
-    }, 500)
-
-    return () => {
-      batal = true
-      clearTimeout(t)
-    }
-  }, [jenis, ringkasan, namaBencana, negeriPps, daerahPps])
 
   function renderMedan(def: FieldDef) {
     return (
@@ -265,21 +355,28 @@ export function LaporanAwam() {
             return baru
           })
         }}
-        amaran={jenis === 'awal' && failAwal ? amaranUntuk(def) : undefined}
+        amaran={fail ? amaranUntuk(def) : undefined}
       />
     )
   }
 
-  function pilihJenis(v: string) {
-    setJenis(v)
+  function kosongkanFail() {
+    setFail(null)
     setNilai({})
-    setRingkasan('')
-    setRalat('')
-    setSenaraiPps([ppsKosong()])
-    setLokasiBencana(null)
-    setFailAwal(null)
     setAmaran({})
     setRalatFail('')
+    setRingkasan('')
+    setKumpulanPps([])
+    setMetaPps({})
+    setLampiran(null)
+    setPilihanLampiran(null)
+  }
+
+  function pilihJenis(v: '' | 'awal' | 'semasa') {
+    setJenis(v)
+    setRalat('')
+    setLokasiBencana(null)
+    kosongkanFail()
   }
 
   // Hint for a field: a reading note, or "not found" for an empty required field
@@ -289,35 +386,84 @@ export function LaporanAwam() {
     return undefined
   }
 
-  async function muatNaikFail(fail: File) {
+  async function muatNaikFail(f: File) {
     setRalatFail('')
     setMembacaFail(true)
-    const hasil = await bacaLaporanAwal(fail)
+
+    if (jenis === 'awal') {
+      const hasil = await bacaLaporanAwal(f)
+      setMembacaFail(false)
+      if ('ralat' in hasil) {
+        setRalatFail(hasil.ralat)
+        return
+      }
+      setFail(f)
+      setNilai(hasil.nilai)
+      setAmaran(hasil.amaran)
+      return
+    }
+
+    const hasil = await bacaLaporanSemasa(f)
     setMembacaFail(false)
     if ('ralat' in hasil) {
       setRalatFail(hasil.ralat)
       return
     }
-    setFailAwal(fail)
+
+    // Group the PPS by district ("KUALA NERUS" and "Kuala Nerus" together)
+    const ikutDaerah = new Map<string, KumpulanPps>()
+    const meta: Record<string, MetaPps> = {}
+    for (const p of hasil.pps) {
+      const k = kunci(p.daerah)
+      if (!ikutDaerah.has(k)) ikutDaerah.set(k, { kunci: crypto.randomUUID(), daerah: p.daerah, rows: [] })
+      const id = crypto.randomUUID()
+      ikutDaerah.get(k)!.rows.push({
+        kunci: id,
+        nama: p.nama,
+        mangsa: String(p.mangsa),
+        keluarga: String(p.keluarga),
+        latitude: null,
+        longitude: null,
+        sedia: false,
+      })
+      meta[id] = {
+        mukim: p.mukim,
+        dibukaPada: p.dibukaPada,
+        ditutup: p.ditutup,
+        tutupPada: p.tutupPada,
+        pengurusNama: p.pengurusNama,
+        pengurusJawatan: p.pengurusJawatan,
+        pengurusTelefon: p.pengurusTelefon,
+      }
+    }
+
+    setFail(f)
     setNilai(hasil.nilai)
     setAmaran(hasil.amaran)
+    setRingkasan(hasil.ringkasan)
+    setKumpulanPps([...ikutDaerah.values()])
+    setMetaPps(meta)
+    setLampiran(hasil.lampiran)
+    setPilihanLampiran(pilihanAsal(hasil.lampiran))
   }
 
-  // Another file replaces the read values; the chosen location is kept
-  function tukarFail() {
-    setFailAwal(null)
-    setNilai({})
-    setAmaran({})
-    setRalatFail('')
+  function ubahKumpulan(k: string, ubah: Partial<KumpulanPps>) {
+    setKumpulanPps((prev) => prev.map((g) => (g.kunci === k ? { ...g, ...ubah } : g)))
   }
 
-  const bilAmaran = jenis === 'awal' && failAwal ? AWAL_FIELD.filter((f) => amaranUntuk(f)).length : 0
+  const medanSemak = jenis === 'awal' ? AWAL_FIELD : SEMASA_FIELD
+  const bilAmaran = fail ? medanSemak.filter((f) => amaranUntuk(f)).length : 0
+  const bilPps = kumpulanPps.reduce((n, g) => n + g.rows.length, 0)
 
   async function handleHantar() {
     setRalat('')
 
     if (!jenis) {
       setRalat('Sila pilih jenis laporan.')
+      return
+    }
+    if (!fail) {
+      setRalat('Sila muat naik fail laporan.')
       return
     }
 
@@ -328,10 +474,6 @@ export function LaporanAwam() {
       const tiadaIsi = AWAL_FIELD.find((f) => f.required && !nilai[f.key]?.trim())
       if (tiadaIsi) {
         setRalat(`Sila isi ruangan "${tiadaIsi.label}".`)
-        return
-      }
-      if (!failAwal) {
-        setRalat('Sila muat naik fail Laporan Awal.')
         return
       }
       if (!lokasiBencana) {
@@ -356,38 +498,53 @@ export function LaporanAwam() {
       }
 
       if (ringkasan === 'ada_perubahan') {
-        const tiadaPps = PPS_FIELDS.find((f) => f.required && !nilai[f.key]?.trim())
-        if (tiadaPps) {
-          setRalat(`Sila isi ruangan "${tiadaPps.label}".`)
+        const kumpulan = kumpulanPps.filter((g) => g.rows.length > 0)
+        if (kumpulan.length === 0) {
+          setRalat('Tiada PPS untuk dihantar. Pilih "Tiada Perubahan" atau tambah PPS.')
           return
         }
-        const ralatPps = semakPps(senaraiPps)
-        if (ralatPps) {
-          setRalat(ralatPps)
-          return
+        for (const g of kumpulan) {
+          if (!g.daerah.trim()) {
+            setRalat('Sila isi Daerah bagi setiap kumpulan PPS.')
+            return
+          }
+          const ralatPps = semakPps(g.rows)
+          if (ralatPps) {
+            setRalat(`${g.daerah}: ${ralatPps}`)
+            return
+          }
         }
 
-        const items = senaraiPps.map((r) => ({
-          nama: r.nama.trim().replace(/\s+/g, ' '),
-          jumlah_mangsa: Number(r.mangsa),
-          jumlah_keluarga: Number(r.keluarga),
-          latitude: r.latitude,
-          longitude: r.longitude,
-        }))
-
-        pps = [
-          {
-            negeri: nilai.pps_negeri,
-            daerah: nilai.pps_daerah,
-            zon: cariZon(nilai.pps_negeri),
-            // Legacy group fields, still read by the daily report until phase 3
+        pps = kumpulan.map((g) => {
+          const items = g.rows.map((r) => {
+            const m = metaPps[r.kunci]
+            return {
+              nama: r.nama.trim().replace(/\s+/g, ' '),
+              jumlah_mangsa: Number(r.mangsa),
+              jumlah_keluarga: Number(r.keluarga),
+              latitude: r.latitude,
+              longitude: r.longitude,
+              // Excel details (absent for PPS added by hand here)
+              mukim: m?.mukim || null,
+              pengurus_nama: m?.pengurusNama || null,
+              pengurus_jawatan: m?.pengurusJawatan || null,
+              pengurus_telefon: m?.pengurusTelefon || null,
+              dibuka_pada: m?.dibukaPada ?? null,
+              ditutup: m?.ditutup ?? false,
+              tutup_pada: m?.tutupPada ?? null,
+            }
+          })
+          return {
+            negeri: nilai.negeri,
+            daerah: g.daerah.trim(),
+            zon: cariZon(nilai.negeri),
+            // Legacy group fields, still read by older views
             pps: items.map((i) => i.nama).join('\n'),
             jumlah_mangsa: items.reduce((n, i) => n + i.jumlah_mangsa, 0),
             jumlah_keluarga: items.reduce((n, i) => n + i.jumlah_keluarga, 0),
-            // New: one entry per PPS
             items,
-          },
-        ]
+          }
+        })
       }
 
       rekod.ringkasan_status = ringkasan
@@ -395,6 +552,8 @@ export function LaporanAwam() {
         const v = (nilai[f.key] ?? '').trim()
         rekod[f.key] = !v ? null : f.type === 'datetime' ? new Date(v).toISOString() : v
       }
+      // Verified by the state officer in the Excel ("Disahkan Oleh")
+      if (rekod.perhatian_nama) rekod.perhatian_masa = rekod.tarikh_masa
     }
 
     setMenghantar(true)
@@ -402,6 +561,7 @@ export function LaporanAwam() {
       p_code: ambilKod('laporan'),
       p_data: rekod,
       p_pps: pps,
+      p_lampiran: jenis === 'semasa' && lampiran && pilihanLampiran ? lampiranUntukHantar(lampiran, pilihanLampiran) : {},
     })
     setMenghantar(false)
 
@@ -421,7 +581,7 @@ export function LaporanAwam() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const zonPps = nilai.pps_negeri ? cariZon(nilai.pps_negeri) : ''
+  const zonPps = nilai.negeri ? cariZon(nilai.negeri) : ''
 
   return (
     <div className="relative min-h-[100dvh] overflow-hidden bg-gradient-to-br from-sky-100 via-sky-50 to-white px-4 py-10">
@@ -458,236 +618,244 @@ export function LaporanAwam() {
           {berjaya ? (
             <KejayaanHantar berjaya={berjaya} onLagi={() => setBerjaya(null)} onKeluar={() => navigate('/')} />
           ) : (
-          <div className="space-y-6">
-            <div>
-              <label className="mb-2 block text-sm font-medium text-neutral-700">
-                Jenis Laporan <span className="text-red-500">*</span>
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {JENIS_LAPORAN.map(({ value, label }) => {
-                  const active = jenis === value
-                  return (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => pilihJenis(value)}
-                      className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
-                        active
-                          ? 'border-emerald-700 bg-emerald-700 text-white'
-                          : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  )
-                })}
+            <div className="space-y-6">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-neutral-700">
+                  Jenis Laporan <span className="text-red-500">*</span>
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {JENIS_LAPORAN.map(({ value, label }) => {
+                    const active = jenis === value
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => pilihJenis(value as 'awal' | 'semasa')}
+                        className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
+                          active
+                            ? 'border-emerald-700 bg-emerald-700 text-white'
+                            : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-            </div>
 
-            {/* Step 1: upload the NDCC Word file */}
-            {jenis === 'awal' && !failAwal && (
-              <Bahagian tajuk="Muat Naik Laporan Awal">
-                <div className="space-y-3 sm:col-span-2">
-                  <p className="text-sm text-neutral-600">
-                    Muat naik fail <span className="font-medium">Laporan Awal NDCC</span> (.docx) yang telah diisi.
-                    Maklumat dalam fail akan dibaca secara automatik untuk anda semak sebelum dihantar.
-                  </p>
-                  <label
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => {
-                      e.preventDefault()
-                      const f = e.dataTransfer.files[0]
-                      if (f && !membacaFail) muatNaikFail(f)
-                    }}
-                    className={`flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-emerald-300 bg-emerald-50/40 px-6 py-10 text-center transition-colors hover:bg-emerald-50 ${
-                      membacaFail ? 'pointer-events-none opacity-60' : ''
-                    }`}
-                  >
-                    {membacaFail ? (
-                      <Loader2 size={28} className="animate-spin text-emerald-700" />
-                    ) : (
-                      <Upload size={28} className="text-emerald-700" />
-                    )}
-                    <span className="text-sm font-medium text-neutral-800">
-                      {membacaFail ? 'Membaca fail...' : 'Klik untuk pilih fail, atau seret fail ke sini'}
-                    </span>
-                    <span className="text-xs text-neutral-500">Fail Word (.docx) sahaja · maksimum 5 MB</span>
-                    <input
-                      type="file"
-                      accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                      className="hidden"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0]
-                        if (f) muatNaikFail(f)
-                        e.target.value = ''
-                      }}
-                    />
-                  </label>
-                  {ralatFail && <p className="text-sm text-red-600">{ralatFail}</p>}
-                </div>
-              </Bahagian>
-            )}
+              {/* Step 1 (both types): upload the NDCC file */}
+              {jenis && !fail && (
+                <ZonMuatNaik jenis={jenis} membaca={membacaFail} ralat={ralatFail} onPilih={muatNaikFail} />
+              )}
 
-            {/* Step 2: check the values read from the file, then choose the location */}
-            {jenis === 'awal' && failAwal && (
-              <>
-                <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-900">
-                  <p className="flex items-center gap-2 font-semibold">
-                    <AlertTriangle size={16} className="shrink-0" />
-                    Sila periksa maklumat sebelum menghantar
-                  </p>
-                  <p className="mt-1 text-amber-800">
-                    Maklumat di bawah telah dibaca secara automatik daripada fail. Semak setiap ruangan dan betulkan
-                    jika ada kesilapan.
-                  </p>
-                  <ul className="mt-2 list-disc space-y-0.5 pl-5 text-amber-800">
-                    {bilAmaran > 0 && <li>{bilAmaran} ruangan bertanda amaran perlu diperiksa.</li>}
-                    {!lokasiBencana && (
-                      <li>Lokasi bencana tiada dalam fail. Sila pilih di peta (bahagian Lokasi Bencana).</li>
-                    )}
-                  </ul>
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-                    <span className="flex min-w-0 items-center gap-1.5 rounded-full bg-white px-3 py-1 font-medium text-neutral-700 ring-1 ring-amber-200">
-                      <FileText size={13} className="shrink-0" />
-                      <span className="truncate">{failAwal.name}</span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={tukarFail}
-                      className="font-medium text-amber-900 underline underline-offset-2"
-                    >
-                      Tukar fail
-                    </button>
-                  </div>
-                </div>
+              {/* Laporan Awal step 2: check the values, then choose the location */}
+              {jenis === 'awal' && fail && (
+                <>
+                  <BannerSemak
+                    fail={fail}
+                    bilAmaran={bilAmaran}
+                    nota={
+                      lokasiBencana
+                        ? []
+                        : ['Lokasi bencana tiada dalam fail. Sila pilih di peta (bahagian Lokasi Bencana).']
+                    }
+                    onTukar={kosongkanFail}
+                  />
 
-                <div className="grid gap-4 sm:grid-cols-2">{renderMedan(TARIKH_MASA_FIELD)}</div>
-                <Bahagian tajuk="Maklumat Kejadian">{KEJADIAN_FIELDS.map(renderMedan)}</Bahagian>
+                  <div className="grid gap-4 sm:grid-cols-2">{renderMedan(TARIKH_MASA_FIELD)}</div>
+                  <Bahagian tajuk="Maklumat Kejadian">{KEJADIAN_FIELDS.map(renderMedan)}</Bahagian>
 
-                <Bahagian tajuk="Lokasi Bencana">
-                  <div className="sm:col-span-2">
-                    <p className="mb-2 text-xs text-neutral-500">
-                      Lokasi ini akan dipaparkan sebagai titik bencana pada Peta Bencana.{' '}
-                      <span className="text-red-500">*</span>
-                    </p>
-                    {lokasiBencana ? (
-                      <div className="flex flex-wrap items-center gap-2 text-sm text-emerald-700">
-                        <MapPin size={15} />
-                        {lokasiBencana[0].toFixed(5)}, {lokasiBencana[1].toFixed(5)}
+                  <Bahagian tajuk="Lokasi Bencana">
+                    <div className="sm:col-span-2">
+                      <p className="mb-2 text-xs text-neutral-500">
+                        Lokasi ini akan dipaparkan sebagai titik bencana pada Peta Bencana.{' '}
+                        <span className="text-red-500">*</span>
+                      </p>
+                      {lokasiBencana ? (
+                        <div className="flex flex-wrap items-center gap-2 text-sm text-emerald-700">
+                          <MapPin size={15} />
+                          {lokasiBencana[0].toFixed(5)}, {lokasiBencana[1].toFixed(5)}
+                          <button
+                            type="button"
+                            onClick={() => setPetaBuka(true)}
+                            className="rounded-full border border-emerald-200 px-2.5 py-0.5 text-xs font-medium hover:bg-emerald-50"
+                          >
+                            Ubah
+                          </button>
+                        </div>
+                      ) : (
                         <button
                           type="button"
                           onClick={() => setPetaBuka(true)}
-                          className="rounded-full border border-emerald-200 px-2.5 py-0.5 text-xs font-medium hover:bg-emerald-50"
+                          className="flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm font-medium text-neutral-700 transition-colors hover:border-emerald-500 hover:text-emerald-700"
                         >
-                          Ubah
+                          <MapPinned size={15} />
+                          Pilih lokasi di peta
                         </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setPetaBuka(true)}
-                        className="flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm font-medium text-neutral-700 transition-colors hover:border-emerald-500 hover:text-emerald-700"
-                      >
-                        <MapPinned size={15} />
-                        Pilih lokasi di peta
-                      </button>
+                      )}
+                    </div>
+                  </Bahagian>
+
+                  <PilihLokasiModal
+                    open={petaBuka}
+                    tajuk="Pilih Lokasi Bencana"
+                    negeri={nilai.negeri}
+                    cadangan={nilai.alamat || nilai.mukim || nilai.daerah}
+                    awal={lokasiBencana}
+                    onClose={() => setPetaBuka(false)}
+                    onSimpan={(lat, lng) => {
+                      setLokasiBencana([lat, lng])
+                      setPetaBuka(false)
+                    }}
+                  />
+                  <Bahagian tajuk="Hal-hal Lain">{renderMedan(HAL_LAIN_FIELD)}</Bahagian>
+                  <Bahagian tajuk="Disediakan Oleh">{PENYEDIA_FIELDS.map(renderMedan)}</Bahagian>
+                </>
+              )}
+
+              {/* Laporan Semasa step 2: check the values and the PPS read from the Excel */}
+              {jenis === 'semasa' && fail && (
+                <>
+                  <BannerSemak
+                    fail={fail}
+                    bilAmaran={bilAmaran}
+                    nota={[
+                      `${bilPps} PPS dibaca daripada helaian ShelterStatus (${kumpulanPps.length} daerah).`,
+                      'PPS yang ditanda "Tutup" dalam fail akan dicadangkan untuk ditutup. Sekretariat akan mengesahkan.',
+                    ]}
+                    onTukar={kosongkanFail}
+                  />
+
+                  <Bahagian tajuk="Maklumat Bencana">
+                    {SEMASA_MAKLUMAT_FIELDS.map(renderMedan)}
+                    {renderMedan(TARIKH_MASA_FIELD)}
+                    {renderMedan(RINGKASAN_TEKS_FIELD)}
+                  </Bahagian>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-neutral-700">
+                      Status Laporan <span className="text-red-500">*</span>
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {RINGKASAN_STATUS.map(({ value, label }) => {
+                        const active = ringkasan === value
+                        return (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => setRingkasan(value)}
+                            className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
+                              active
+                                ? 'border-emerald-700 bg-emerald-700 text-white'
+                                : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    {ringkasan === 'tiada_perubahan' && bilPps > 0 && (
+                      <p className="mt-2 flex items-start gap-1 text-xs text-amber-700">
+                        <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                        Fail mengandungi {bilPps} PPS. Dengan "Tiada Perubahan", senarai PPS tidak akan dikemaskini.
+                        Sila periksa.
+                      </p>
                     )}
                   </div>
-                </Bahagian>
 
-                <PilihLokasiModal
-                  open={petaBuka}
-                  tajuk="Pilih Lokasi Bencana"
-                  negeri={nilai.negeri}
-                  cadangan={nilai.alamat || nilai.mukim || nilai.daerah}
-                  awal={lokasiBencana}
-                  onClose={() => setPetaBuka(false)}
-                  onSimpan={(lat, lng) => {
-                    setLokasiBencana([lat, lng])
-                    setPetaBuka(false)
-                  }}
-                />
-                <Bahagian tajuk="Hal-hal Lain">{renderMedan(HAL_LAIN_FIELD)}</Bahagian>
-                <Bahagian tajuk="Disediakan Oleh">{PENYEDIA_FIELDS.map(renderMedan)}</Bahagian>
-              </>
-            )}
+                  {ringkasan === 'ada_perubahan' && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                          Pusat Pemindahan Sementara
+                        </h2>
+                        {zonPps && (
+                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                            Zon {zonPps}
+                          </span>
+                        )}
+                      </div>
 
-            {jenis === 'semasa' && (
-              <>
-                <Bahagian tajuk="Maklumat Bencana">
-                  {SEMASA_MAKLUMAT_FIELDS.map(renderMedan)}
-                  {renderMedan(TARIKH_MASA_FIELD)}
-                </Bahagian>
+                      {kumpulanPps.length === 0 && (
+                        <p className="text-sm text-neutral-500">Tiada PPS dijumpai dalam fail.</p>
+                      )}
 
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-neutral-700">
-                    Ringkasan Laporan <span className="text-red-500">*</span>
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {RINGKASAN_STATUS.map(({ value, label }) => {
-                      const active = ringkasan === value
-                      return (
-                        <button
-                          key={value}
-                          type="button"
-                          onClick={() => setRingkasan(value)}
-                          className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
-                            active
-                              ? 'border-emerald-700 bg-emerald-700 text-white'
-                              : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
+                      {kumpulanPps.map((g) => {
+                        const bilTutup = g.rows.filter((r) => metaPps[r.kunci]?.ditutup).length
+                        return (
+                          <div
+                            key={g.kunci}
+                            className="space-y-3 rounded-xl border border-white/70 bg-white/50 p-4 shadow-sm"
+                          >
+                            <div className="flex flex-wrap items-end gap-3">
+                              <div className="min-w-[12rem] flex-1">
+                                <label className="mb-1 block text-sm font-medium text-neutral-700">
+                                  Daerah <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                  value={g.daerah}
+                                  onChange={(e) => ubahKumpulan(g.kunci, { daerah: e.target.value })}
+                                  className={inputClass}
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setKumpulanPps((prev) => prev.filter((x) => x.kunci !== g.kunci))}
+                                className="flex items-center gap-1 rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-xs font-medium text-neutral-600 hover:border-red-300 hover:text-red-600 sm:py-2"
+                              >
+                                <Trash2 size={13} />
+                                Buang daerah
+                              </button>
+                            </div>
+                            <p className="text-xs text-neutral-500">
+                              {g.rows.length} PPS
+                              {bilTutup > 0 && ` · ${bilTutup} ditanda "Tutup" dalam fail`}
+                            </p>
+                            <SenaraiPpsInput
+                              rows={g.rows}
+                              onChange={(rows) => ubahKumpulan(g.kunci, { rows })}
+                              negeri={nilai.negeri}
+                            />
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
 
-                {ringkasan === 'ada_perubahan' && (
-                  <Bahagian
-                    tajuk="Pusat Pemindahan Sementara"
-                    anak={
-                      zonPps && (
-                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                          Zon {zonPps}
-                        </span>
-                      )
-                    }
-                  >
-                    {PPS_FIELDS.map(renderMedan)}
-                    <SenaraiPpsInput
-                      rows={senaraiPps}
-                      onChange={setSenaraiPps}
-                      memuat={memuatPps}
-                      negeri={nilai.pps_negeri}
+                  {lampiran && pilihanLampiran && (
+                    <SemakLampiran
+                      lampiran={lampiran}
+                      pilihan={pilihanLampiran}
+                      onPilihan={(k, v) => setPilihanLampiran((p) => (p ? { ...p, [k]: v } : p))}
                     />
-                  </Bahagian>
-                )}
+                  )}
 
-                <Bahagian tajuk="Hal-hal Lain">{renderMedan(HAL_LAIN_FIELD)}</Bahagian>
-                <Bahagian tajuk="Disediakan Oleh">{SEMASA_PENYEDIA_FIELDS.map(renderMedan)}</Bahagian>
-              </>
-            )}
+                  <Bahagian tajuk="Hal-hal Lain">{renderMedan(HAL_LAIN_FIELD)}</Bahagian>
+                  <Bahagian tajuk="Disediakan Oleh">{SEMASA_PENYEDIA_FIELDS.map(renderMedan)}</Bahagian>
+                  <Bahagian tajuk="Disahkan Oleh">{SEMASA_PERHATIAN_FIELDS.map(renderMedan)}</Bahagian>
+                </>
+              )}
 
-            {ralat && <p className="text-sm text-red-600">{ralat}</p>}
+              {ralat && <p className="text-sm text-red-600">{ralat}</p>}
 
-            {/* Laporan Awal: HANTAR only appears once a file has been read */}
-            {jenis && (jenis !== 'awal' || failAwal) ? (
-              <motion.button
-                type="button"
-                onClick={handleHantar}
-                disabled={menghantar}
-                whileTap={{ scale: 0.97 }}
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-700 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
-              >
-                {menghantar && <Loader2 size={16} className="animate-spin" />}
-                {menghantar ? 'Menghantar...' : 'HANTAR'}
-              </motion.button>
-            ) : !jenis ? (
-              <p className="text-center text-xs text-neutral-400">Pilih jenis laporan untuk bermula.</p>
-            ) : null}
-          </div>
+              {/* HANTAR only appears once a file has been read */}
+              {jenis && fail ? (
+                <motion.button
+                  type="button"
+                  onClick={handleHantar}
+                  disabled={menghantar}
+                  whileTap={{ scale: 0.97 }}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-700 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
+                >
+                  {menghantar && <Loader2 size={16} className="animate-spin" />}
+                  {menghantar ? 'Menghantar...' : 'HANTAR'}
+                </motion.button>
+              ) : !jenis ? (
+                <p className="text-center text-xs text-neutral-400">Pilih jenis laporan untuk bermula.</p>
+              ) : null}
+            </div>
           )}
         </div>
       </div>

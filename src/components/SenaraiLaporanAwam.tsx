@@ -436,6 +436,13 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
                   {buka && jenis === 'semasa' && (
                     <div className="space-y-3 border-t border-neutral-100 p-4">
                       <Bahagian tajuk="Maklumat Bencana" fields={[...SEMASA_MAKLUMAT_FIELDS, TARIKH_MASA_FIELD]} row={row} />
+                      {row.kandungan && (
+                        <Bahagian
+                          tajuk="Ringkasan Laporan"
+                          fields={[{ key: 'kandungan', label: 'Ringkasan', wide: true }]}
+                          row={row}
+                        />
+                      )}
 
                       {row.trend && (
                         <Seksyen tajuk="Trend">

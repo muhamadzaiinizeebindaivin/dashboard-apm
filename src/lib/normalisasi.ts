@@ -1,0 +1,54 @@
+import { NEGERI_LIST } from './negeriVisual'
+import { JENIS_BENCANA } from './laporanBencana'
+
+// Shared text normalisation for everything read from uploaded files
+// (Laporan Awal .docx, Laporan Semasa .xlsx).
+
+// "P. Pinang *" -> "p pinang"
+export function kunci(s: string) {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+const NEGERI_IKUT_KUNCI = new Map(NEGERI_LIST.map((n) => [kunci(n), n]))
+
+const ALIAS_NEGERI: Record<string, string> = {
+  'p pinang': 'Pulau Pinang',
+  penang: 'Pulau Pinang',
+  'n sembilan': 'Negeri Sembilan',
+  ns: 'Negeri Sembilan',
+  kl: 'Kuala Lumpur',
+  wpkl: 'Kuala Lumpur',
+  malacca: 'Melaka',
+}
+
+export function normalNegeri(asal: string): string | null {
+  // "WP Kuala Lumpur", "W.P. Labuan", "Wilayah Persekutuan Putrajaya"
+  const k = kunci(asal).replace(/^(wilayah persekutuan|w p|wp) /, '')
+  return NEGERI_IKUT_KUNCI.get(k) ?? ALIAS_NEGERI[k] ?? null
+}
+
+// Words that identify a disaster type inside a free-text name
+const KATA_JENIS: [string, string][] = [
+  ...JENIS_BENCANA.map((j): [string, string] => [kunci(j), j]),
+  ['angin kencang', 'Ribut'],
+  ['puting beliung', 'Ribut'],
+  ['bumbung terbang', 'Ribut'],
+  ['runtuhan tanah', 'Tanah Runtuh'],
+  ['air pasang', 'Ombak Besar'],
+  ['ombak', 'Ombak Besar'],
+  ['kebakar', 'Kebakaran'],
+]
+
+// "Banjir kilat" -> "Banjir", "BENCANA RIBUT NEGERI SARAWAK" -> "Ribut"
+export function normalJenis(asal: string): string | null {
+  const k = ` ${kunci(asal)} `
+  return KATA_JENIS.find(([kata]) => k.includes(kata))?.[1] ?? null
+}
+
+// Disaster names are stored in one canonical form (same rule as the database)
+export function normalNamaBencana(s: string) {
+  return s.replace(/\s+/g, ' ').trim().toUpperCase()
+}

@@ -1,6 +1,19 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Home, ChevronRight, Search, MapPin, AlertTriangle, Inbox, ArrowLeft, Tent, Clock } from 'lucide-react'
+import {
+  Home,
+  ChevronRight,
+  Search,
+  MapPin,
+  AlertTriangle,
+  Inbox,
+  ArrowLeft,
+  Tent,
+  Clock,
+  Phone,
+  UserRound,
+  BellOff,
+} from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { NEGERI_LIST } from '../lib/negeriVisual'
 import { ConfirmModal } from '../components/ConfirmModal'
@@ -8,13 +21,21 @@ import { EditPpsModal } from '../components/EditPpsModal'
 import { Memuat, Skeleton, SkeletonKad } from '../components/Memuatkan'
 import { Toast } from '../components/Toast'
 import type { ToastState } from '../components/Toast'
-import { formatTarikhMasa, SEBAB_CADANGAN, STATUS_PPS } from '../lib/ppsPusat'
+import {
+  formatTarikhMasa,
+  HAD_TIADA_KEMASKINI_JAM,
+  jamTanpaLaporan,
+  pautanTelefon,
+  SEBAB_CADANGAN,
+  STATUS_PPS,
+} from '../lib/ppsPusat'
 import type { PpsPusat, StatusPps } from '../lib/ppsPusat'
 
 type Tindakan = 'tutup' | 'kekalkan' | 'buka_semula'
-type TapisStatus = 'aktif' | 'dibuka' | 'cadangan_tutup' | 'ditutup' | 'semua'
+type TapisStatus = 'aktif' | 'dibuka' | 'tiada_kemaskini' | 'cadangan_tutup' | 'ditutup' | 'semua'
 
 const SEHARI = 24 * 60 * 60 * 1000
+const SEMINIT = 60 * 1000
 
 const selectClass =
   'h-9 rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-700 outline-none focus:border-emerald-600'
@@ -58,18 +79,23 @@ const GAYA_KAD: Record<StatusPps, { kad: string; ikon: string }> = {
 
 type KadPpsProps = {
   pps: PpsPusat
+  kini: number
   onTindakan: (pps: PpsPusat, jenis: Tindakan) => void
   onKemaskini: (pps: PpsPusat) => void
 }
 
-function KadPps({ pps, onTindakan, onKemaskini }: KadPpsProps) {
+function KadPps({ pps, kini, onTindakan, onKemaskini }: KadPpsProps) {
   const status = STATUS_PPS[pps.status]
   const gaya = GAYA_KAD[pps.status]
   const adaLokasi = pps.latitude != null && pps.longitude != null
   const ditutup = pps.status === 'ditutup'
-  // Only mention "Dikemas kini" when it actually differs from the opening time
-  const adaKemaskini =
-    !ditutup && Math.abs(new Date(pps.dikemaskini_pada).getTime() - new Date(pps.dibuka_pada).getTime()) > 60_000
+  const jamSenyap = jamTanpaLaporan(pps, kini)
+  const telefon = pautanTelefon(pps.pengurus_telefon)
+  // Only mention the last report when it actually differs from the opening time
+  const adaLaporanBaru =
+    !ditutup &&
+    !!pps.dilapor_pada &&
+    Math.abs(new Date(pps.dilapor_pada).getTime() - new Date(pps.dibuka_pada).getTime()) > SEMINIT
 
   return (
     <div
@@ -84,14 +110,23 @@ function KadPps({ pps, onTindakan, onKemaskini }: KadPpsProps) {
           <div className="min-w-0">
             <p className="truncate font-semibold text-neutral-900">{pps.nama}</p>
             <p className="truncate text-xs text-neutral-500">
-              {[pps.daerah, pps.negeri].filter(Boolean).join(', ')}
+              {[pps.mukim, pps.daerah, pps.negeri].filter(Boolean).join(', ')}
               {pps.zon && ` · Zon ${pps.zon}`}
             </p>
           </div>
         </div>
-        <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${status.className}`}>
-          {status.label}
-        </span>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${status.className}`}>{status.label}</span>
+          {jamSenyap !== null && (
+            <span
+              title={`Tiada laporan untuk PPS ini sejak ${formatTarikhMasa(pps.dilapor_pada ?? pps.dibuka_pada)}`}
+              className="flex items-center gap-1 rounded-full bg-neutral-200/80 px-2.5 py-0.5 text-xs font-medium text-neutral-600"
+            >
+              <BellOff size={11} />
+              Tiada kemas kini · {jamSenyap} j
+            </span>
+          )}
+        </div>
       </div>
 
       {pps.status === 'cadangan_tutup' && pps.sebab_cadangan && (
@@ -117,9 +152,39 @@ function KadPps({ pps, onTindakan, onKemaskini }: KadPpsProps) {
       <p className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-neutral-500">
         <Clock size={12} className="shrink-0" />
         <span>Dibuka {formatTarikhMasa(pps.dibuka_pada)}</span>
-        {adaKemaskini && <span>· Dikemas kini {formatTarikhMasa(pps.dikemaskini_pada)}</span>}
+        {adaLaporanBaru && <span>· Laporan terakhir {formatTarikhMasa(pps.dilapor_pada)}</span>}
         {ditutup && <span>· Ditutup {formatTarikhMasa(pps.ditutup_pada)}</span>}
       </p>
+
+      {/* PPS manager (from the state's Excel report) */}
+      {(pps.pengurus_nama || pps.pengurus_telefon) && (
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-600">
+          {pps.pengurus_nama && (
+            <span className="flex min-w-0 items-center gap-1.5">
+              <UserRound size={12} className="shrink-0 text-neutral-400" />
+              <span className="truncate">
+                {pps.pengurus_nama}
+                {pps.pengurus_jawatan && <span className="text-neutral-400"> · {pps.pengurus_jawatan}</span>}
+              </span>
+            </span>
+          )}
+          {pps.pengurus_telefon &&
+            (telefon ? (
+              <a
+                href={telefon}
+                className="flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700 ring-1 ring-emerald-200/70 hover:bg-emerald-100"
+              >
+                <Phone size={12} />
+                {pps.pengurus_telefon}
+              </a>
+            ) : (
+              <span className="flex items-center gap-1">
+                <Phone size={12} className="text-neutral-400" />
+                {pps.pengurus_telefon}
+              </span>
+            ))}
+        </div>
+      )}
 
       {ditutup && pps.catatan_tutup && (
         <p className="mt-2 text-xs italic text-neutral-500">“{pps.catatan_tutup}”</p>
@@ -196,6 +261,13 @@ export function PengurusanPps() {
   const [ralatTindakan, setRalatTindakan] = useState('')
   const [toast, setToast] = useState<ToastState>(null)
   const [disunting, setDisunting] = useState<PpsPusat | null>(null)
+  // "Tiada kemas kini" depends on the clock, not only on data changes
+  const [kini, setKini] = useState(() => Date.now())
+
+  useEffect(() => {
+    const t = setInterval(() => setKini(Date.now()), SEMINIT)
+    return () => clearInterval(t)
+  }, [])
 
   // Initial load + live refresh whenever a report or an action changes a PPS
   useEffect(() => {
@@ -222,6 +294,7 @@ export function PengurusanPps() {
 
   const bilDibuka = senarai.filter((p) => p.status === 'dibuka').length
   const bilCadangan = senarai.filter((p) => p.status === 'cadangan_tutup').length
+  const bilSenyap = senarai.filter((p) => jamTanpaLaporan(p, kini) !== null).length
   const bilDitutup24 = senarai.filter(
     (p) => p.status === 'ditutup' && p.ditutup_pada && Date.now() - new Date(p.ditutup_pada).getTime() < SEHARI,
   ).length
@@ -234,7 +307,12 @@ export function PengurusanPps() {
       (!q || p.nama.toLowerCase().includes(q) || (p.daerah ?? '').toLowerCase().includes(q)) &&
       (!tapisNegeri || p.negeri === tapisNegeri) &&
       (!tapisBencana || p.nama_bencana === tapisBencana) &&
-      (tapisStatus === 'semua' || (tapisStatus === 'aktif' ? p.status !== 'ditutup' : p.status === tapisStatus)),
+      (tapisStatus === 'semua' ||
+        (tapisStatus === 'aktif'
+          ? p.status !== 'ditutup'
+          : tapisStatus === 'tiada_kemaskini'
+            ? jamTanpaLaporan(p, kini) !== null
+            : p.status === tapisStatus)),
   )
 
   const perluTindakan = ditapis.filter((p) => p.status === 'cadangan_tutup')
@@ -316,15 +394,24 @@ export function PengurusanPps() {
       </div>
 
       {/* Counters */}
-      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
           { label: 'PPS Dibuka', nilai: bilDibuka, warna: 'text-emerald-700' },
           { label: 'Cadangan Tutup', nilai: bilCadangan, warna: 'text-amber-600' },
+          {
+            label: `Tiada kemas kini (> ${HAD_TIADA_KEMASKINI_JAM} jam)`,
+            nilai: bilSenyap,
+            warna: bilSenyap > 0 ? 'text-neutral-700' : 'text-neutral-400',
+            tapis: 'tiada_kemaskini' as const,
+          },
           { label: 'Ditutup (24 jam lepas)', nilai: bilDitutup24, warna: 'text-neutral-600' },
         ].map((k) => (
           <div
             key={k.label}
-            className="rounded-2xl border border-white/60 bg-white/40 px-5 py-4 shadow-lg backdrop-blur-md"
+            onClick={k.tapis ? () => setTapisStatus(k.tapis) : undefined}
+            className={`rounded-2xl border border-white/60 bg-white/40 px-5 py-4 shadow-lg backdrop-blur-md ${
+              k.tapis ? 'cursor-pointer transition-colors hover:border-neutral-400' : ''
+            }`}
           >
             <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">{k.label}</p>
             {loading ? (
@@ -370,6 +457,7 @@ export function PengurusanPps() {
         >
           <option value="aktif">Dibuka + Cadangan Tutup</option>
           <option value="dibuka">Dibuka sahaja</option>
+          <option value="tiada_kemaskini">Tiada kemas kini (&gt; {HAD_TIADA_KEMASKINI_JAM} jam)</option>
           <option value="cadangan_tutup">Cadangan Tutup sahaja</option>
           <option value="ditutup">Ditutup</option>
           <option value="semua">Semua</option>
@@ -413,7 +501,7 @@ export function PengurusanPps() {
                 {perluTindakan.map((p) => (
                   <div key={p.id}>
                     <p className="mb-1 text-xs font-medium text-neutral-500">{p.nama_bencana}</p>
-                    <KadPps pps={p} onTindakan={bukaTindakan} onKemaskini={setDisunting} />
+                    <KadPps pps={p} kini={kini} onTindakan={bukaTindakan} onKemaskini={setDisunting} />
                   </div>
                 ))}
               </div>
@@ -431,7 +519,7 @@ export function PengurusanPps() {
               </h2>
               <div className="grid gap-3 lg:grid-cols-2">
                 {arr.map((p) => (
-                  <KadPps key={p.id} pps={p} onTindakan={bukaTindakan} onKemaskini={setDisunting} />
+                  <KadPps key={p.id} pps={p} kini={kini} onTindakan={bukaTindakan} onKemaskini={setDisunting} />
                 ))}
               </div>
             </div>

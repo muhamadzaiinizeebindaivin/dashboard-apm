@@ -1,5 +1,7 @@
-import { NEGERI_LIST } from './negeriVisual'
-import { JENIS_BENCANA } from './laporanBencana'
+import { bacaTarikhMasa } from './tarikhBebas'
+import { kunci, normalJenis, normalNegeri, normalNamaBencana } from './normalisasi'
+
+// Reads the NDCC "Laporan Awal" Word template (.docx).
 
 export const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 const SAIZ_MAKS = 5 * 1024 * 1024
@@ -8,91 +10,6 @@ export type HasilBacaan = {
   nilai: Record<string, string> // form values, keyed like the Laporan Awal fields
   amaran: Record<string, string> // per field: what the operator should check
 }
-
-const kunci = (s: string) =>
-  s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim()
-
-const pad = (n: number) => String(n).padStart(2, '0')
-
-// ---------------------------------------------------------------------------
-// Value normalisation
-// ---------------------------------------------------------------------------
-
-const NEGERI_IKUT_KUNCI = new Map(NEGERI_LIST.map((n) => [kunci(n), n]))
-const ALIAS_NEGERI: Record<string, string> = {
-  'p pinang': 'Pulau Pinang',
-  penang: 'Pulau Pinang',
-  'n sembilan': 'Negeri Sembilan',
-  ns: 'Negeri Sembilan',
-  kl: 'Kuala Lumpur',
-  malacca: 'Melaka',
-}
-
-function normalNegeri(asal: string): string | null {
-  const k = kunci(asal).replace(/^(wilayah persekutuan|w p|wp) /, '')
-  return NEGERI_IKUT_KUNCI.get(k) ?? ALIAS_NEGERI[k] ?? null
-}
-
-// "Banjir kilat" -> "Banjir", "Kebakaran hutan" -> "Kebakaran"
-function normalJenis(asal: string): string | null {
-  const k = kunci(asal)
-  return JENIS_BENCANA.find((j) => k.includes(kunci(j))) ?? null
-}
-
-const BULAN: Record<string, number> = {
-  jan: 1, januari: 1, january: 1, feb: 2, februari: 2, february: 2, mac: 3, mar: 3, march: 3,
-  apr: 4, april: 4, mei: 5, may: 5, jun: 6, june: 6, jul: 7, julai: 7, july: 7,
-  ogo: 8, ogos: 8, aug: 8, august: 8, sep: 9, sept: 9, september: 9,
-  okt: 10, oktober: 10, oct: 10, october: 10, nov: 11, november: 11, dis: 12, disember: 12, dec: 12, december: 12,
-}
-const PETANG = ['pm', 'ptg', 'petang', 'malam', 'mlm']
-const PAGI = ['am', 'pg', 'pagi']
-
-// Free-form "9/10/2026 1400H", "09-10-2026 2.30 ptg", "9 Okt 2026 14:00"
-// -> "2026-10-09T14:00" (datetime-local format), or null
-export function bacaTarikhMasa(asal: string): { nilai: string; adaMasa: boolean } | null {
-  const t = asal.toLowerCase()
-  let d: number, m: number, y: number
-  let padanTarikh = t.match(/(\d{1,2})\s*[/\-.]\s*(\d{1,2})\s*[/\-.]\s*(\d{2,4})/)
-  if (padanTarikh) {
-    d = +padanTarikh[1]
-    m = +padanTarikh[2]
-    y = +padanTarikh[3]
-  } else {
-    padanTarikh = t.match(/(\d{1,2})\s+([a-z]+)\s+(\d{4})/)
-    if (!padanTarikh || !BULAN[padanTarikh[2]]) return null
-    d = +padanTarikh[1]
-    m = BULAN[padanTarikh[2]]
-    y = +padanTarikh[3]
-  }
-  if (y < 100) y += 2000
-  if (m < 1 || m > 12 || d < 1 || d > 31) return null
-
-  const sisa = t.replace(padanTarikh[0], ' ')
-  let jam = 0
-  let minit = 0
-  let adaMasa = false
-  const masa =
-    sisa.match(/(\d{1,2})[:.](\d{2})\s*(am|pm|pg|ptg|pagi|petang|malam|mlm)?/) ??
-    sisa.match(/\b(\d{2})(\d{2})\s*(h|hrs|jam)\b/)
-  if (masa) {
-    jam = +masa[1]
-    minit = +masa[2]
-    const akhiran = masa[3] ?? ''
-    if (PETANG.includes(akhiran) && jam < 12) jam += 12
-    if (PAGI.includes(akhiran) && jam === 12) jam = 0
-    if (jam > 23 || minit > 59) return null
-    adaMasa = true
-  }
-  return { nilai: `${y}-${pad(m)}-${pad(d)}T${pad(jam)}:${pad(minit)}`, adaMasa }
-}
-
-// ---------------------------------------------------------------------------
-// Reading the NDCC "Laporan Awal" Word template
-// ---------------------------------------------------------------------------
 
 // 1.x numbers in the template -> form keys
 const NOMBOR_MEDAN: Record<string, string> = {
@@ -249,16 +166,17 @@ export async function bacaLaporanAwal(fail: File): Promise<HasilBacaan | { ralat
 
   if (nilai.negeri) {
     const asal = nilai.negeri
-    const negeri = normalNegeri(asal)
+    // "WILAYAH PERSEKUTUAN" alone: the district says which one (Labuan, Kuala Lumpur, Putrajaya)
+    const wilayah = /^(wilayah persekutuan|w p|wp)$/.test(kunci(asal))
+    const negeri = normalNegeri(asal) ?? (wilayah && nilai.daerah ? normalNegeri(nilai.daerah) : null)
     if (!negeri) amaran.negeri = `Negeri "${asal}" tidak dikenali. Sila pilih daripada senarai.`
     // Only flag a real change ("W.P. Labuan" -> Labuan), not capitals/spaces ("SABAH" -> Sabah)
     else if (kunci(negeri) !== kunci(asal)) amaran.negeri = `Dibaca daripada "${asal}". Sila periksa.`
     nilai.negeri = negeri ?? ''
   }
 
-  // Disaster names are saved in one canonical form (UPPERCASE, single spaces):
-  // show it that way already, so the operator sees exactly what will be stored
-  if (nilai.nama_bencana) nilai.nama_bencana = nilai.nama_bencana.replace(/\s+/g, ' ').trim().toUpperCase()
+  // Shown exactly as it will be stored (UPPERCASE, single spaces)
+  if (nilai.nama_bencana) nilai.nama_bencana = normalNamaBencana(nilai.nama_bencana)
 
   const tetapkanMasa = (kunciMedan: string, teks: string, label: string) => {
     if (!teks.trim()) return
@@ -268,14 +186,22 @@ export async function bacaLaporanAwal(fail: File): Promise<HasilBacaan | { ralat
       return
     }
     nilai[kunciMedan] = hasil.nilai
-    amaran[kunciMedan] = hasil.adaMasa
-      ? `Dibaca daripada "${teks}". Sila periksa.`
-      : `Masa tidak dinyatakan dalam fail ("${teks}"). Sila periksa.`
+    amaran[kunciMedan] = hasil.ditukar
+      ? `Dibaca daripada "${teks}" sebagai bulan/hari. Sila periksa.`
+      : hasil.adaMasa
+        ? `Dibaca daripada "${teks}". Sila periksa.`
+        : `Masa tidak dinyatakan dalam fail ("${teks}"). Sila periksa.`
   }
   tetapkanMasa('tarikh_masa', teksTarikh, 'Tarikh/Masa')
   tetapkanMasa('penyedia_masa', `${nilai._tarikh ?? ''} ${nilai._masa ?? ''}`.trim(), 'Masa & Tarikh')
   delete nilai._tarikh
   delete nilai._masa
+
+  // No date at the top of the form: suggest the "Disediakan Oleh" time
+  if (!nilai.tarikh_masa && !amaran.tarikh_masa && nilai.penyedia_masa) {
+    nilai.tarikh_masa = nilai.penyedia_masa
+    amaran.tarikh_masa = 'Tarikh/Masa kosong dalam fail. Diambil daripada Masa "Disediakan Oleh". Sila periksa.'
+  }
 
   return { nilai, amaran }
 }

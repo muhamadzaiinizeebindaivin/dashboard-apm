@@ -14,6 +14,7 @@ import type { TitikGraf } from '../lib/laporanNasionalGraf'
 import { bangunLaporanNasionalDoc } from '../lib/janaLaporanNasional'
 import { JENIS_BENCANA_SEMASA, cariZon } from '../lib/laporanBencana'
 import { NEGERI_LIST } from '../lib/negeriVisual'
+import { HAD_TIADA_KEMASKINI_JAM } from '../lib/ppsPusat'
 
 const ZON_LIST = ['Utara', 'Tengah', 'Selatan', 'Timur', 'Borneo']
 
@@ -56,21 +57,32 @@ export function Sekretariat() {
   } | null>(null)
   const [dataGraf, setDataGraf] = useState<{ duaJam: TitikGraf[]; harian: TitikGraf[] } | null>(null)
   const [bilCadangan, setBilCadangan] = useState(0)
+  const [bilSenyap, setBilSenyap] = useState(0)
 
-  // Badge on the Pengurusan PPS card: PPS waiting for a closure decision
+  // Badges on the Pengurusan PPS card: PPS waiting for a closure decision,
+  // and open PPS with no report for more than HAD_TIADA_KEMASKINI_JAM hours
   useEffect(() => {
     if (!onLanding) return
     let batal = false
 
     async function kira() {
-      const { count } = await supabase
-        .from('pps_pusat')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'cadangan_tutup')
-      if (!batal) setBilCadangan(count ?? 0)
+      const had = new Date(Date.now() - HAD_TIADA_KEMASKINI_JAM * 3_600_000).toISOString()
+      const [cadangan, senyap] = await Promise.all([
+        supabase.from('pps_pusat').select('id', { count: 'exact', head: true }).eq('status', 'cadangan_tutup'),
+        supabase
+          .from('pps_pusat')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'dibuka')
+          .lt('dilapor_pada', had),
+      ])
+      if (batal) return
+      setBilCadangan(cadangan.count ?? 0)
+      setBilSenyap(senyap.count ?? 0)
     }
 
     kira()
+    // The "no update" count also changes with time alone
+    const t = setInterval(kira, 5 * 60 * 1000)
     const channel = supabase
       .channel('pps-badge')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pps_pusat' }, () => kira())
@@ -78,6 +90,7 @@ export function Sekretariat() {
 
     return () => {
       batal = true
+      clearInterval(t)
       supabase.removeChannel(channel)
     }
   }, [onLanding])
@@ -204,6 +217,14 @@ export function Sekretariat() {
                       className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-semibold text-white"
                     >
                       {bilCadangan}
+                    </span>
+                  )}
+                  {to === 'pps' && bilSenyap > 0 && (
+                    <span
+                      title={`PPS dibuka tanpa laporan lebih ${HAD_TIADA_KEMASKINI_JAM} jam`}
+                      className="rounded-full bg-neutral-500 px-2 py-0.5 text-xs font-semibold text-white"
+                    >
+                      {bilSenyap}
                     </span>
                   )}
                 </h2>

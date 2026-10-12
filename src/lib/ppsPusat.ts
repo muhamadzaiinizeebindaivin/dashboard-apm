@@ -73,6 +73,11 @@ export type PpsPusat = {
   dikemaskini_pada: string
   ditutup_pada: string | null
   catatan_tutup: string | null
+  dilapor_pada: string | null // last time a report listed this PPS
+  mukim: string | null
+  pengurus_nama: string | null
+  pengurus_jawatan: string | null
+  pengurus_telefon: string | null
 }
 
 export const STATUS_PPS: Record<StatusPps, { label: string; className: string }> = {
@@ -84,6 +89,7 @@ export const STATUS_PPS: Record<StatusPps, { label: string; className: string }>
 export const SEBAB_CADANGAN: Record<string, string> = {
   tiada_mangsa: '0 mangsa dalam laporan terkini',
   tidak_dilaporkan: 'Tidak dilaporkan dalam laporan terkini',
+  dilapor_tutup: 'Ditanda "Tutup" dalam laporan negeri',
 }
 
 export function formatTarikhMasa(iso: string | null) {
@@ -95,4 +101,24 @@ export function formatTarikhMasa(iso: string | null) {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+// An open PPS with no report for this long gets the "Tiada kemas kini" badge
+// (reports come every 4 h, sometimes 2 h: 4 h + 2 h margin)
+export const HAD_TIADA_KEMASKINI_JAM = 6
+
+// Hours since the last report for an open PPS past the limit, otherwise null
+export function jamTanpaLaporan(pps: PpsPusat, kini: number): number | null {
+  if (pps.status !== 'dibuka') return null
+  const terakhir = new Date(pps.dilapor_pada ?? pps.dibuka_pada).getTime()
+  const jam = (kini - terakhir) / 3_600_000
+  return jam > HAD_TIADA_KEMASKINI_JAM ? Math.floor(jam) : null
+}
+
+// "013-7567487" / "60125729248" / "09-623 6655" -> "tel:+60137567487"
+export function pautanTelefon(no: string | null): string | null {
+  if (!no) return null
+  let d = no.replace(/\D/g, '')
+  if (d.startsWith('0')) d = `60${d.slice(1)}`
+  return d.length >= 9 ? `tel:+${d}` : null
 }
