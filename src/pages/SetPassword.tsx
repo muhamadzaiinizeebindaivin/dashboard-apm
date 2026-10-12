@@ -50,7 +50,7 @@ export function SetPassword() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
+    <div className="flex min-h-[100dvh] items-center justify-center bg-neutral-50 px-4">
       <motion.form
         onSubmit={handleSubmit}
         initial={{ opacity: 0, y: 8 }}

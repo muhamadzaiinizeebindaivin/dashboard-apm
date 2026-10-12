@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, CheckCircle2, Loader2, MapPin, MapPinned } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Loader2, MapPin, MapPinned, FileText, Upload, AlertTriangle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { ambilKod, padamKod } from '../lib/accessCode'
 import apmLogo from '../assets/apm-logo.png'
@@ -21,6 +21,7 @@ import {
 import type { FieldDef } from '../lib/laporanBencana'
 import { SenaraiPpsInput } from '../components/SenaraiPpsInput'
 import { PilihLokasiModal } from '../components/PilihLokasiModal'
+import { bacaLaporanAwal } from '../lib/bacaLaporanAwal'
 import { normalNamaPps, ppsKosong, semakPps } from '../lib/ppsPusat'
 import type { PpsInput, PpsSediaAda } from '../lib/ppsPusat'
 
@@ -38,12 +39,14 @@ const SEMASA_FIELD: FieldDef[] = [
   ...SEMASA_PENYEDIA_FIELDS,
 ]
 
+const SENARAI_NAMA_ID = 'senarai-nama-bencana'
+
 const inputClass =
   'w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 outline-none focus:border-emerald-600'
 
-type MedanProps = { def: FieldDef; value: string; onChange: (v: string) => void }
+type MedanProps = { def: FieldDef; value: string; onChange: (v: string) => void; amaran?: string }
 
-function Medan({ def, value, onChange }: MedanProps) {
+function Medan({ def, value, onChange, amaran }: MedanProps) {
   return (
     <div className={def.wide ? 'sm:col-span-2' : ''}>
       <label className="mb-1 block text-sm font-medium text-neutral-700">
@@ -67,10 +70,18 @@ function Medan({ def, value, onChange }: MedanProps) {
       ) : (
         <input
           type={def.type === 'datetime' ? 'datetime-local' : def.type === 'number' ? 'number' : 'text'}
+          // Nama Bencana: suggest existing disasters so reporters reuse the same name
+          list={def.key === 'nama_bencana' ? SENARAI_NAMA_ID : undefined}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           className={inputClass}
         />
+      )}
+      {amaran && (
+        <p className="mt-1 flex items-start gap-1 text-xs text-amber-700">
+          <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+          {amaran}
+        </p>
       )}
     </div>
   )
@@ -171,7 +182,24 @@ export function LaporanAwam() {
   const [senaraiPps, setSenaraiPps] = useState<PpsInput[]>(() => [ppsKosong()])
   const [lokasiBencana, setLokasiBencana] = useState<[number, number] | null>(null)
   const [petaBuka, setPetaBuka] = useState(false)
+  // Laporan Awal: uploaded Word file + what the operator must check
+  const [failAwal, setFailAwal] = useState<File | null>(null)
+  const [amaran, setAmaran] = useState<Record<string, string>>({})
+  const [membacaFail, setMembacaFail] = useState(false)
+  const [ralatFail, setRalatFail] = useState('')
   const [memuatPps, setMemuatPps] = useState(false)
+  const [cadanganNama, setCadanganNama] = useState<string[]>([])
+
+  // Existing disaster names (last 90 days) for the Nama Bencana suggestions
+  useEffect(() => {
+    let batal = false
+    supabase.rpc('senarai_nama_bencana', { p_code: ambilKod('laporan') }).then(({ data }) => {
+      if (!batal && data) setCadanganNama((data as { nama_bencana: string }[]).map((d) => d.nama_bencana))
+    })
+    return () => {
+      batal = true
+    }
+  }, [])
 
   // Prefill the PPS still open for this disaster + negeri, so the reporter
   // updates their numbers instead of retyping names (avoids duplicates and
@@ -227,7 +255,17 @@ export function LaporanAwam() {
         key={def.key}
         def={def}
         value={nilai[def.key] ?? ''}
-        onChange={(v) => setNilai((prev) => ({ ...prev, [def.key]: v }))}
+        onChange={(v) => {
+          setNilai((prev) => ({ ...prev, [def.key]: v }))
+          // Once the operator edits a field, its "please check" hint has served its purpose
+          setAmaran((a) => {
+            if (!(def.key in a)) return a
+            const baru = { ...a }
+            delete baru[def.key]
+            return baru
+          })
+        }}
+        amaran={jenis === 'awal' && failAwal ? amaranUntuk(def) : undefined}
       />
     )
   }
@@ -239,7 +277,41 @@ export function LaporanAwam() {
     setRalat('')
     setSenaraiPps([ppsKosong()])
     setLokasiBencana(null)
+    setFailAwal(null)
+    setAmaran({})
+    setRalatFail('')
   }
+
+  // Hint for a field: a reading note, or "not found" for an empty required field
+  function amaranUntuk(def: FieldDef) {
+    if (amaran[def.key]) return amaran[def.key]
+    if (def.required && !nilai[def.key]?.trim()) return 'Tidak dijumpai dalam fail. Sila isi.'
+    return undefined
+  }
+
+  async function muatNaikFail(fail: File) {
+    setRalatFail('')
+    setMembacaFail(true)
+    const hasil = await bacaLaporanAwal(fail)
+    setMembacaFail(false)
+    if ('ralat' in hasil) {
+      setRalatFail(hasil.ralat)
+      return
+    }
+    setFailAwal(fail)
+    setNilai(hasil.nilai)
+    setAmaran(hasil.amaran)
+  }
+
+  // Another file replaces the read values; the chosen location is kept
+  function tukarFail() {
+    setFailAwal(null)
+    setNilai({})
+    setAmaran({})
+    setRalatFail('')
+  }
+
+  const bilAmaran = jenis === 'awal' && failAwal ? AWAL_FIELD.filter((f) => amaranUntuk(f)).length : 0
 
   async function handleHantar() {
     setRalat('')
@@ -256,6 +328,10 @@ export function LaporanAwam() {
       const tiadaIsi = AWAL_FIELD.find((f) => f.required && !nilai[f.key]?.trim())
       if (tiadaIsi) {
         setRalat(`Sila isi ruangan "${tiadaIsi.label}".`)
+        return
+      }
+      if (!failAwal) {
+        setRalat('Sila muat naik fail Laporan Awal.')
         return
       }
       if (!lokasiBencana) {
@@ -348,7 +424,7 @@ export function LaporanAwam() {
   const zonPps = nilai.pps_negeri ? cariZon(nilai.pps_negeri) : ''
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-sky-100 via-sky-50 to-white px-4 py-10">
+    <div className="relative min-h-[100dvh] overflow-hidden bg-gradient-to-br from-sky-100 via-sky-50 to-white px-4 py-10">
       <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-sky-300/40 blur-3xl" />
       <div className="pointer-events-none absolute right-0 top-1/3 h-80 w-80 rounded-full bg-emerald-200/40 blur-3xl" />
       <div className="pointer-events-none absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-cyan-200/40 blur-3xl" />
@@ -371,6 +447,12 @@ export function LaporanAwam() {
             Keluar
           </button>
         </div>
+
+        <datalist id={SENARAI_NAMA_ID}>
+          {cadanganNama.map((n) => (
+            <option key={n} value={n} />
+          ))}
+        </datalist>
 
         <div className="mt-6 rounded-2xl border border-white/60 bg-white/40 p-6 shadow-lg backdrop-blur-md">
           {berjaya ? (
@@ -402,8 +484,83 @@ export function LaporanAwam() {
               </div>
             </div>
 
-            {jenis === 'awal' && (
+            {/* Step 1: upload the NDCC Word file */}
+            {jenis === 'awal' && !failAwal && (
+              <Bahagian tajuk="Muat Naik Laporan Awal">
+                <div className="space-y-3 sm:col-span-2">
+                  <p className="text-sm text-neutral-600">
+                    Muat naik fail <span className="font-medium">Laporan Awal NDCC</span> (.docx) yang telah diisi.
+                    Maklumat dalam fail akan dibaca secara automatik untuk anda semak sebelum dihantar.
+                  </p>
+                  <label
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      const f = e.dataTransfer.files[0]
+                      if (f && !membacaFail) muatNaikFail(f)
+                    }}
+                    className={`flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-emerald-300 bg-emerald-50/40 px-6 py-10 text-center transition-colors hover:bg-emerald-50 ${
+                      membacaFail ? 'pointer-events-none opacity-60' : ''
+                    }`}
+                  >
+                    {membacaFail ? (
+                      <Loader2 size={28} className="animate-spin text-emerald-700" />
+                    ) : (
+                      <Upload size={28} className="text-emerald-700" />
+                    )}
+                    <span className="text-sm font-medium text-neutral-800">
+                      {membacaFail ? 'Membaca fail...' : 'Klik untuk pilih fail, atau seret fail ke sini'}
+                    </span>
+                    <span className="text-xs text-neutral-500">Fail Word (.docx) sahaja · maksimum 5 MB</span>
+                    <input
+                      type="file"
+                      accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0]
+                        if (f) muatNaikFail(f)
+                        e.target.value = ''
+                      }}
+                    />
+                  </label>
+                  {ralatFail && <p className="text-sm text-red-600">{ralatFail}</p>}
+                </div>
+              </Bahagian>
+            )}
+
+            {/* Step 2: check the values read from the file, then choose the location */}
+            {jenis === 'awal' && failAwal && (
               <>
+                <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-900">
+                  <p className="flex items-center gap-2 font-semibold">
+                    <AlertTriangle size={16} className="shrink-0" />
+                    Sila periksa maklumat sebelum menghantar
+                  </p>
+                  <p className="mt-1 text-amber-800">
+                    Maklumat di bawah telah dibaca secara automatik daripada fail. Semak setiap ruangan dan betulkan
+                    jika ada kesilapan.
+                  </p>
+                  <ul className="mt-2 list-disc space-y-0.5 pl-5 text-amber-800">
+                    {bilAmaran > 0 && <li>{bilAmaran} ruangan bertanda amaran perlu diperiksa.</li>}
+                    {!lokasiBencana && (
+                      <li>Lokasi bencana tiada dalam fail. Sila pilih di peta (bahagian Lokasi Bencana).</li>
+                    )}
+                  </ul>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="flex min-w-0 items-center gap-1.5 rounded-full bg-white px-3 py-1 font-medium text-neutral-700 ring-1 ring-amber-200">
+                      <FileText size={13} className="shrink-0" />
+                      <span className="truncate">{failAwal.name}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={tukarFail}
+                      className="font-medium text-amber-900 underline underline-offset-2"
+                    >
+                      Tukar fail
+                    </button>
+                  </div>
+                </div>
+
                 <div className="grid gap-4 sm:grid-cols-2">{renderMedan(TARIKH_MASA_FIELD)}</div>
                 <Bahagian tajuk="Maklumat Kejadian">{KEJADIAN_FIELDS.map(renderMedan)}</Bahagian>
 
@@ -515,7 +672,8 @@ export function LaporanAwam() {
 
             {ralat && <p className="text-sm text-red-600">{ralat}</p>}
 
-            {jenis ? (
+            {/* Laporan Awal: HANTAR only appears once a file has been read */}
+            {jenis && (jenis !== 'awal' || failAwal) ? (
               <motion.button
                 type="button"
                 onClick={handleHantar}
@@ -526,9 +684,9 @@ export function LaporanAwam() {
                 {menghantar && <Loader2 size={16} className="animate-spin" />}
                 {menghantar ? 'Menghantar...' : 'HANTAR'}
               </motion.button>
-            ) : (
+            ) : !jenis ? (
               <p className="text-center text-xs text-neutral-400">Pilih jenis laporan untuk bermula.</p>
-            )}
+            ) : null}
           </div>
           )}
         </div>

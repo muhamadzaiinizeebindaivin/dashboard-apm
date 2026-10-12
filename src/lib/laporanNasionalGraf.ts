@@ -20,6 +20,7 @@ type BarisPps = {
 type BarisPusat = { id: string; nama_bencana: string; negeri: string; zon: string | null }
 type BarisItem = { laporan_id: string; pps_id: string; jumlah_mangsa: number; jumlah_keluarga: number }
 type BarisLog = { pps_id: string; ke: string; masa: string }
+type BarisSuntingan = { pps_id: string; masa: string; selepas: { jumlah_mangsa: number; jumlah_keluarga: number } }
 
 export type TitikGraf = {
   label: string
@@ -35,15 +36,23 @@ export type TapisGraf = {
   zon?: string
 }
 
+type Kiraan = { masa: number; mangsa: number; keluarga: number; suntingan?: boolean }
+
 // Per-PPS history, indexed for fast "as of time t" lookups
 type DataPusat = {
   ppsIkutBencana: Map<string, string[]>
   pusat: Map<string, BarisPusat>
-  kiraan: Map<string, { masa: number; mangsa: number; keluarga: number }[]> // reported counts, ascending
+  kiraan: Map<string, Kiraan[]> // reported counts + manual edits, ascending
   log: Map<string, { masa: number; ke: string }[]> // manual status changes, ascending
 }
 
-function binaDataPusat(baris: BarisSemasa[], pusatRows: BarisPusat[], itemRows: BarisItem[], logRows: BarisLog[]): DataPusat {
+function binaDataPusat(
+  baris: BarisSemasa[],
+  pusatRows: BarisPusat[],
+  itemRows: BarisItem[],
+  logRows: BarisLog[],
+  suntinganRows: BarisSuntingan[],
+): DataPusat {
   const masaLaporan = new Map(baris.map((b) => [b.id, new Date(b.created_at).getTime()]))
 
   const ppsIkutBencana = new Map<string, string[]>()
@@ -54,12 +63,23 @@ function binaDataPusat(baris: BarisSemasa[], pusatRows: BarisPusat[], itemRows: 
     ppsIkutBencana.get(p.nama_bencana)!.push(p.id)
   }
 
-  const kiraan = new Map<string, { masa: number; mangsa: number; keluarga: number }[]>()
+  const kiraan = new Map<string, Kiraan[]>()
   for (const i of itemRows) {
     const masa = masaLaporan.get(i.laporan_id)
     if (masa === undefined) continue
     if (!kiraan.has(i.pps_id)) kiraan.set(i.pps_id, [])
     kiraan.get(i.pps_id)!.push({ masa, mangsa: i.jumlah_mangsa, keluarga: i.jumlah_keluarga })
+  }
+
+  // Manual edits (Pengurusan PPS) count from the moment they were made
+  for (const s of suntinganRows) {
+    if (!kiraan.has(s.pps_id)) kiraan.set(s.pps_id, [])
+    kiraan.get(s.pps_id)!.push({
+      masa: new Date(s.masa).getTime(),
+      mangsa: s.selepas.jumlah_mangsa,
+      keluarga: s.selepas.jumlah_keluarga,
+      suntingan: true,
+    })
   }
   for (const arr of kiraan.values()) arr.sort((a, b) => a.masa - b.masa)
 
@@ -92,6 +112,7 @@ function snapshotPadaMasa(
   pps: BarisPps[],
   data: DataPusat,
   tapis: TapisGraf,
+  tamat: Map<string, number>,
 ): { mangsa: number; keluarga: number; pps: number; negeri: number } {
   const t = masa.getTime()
   const had = barisAsc.filter((b) => new Date(b.created_at).getTime() <= t)
@@ -109,6 +130,10 @@ function snapshotPadaMasa(
   const negeriSet = new Set<string>()
 
   for (const [nama, arr] of kumpulan) {
+    // Ended disasters stop counting from the moment they were ended
+    const masaTamat = tamat.get(nama.trim())
+    if (masaTamat !== undefined && t >= masaTamat) continue
+
     // New format: if this disaster already had per-PPS data at time t, use
     // each PPS's latest counts at t, minus the PPS that were closed at t.
     const idPps = data.ppsIkutBencana.get(nama.trim())
@@ -122,11 +147,13 @@ function snapshotPadaMasa(
         const k = terakhirSebelum(data.kiraan.get(id), t)
         if (!k) continue // not opened yet at t
 
-        // Closed at t = last manual action is a closure, unless a later report
-        // with victims re-opened it (the RPC re-opens automatically and that
-        // isn't in the manual log).
+        // Closed at t = last manual action is a closure, unless a later REPORT
+        // with victims re-opened it (manual edits never change the status)
         const l = terakhirSebelum(data.log.get(id), t)
-        const ditutup = l?.ke === 'ditutup' && !(k.masa > l.masa && k.mangsa > 0)
+        const dibukaSemula =
+          !!l &&
+          (data.kiraan.get(id) ?? []).some((x) => !x.suntingan && x.masa > l.masa && x.masa <= t && x.mangsa > 0)
+        const ditutup = l?.ke === 'ditutup' && !dibukaSemula
         if (ditutup) continue
 
         const p = data.pusat.get(id)!
@@ -163,18 +190,34 @@ const pad = (n: number) => String(n).padStart(2, '0')
 const NAMA_BULAN = ['Jan', 'Feb', 'Mac', 'Apr', 'Mei', 'Jun', 'Jul', 'Ogo', 'Sep', 'Okt', 'Nov', 'Dis']
 
 export async function ambilDataGraf(tapis: TapisGraf = {}): Promise<{ duaJam: TitikGraf[]; harian: TitikGraf[] }> {
-  const [{ data: semasaData }, { data: ppsData }, { data: pusatData }, { data: itemData }, { data: logData }] =
-    await Promise.all([
-      supabase
-        .from('laporan_bencana')
-        .select('id, nama_bencana, jenis_bencana, ringkasan_status, created_at')
-        .eq('jenis_laporan', 'semasa')
-        .order('created_at', { ascending: true }),
-      supabase.from('laporan_pps').select('laporan_id, negeri, zon, pps, jumlah_mangsa, jumlah_keluarga'),
-      supabase.from('pps_pusat').select('id, nama_bencana, negeri, zon'),
-      supabase.from('laporan_pps_item').select('laporan_id, pps_id, jumlah_mangsa, jumlah_keluarga'),
-      supabase.from('pps_status_log').select('pps_id, ke, masa'),
-    ])
+  const [
+    { data: semasaData },
+    { data: ppsData },
+    { data: pusatData },
+    { data: itemData },
+    { data: logData },
+    { data: tamatData },
+    { data: suntinganData },
+  ] = await Promise.all([
+    supabase
+      .from('laporan_bencana')
+      .select('id, nama_bencana, jenis_bencana, ringkasan_status, created_at')
+      .eq('jenis_laporan', 'semasa')
+      .order('created_at', { ascending: true }),
+    supabase.from('laporan_pps').select('laporan_id, negeri, zon, pps, jumlah_mangsa, jumlah_keluarga'),
+    supabase.from('pps_pusat').select('id, nama_bencana, negeri, zon'),
+    supabase.from('laporan_pps_item').select('laporan_id, pps_id, jumlah_mangsa, jumlah_keluarga'),
+    supabase.from('pps_status_log').select('pps_id, ke, masa'),
+    supabase.from('bencana_tamat').select('nama_bencana, ditamatkan_pada'),
+    supabase.from('pps_suntingan').select('pps_id, masa, selepas'),
+  ])
+
+  const tamat = new Map(
+    ((tamatData as { nama_bencana: string; ditamatkan_pada: string }[]) ?? []).map((x) => [
+      x.nama_bencana,
+      new Date(x.ditamatkan_pada).getTime(),
+    ]),
+  )
 
   const baris = (semasaData as BarisSemasa[]) ?? []
   const pps = (ppsData as BarisPps[]) ?? []
@@ -183,6 +226,7 @@ export async function ambilDataGraf(tapis: TapisGraf = {}): Promise<{ duaJam: Ti
     (pusatData as BarisPusat[]) ?? [],
     (itemData as BarisItem[]) ?? [],
     (logData as BarisLog[]) ?? [],
+    (suntinganData as BarisSuntingan[]) ?? [],
   )
 
   // Round "now" down to the last even hour, so labels read 1200H/1400H/...
@@ -194,7 +238,7 @@ export async function ambilDataGraf(tapis: TapisGraf = {}): Promise<{ duaJam: Ti
   const duaJam: TitikGraf[] = []
   for (let i = 11; i >= 0; i--) {
     const masa = new Date(jamGenap.getTime() - i * 2 * 60 * 60 * 1000)
-    const s = snapshotPadaMasa(masa, baris, pps, data, tapis)
+    const s = snapshotPadaMasa(masa, baris, pps, data, tapis, tamat)
     duaJam.push({ label: `${pad(masa.getHours())}${pad(masa.getMinutes())}H`, ...s })
   }
 
@@ -205,7 +249,7 @@ export async function ambilDataGraf(tapis: TapisGraf = {}): Promise<{ duaJam: Ti
       masa.setDate(masa.getDate() - i)
       masa.setHours(23, 59, 59, 999)
     }
-    const s = snapshotPadaMasa(masa, baris, pps, data, tapis)
+    const s = snapshotPadaMasa(masa, baris, pps, data, tapis, tamat)
     harian.push({ label: `${masa.getDate()}-${NAMA_BULAN[masa.getMonth()]}`, ...s })
   }
 

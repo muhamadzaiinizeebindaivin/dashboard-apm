@@ -109,12 +109,12 @@ export function Admin() {
         </button>
       </div>
 
-      <div className="mt-6 overflow-hidden rounded-2xl border border-white/60 bg-white/40 shadow-lg backdrop-blur-md">
+      <div className="mt-6 overflow-x-auto rounded-2xl border border-white/60 bg-white/40 shadow-lg backdrop-blur-md">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-white/60 text-xs uppercase tracking-wide text-neutral-500">
             <tr>
               <th className="px-5 py-3 font-medium">Nama</th>
-              <th className="px-5 py-3 font-medium">Emel</th>
+              <th className="hidden px-5 py-3 font-medium sm:table-cell">Emel</th>
               <th className="px-5 py-3 font-medium">Peranan</th>
               <th className="px-5 py-3 font-medium" />
             </tr>
@@ -130,8 +130,12 @@ export function Admin() {
                     fadingId === user.id ? 'opacity-0' : 'opacity-100'
                   }`}
                 >
-                  <td className="px-5 py-3 text-neutral-800">{user.full_name ?? '—'}</td>
-                  <td className="px-5 py-3 text-neutral-600">{user.email ?? '—'}</td>
+                  <td className="px-3 py-3 text-neutral-800 sm:px-5">
+                    {user.full_name ?? '—'}
+                    {/* Mobile: email under the name instead of its own column */}
+                    <p className="break-all text-xs text-neutral-500 sm:hidden">{user.email ?? '—'}</p>
+                  </td>
+                  <td className="hidden px-5 py-3 text-neutral-600 sm:table-cell">{user.email ?? '—'}</td>
                   <td className="px-5 py-3">
                     {user.id === profile?.id ? (
                       <span
@@ -158,7 +162,7 @@ export function Admin() {
                         onClick={() => setPendingDelete(user)}
                         disabled={updatingId === user.id}
                         title="Padam pengguna"
-                        className="rounded-full p-1.5 text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-60"
+                        className="rounded-full p-2.5 text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-60 sm:p-1.5"
                       >
                         <Trash2 size={15} />
                       </button>

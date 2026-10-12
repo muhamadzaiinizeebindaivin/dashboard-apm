@@ -51,11 +51,11 @@ export function LoginModal({ open, onClose, onSuccess }: LoginModalProps) {
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
             transition={{ duration: 0.15 }}
             onClick={(e) => e.stopPropagation()}
-            className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl border border-white/60 bg-white/40 p-8 shadow-2xl backdrop-blur-xl sm:p-10"
+            className="relative max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-3xl border border-white/60 bg-white/40 p-6 shadow-2xl backdrop-blur-xl sm:p-10"
           >
             <button
               onClick={handleClose}
-              className="absolute right-4 top-4 rounded-full p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600"
+              className="absolute right-4 top-4 rounded-full p-2.5 sm:p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600"
             >
               <X size={18} />
             </button>

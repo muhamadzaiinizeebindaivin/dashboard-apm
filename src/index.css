@@ -45,3 +45,14 @@
     opacity: 0.5;
   }
 }
+
+/* Mobile: iOS Safari zooms into any field whose text is under 16px when it
+   gets focus. Forms use text-sm (14px), so force 16px on small screens.
+   !important is needed because Tailwind's text-sm class would otherwise win. */
+@media (max-width: 639px) {
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}

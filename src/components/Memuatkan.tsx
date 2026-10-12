@@ -56,7 +56,7 @@ type PemuatHalamanProps = { latar?: boolean; penuh?: boolean }
 export function PemuatHalaman({ latar = false, penuh = true }: PemuatHalamanProps) {
   return (
     <div
-      className={`flex items-center justify-center ${penuh ? 'min-h-screen' : 'py-24'} ${
+      className={`flex items-center justify-center ${penuh ? 'min-h-[100dvh]' : 'py-24'} ${
         latar ? 'bg-gradient-to-br from-sky-100 via-sky-50 to-white' : ''
       }`}
     >

@@ -275,13 +275,13 @@ export function SenaraiSumbanganNegeri() {
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-neutral-200 text-neutral-400">
-                  <th className="pb-2 pr-4 font-medium">Jenis Kumpulan</th>
+                  <th className="hidden pb-2 pr-4 font-medium md:table-cell">Jenis Kumpulan</th>
                   <th className="pb-2 pr-4 font-medium">Nama Kumpulan</th>
-                  <th className="pb-2 pr-4 font-medium">No. Tel</th>
-                  <th className="pb-2 pr-4 font-medium">Jenis Sumbangan</th>
-                  <th className="pb-2 pr-4 font-medium">Lokasi Bantuan</th>
+                  <th className="hidden pb-2 pr-4 font-medium md:table-cell">No. Tel</th>
+                  <th className="hidden pb-2 pr-4 font-medium md:table-cell">Jenis Sumbangan</th>
+                  <th className="hidden pb-2 pr-4 font-medium md:table-cell">Lokasi Bantuan</th>
                   <th className="pb-2 pr-4 font-medium">Status</th>
-                  <th className="pb-2 pr-4 font-medium">Tarikh</th>
+                  <th className="hidden pb-2 pr-4 font-medium md:table-cell">Tarikh</th>
                   <th className="pb-2 font-medium" />
                 </tr>
               </thead>
@@ -294,11 +294,22 @@ export function SenaraiSumbanganNegeri() {
                       fadingId === row.id ? 'opacity-0' : 'opacity-100'
                     }`}
                   >
-                    <td className="py-2 pr-4 text-neutral-800">{row.jenis_kumpulan}</td>
-                    <td className="py-2 pr-4 text-neutral-800">{row.nama_kumpulan}</td>
-                    <td className="py-2 pr-4 text-neutral-600">{row.no_tel ?? '—'}</td>
-                    <td className="py-2 pr-4 text-neutral-600">{row.jenis_sumbangan}</td>
-                    <td className="py-2 pr-4 text-neutral-600">{row.lokasi_bantuan}</td>
+                    <td className="hidden py-2 pr-4 text-neutral-800 md:table-cell">{row.jenis_kumpulan}</td>
+                    <td className="py-2 pr-4 text-neutral-800">
+                      {row.nama_kumpulan}
+                      {/* Mobile: the hidden columns, stacked under the name */}
+                      <p className="mt-0.5 text-xs text-neutral-500 md:hidden">
+                        {[row.jenis_kumpulan, row.jenis_sumbangan].filter(Boolean).join(' · ')}
+                      </p>
+                      <p className="text-xs text-neutral-400 md:hidden">
+                        {[row.lokasi_bantuan, new Date(row.created_at).toLocaleDateString('ms-MY')]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </p>
+                    </td>
+                    <td className="hidden py-2 pr-4 text-neutral-600 md:table-cell">{row.no_tel ?? '—'}</td>
+                    <td className="hidden py-2 pr-4 text-neutral-600 md:table-cell">{row.jenis_sumbangan}</td>
+                    <td className="hidden py-2 pr-4 text-neutral-600 md:table-cell">{row.lokasi_bantuan}</td>
                     <td className="py-2 pr-4">
                       <select
                         value={row.status}
@@ -316,7 +327,7 @@ export function SenaraiSumbanganNegeri() {
                         ))}
                       </select>
                     </td>
-                    <td className="py-2 pr-4 text-neutral-400">
+                    <td className="hidden py-2 pr-4 text-neutral-400 md:table-cell">
                       {new Date(row.created_at).toLocaleDateString('ms-MY')}
                     </td>
                     <td className="py-2">
@@ -327,7 +338,7 @@ export function SenaraiSumbanganNegeri() {
                             setEditingRow(row)
                           }}
                           title="Kemas kini"
-                          className="rounded-full p-1.5 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-emerald-700"
+                          className="rounded-full p-2.5 sm:p-1.5 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-emerald-700"
                         >
                           <Pencil size={14} />
                         </button>
@@ -337,7 +348,7 @@ export function SenaraiSumbanganNegeri() {
                             setPendingDelete(row)
                           }}
                           title="Padam"
-                          className="rounded-full p-1.5 text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                          className="rounded-full p-2.5 sm:p-1.5 text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-600"
                         >
                           <Trash2 size={14} />
                         </button>

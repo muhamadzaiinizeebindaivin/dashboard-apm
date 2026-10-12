@@ -497,6 +497,8 @@ export function LaporanNasionalPreview({ items, duaJam, harian, masaJana, ditutu
         </div>
       </div>
 
+      {/* The table mirrors the PDF, so it keeps its width and scrolls on phones */}
+      <p className="mb-1 text-xs text-neutral-400 sm:hidden">Leret ke kanan untuk melihat jadual penuh →</p>
       <div className="overflow-x-auto rounded-lg border border-neutral-200">
         <table className="w-full min-w-[720px] table-fixed text-left text-sm">
           <colgroup>

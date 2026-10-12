@@ -4,6 +4,7 @@ import { Home, ChevronRight, Search, MapPin, AlertTriangle, Inbox, ArrowLeft, Te
 import { supabase } from '../lib/supabase'
 import { NEGERI_LIST } from '../lib/negeriVisual'
 import { ConfirmModal } from '../components/ConfirmModal'
+import { EditPpsModal } from '../components/EditPpsModal'
 import { Memuat, Skeleton, SkeletonKad } from '../components/Memuatkan'
 import { Toast } from '../components/Toast'
 import type { ToastState } from '../components/Toast'
@@ -55,9 +56,13 @@ const GAYA_KAD: Record<StatusPps, { kad: string; ikon: string }> = {
   },
 }
 
-type KadPpsProps = { pps: PpsPusat; onTindakan: (pps: PpsPusat, jenis: Tindakan) => void }
+type KadPpsProps = {
+  pps: PpsPusat
+  onTindakan: (pps: PpsPusat, jenis: Tindakan) => void
+  onKemaskini: (pps: PpsPusat) => void
+}
 
-function KadPps({ pps, onTindakan }: KadPpsProps) {
+function KadPps({ pps, onTindakan, onKemaskini }: KadPpsProps) {
   const status = STATUS_PPS[pps.status]
   const gaya = GAYA_KAD[pps.status]
   const adaLokasi = pps.latitude != null && pps.longitude != null
@@ -137,10 +142,16 @@ function KadPps({ pps, onTindakan }: KadPpsProps) {
         )}
 
         <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => onKemaskini(pps)}
+            className="rounded-full border border-neutral-200 bg-white/80 px-3 py-2.5 text-xs sm:py-1.5 font-medium text-neutral-700 hover:bg-white"
+          >
+            Kemaskini
+          </button>
           {pps.status === 'cadangan_tutup' && (
             <button
               onClick={() => onTindakan(pps, 'kekalkan')}
-              className="rounded-full border border-neutral-200 bg-white/80 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-white"
+              className="rounded-full border border-neutral-200 bg-white/80 px-3 py-2.5 text-xs sm:py-1.5 font-medium text-neutral-700 hover:bg-white"
             >
               Kekalkan Dibuka
             </button>
@@ -148,7 +159,7 @@ function KadPps({ pps, onTindakan }: KadPpsProps) {
           {!ditutup && (
             <button
               onClick={() => onTindakan(pps, 'tutup')}
-              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+              className={`rounded-full px-3 py-2.5 text-xs sm:py-1.5 font-semibold transition-colors ${
                 pps.status === 'cadangan_tutup'
                   ? 'bg-red-600 text-white hover:bg-red-700'
                   : 'border border-red-200 bg-white/80 text-red-600 hover:bg-red-50'
@@ -160,7 +171,7 @@ function KadPps({ pps, onTindakan }: KadPpsProps) {
           {ditutup && (
             <button
               onClick={() => onTindakan(pps, 'buka_semula')}
-              className="rounded-full border border-emerald-200 bg-white/80 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+              className="rounded-full border border-emerald-200 bg-white/80 px-3 py-2.5 text-xs sm:py-1.5 font-medium text-emerald-700 hover:bg-emerald-50"
             >
               Buka Semula
             </button>
@@ -184,6 +195,7 @@ export function PengurusanPps() {
   const [memproses, setMemproses] = useState(false)
   const [ralatTindakan, setRalatTindakan] = useState('')
   const [toast, setToast] = useState<ToastState>(null)
+  const [disunting, setDisunting] = useState<PpsPusat | null>(null)
 
   // Initial load + live refresh whenever a report or an action changes a PPS
   useEffect(() => {
@@ -273,30 +285,30 @@ export function PengurusanPps() {
       {/* Header */}
       <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/60 bg-white/40 px-5 py-4 shadow-lg backdrop-blur-md">
         <div>
-        <div className="flex items-center gap-1.5 text-sm">
-          <button
-            onClick={() => navigate('/')}
-            className="flex items-center gap-1.5 text-neutral-400 transition-colors hover:text-emerald-700"
-          >
-            <Home size={13} />
-            Portal
-          </button>
-          <ChevronRight size={13} className="text-neutral-300" />
-          <button
-            onClick={() => navigate('/sekretariat')}
-            className="text-neutral-400 transition-colors hover:text-emerald-700"
-          >
-            Sekretariat
-          </button>
-          <ChevronRight size={13} className="text-neutral-300" />
-          <span className="font-medium text-emerald-700">Pengurusan PPS</span>
-        </div>
-        <h1 className="text-xl font-semibold text-neutral-900">Pengurusan PPS</h1>
+          <div className="flex items-center gap-1.5 text-sm">
+            <button
+              onClick={() => navigate('/')}
+              className="flex items-center gap-1.5 text-neutral-400 transition-colors hover:text-emerald-700"
+            >
+              <Home size={13} />
+              Portal
+            </button>
+            <ChevronRight size={13} className="text-neutral-300" />
+            <button
+              onClick={() => navigate('/sekretariat')}
+              className="text-neutral-400 transition-colors hover:text-emerald-700"
+            >
+              Sekretariat
+            </button>
+            <ChevronRight size={13} className="text-neutral-300" />
+            <span className="font-medium text-emerald-700">Pengurusan PPS</span>
+          </div>
+          <h1 className="text-xl font-semibold text-neutral-900">Pengurusan PPS</h1>
         </div>
 
         <button
           onClick={() => navigate('/sekretariat')}
-          className="flex items-center gap-1 rounded-full border border-white/60 bg-white/40 px-3 py-1.5 text-xs font-medium text-neutral-700 backdrop-blur-md transition-colors hover:border-emerald-500 hover:text-emerald-700"
+          className="flex items-center gap-1 rounded-full border border-white/60 bg-white/40 px-3 py-2.5 text-xs sm:py-1.5 font-medium text-neutral-700 backdrop-blur-md transition-colors hover:border-emerald-500 hover:text-emerald-700"
         >
           <ArrowLeft size={14} />
           Kembali
@@ -401,7 +413,7 @@ export function PengurusanPps() {
                 {perluTindakan.map((p) => (
                   <div key={p.id}>
                     <p className="mb-1 text-xs font-medium text-neutral-500">{p.nama_bencana}</p>
-                    <KadPps pps={p} onTindakan={bukaTindakan} />
+                    <KadPps pps={p} onTindakan={bukaTindakan} onKemaskini={setDisunting} />
                   </div>
                 ))}
               </div>
@@ -419,7 +431,7 @@ export function PengurusanPps() {
               </h2>
               <div className="grid gap-3 lg:grid-cols-2">
                 {arr.map((p) => (
-                  <KadPps key={p.id} pps={p} onTindakan={bukaTindakan} />
+                  <KadPps key={p.id} pps={p} onTindakan={bukaTindakan} onKemaskini={setDisunting} />
                 ))}
               </div>
             </div>
@@ -454,6 +466,18 @@ export function PengurusanPps() {
           </div>
         )}
       </ConfirmModal>
+
+      {disunting && (
+        <EditPpsModal
+          key={disunting.id}
+          pps={disunting}
+          onClose={() => setDisunting(null)}
+          onSaved={() => {
+            setDisunting(null)
+            setToast({ type: 'success', message: 'PPS dikemaskini.' })
+          }}
+        />
+      )}
 
       <Toast toast={toast} onDismiss={() => setToast(null)} />
     </div>

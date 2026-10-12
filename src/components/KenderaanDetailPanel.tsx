@@ -174,7 +174,7 @@ export function KenderaanDetailPanel({
               </div>
               <button
                 onClick={onClose}
-                className="rounded-full p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600"
+                className="rounded-full p-2.5 sm:p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600"
               >
                 <X size={18} />
               </button>

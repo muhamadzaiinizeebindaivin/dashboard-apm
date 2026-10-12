@@ -20,8 +20,8 @@ export function RequireCode({ page, label, children, withPetugas = false }: Requ
   if (ok) return <>{children}</>
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-sky-100 via-sky-50 to-white px-4">
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-white/60 bg-white/60 p-8 shadow-xl backdrop-blur-md sm:p-10">
+    <div className="flex min-h-[100dvh] items-center justify-center bg-gradient-to-br from-sky-100 via-sky-50 to-white px-4">
+      <div className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-white/60 bg-white/60 p-6 shadow-xl backdrop-blur-md sm:p-10">
         <div className="mb-5 flex justify-center">
           <img src={apmLogo} alt="Logo APM" className="h-14 w-14 object-contain" />
         </div>

@@ -86,7 +86,7 @@ export function SenaraiPpsInput({ rows, onChange, memuat = false, negeri }: Sena
                 type="button"
                 onClick={() => buang(r.kunci)}
                 title="Buang PPS"
-                className="rounded-full p-1.5 text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                className="rounded-full p-2.5 sm:p-1.5 text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-600"
               >
                 <Trash2 size={15} />
               </button>

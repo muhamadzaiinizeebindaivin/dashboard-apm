@@ -123,7 +123,7 @@ export function RingkasanBencanaPanel({ open, onClose, kategori }: RingkasanBenc
             transition={{ type: 'tween', duration: 0.25, ease: 'easeOut' }}
             className="fixed inset-y-0 right-0 z-[1201] flex w-full max-w-2xl flex-col bg-white/95 shadow-2xl backdrop-blur-md"
           >
-            <div className="flex items-center justify-between gap-3 border-b border-neutral-100 px-5 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 px-4 py-4 sm:px-5">
               <div>
                 <h2 className="text-lg font-semibold text-neutral-900">Ringkasan Bencana</h2>
                 <p className="text-xs text-neutral-500">{ringkasanTapisan}</p>

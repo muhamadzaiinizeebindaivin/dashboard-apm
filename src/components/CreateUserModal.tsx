@@ -56,7 +56,7 @@ export function CreateUserModal({ open, onClose, onSuccess }: CreateUserModalPro
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
             transition={{ duration: 0.15 }}
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-md rounded-2xl border border-white/60 bg-white/90 p-8 shadow-xl backdrop-blur-md"
+            className="relative max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-white/60 bg-white/90 p-5 shadow-xl backdrop-blur-md sm:p-8"
           >
             <button
               onClick={onClose}

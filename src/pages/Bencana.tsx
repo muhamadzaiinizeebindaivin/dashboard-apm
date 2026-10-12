@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Home, ChevronRight, Plus, ClipboardList, X, Tent, AlertTriangle, MousePointerClick } from 'lucide-react'
+import {
+  Home,
+  ChevronRight,
+  ChevronDown,
+  Plus,
+  ClipboardList,
+  X,
+  Tent,
+  AlertTriangle,
+  MousePointerClick,
+} from 'lucide-react'
 import { PilihLokasiModal } from '../components/PilihLokasiModal'
 import { NEGERI_FLAG } from '../lib/negeriVisual'
 import { supabase } from '../lib/supabase'
@@ -66,6 +76,8 @@ export function Bencana() {
 
   const [meletak, setMeletak] = useState(false)
   const [pilihLokasi, setPilihLokasi] = useState(false)
+  // Legend open by default on desktop, collapsed on phones (it covers the map)
+  const [legendBuka, setLegendBuka] = useState(() => window.innerWidth >= 640)
   const [modal, setModal] = useState<BukaModal | null>(null)
   const [hendakPadam, setHendakPadam] = useState<TitikBencana | null>(null)
   const [memadam, setMemadam] = useState(false)
@@ -303,9 +315,17 @@ export function Bencana() {
         )}
 
         {/* Legend */}
-        <div className="absolute bottom-3 left-3 z-[1000] max-w-[220px] rounded-xl border border-white/70 bg-white/85 p-3 text-xs shadow-lg backdrop-blur-md">
-          <p className="mb-1.5 font-semibold text-neutral-700">Petunjuk</p>
-          <ul className="space-y-1">
+        <div className="absolute bottom-3 left-3 z-[1000] max-w-[220px] rounded-xl border border-white/70 bg-white/85 p-2.5 text-xs shadow-lg backdrop-blur-md sm:p-3">
+          <button
+            type="button"
+            onClick={() => setLegendBuka((b) => !b)}
+            aria-expanded={legendBuka}
+            className="flex w-full items-center justify-between gap-3 font-semibold text-neutral-700"
+          >
+            Petunjuk
+            <ChevronDown size={14} className={`transition-transform ${legendBuka ? 'rotate-180' : ''}`} />
+          </button>
+          <ul className={`mt-1.5 space-y-1 ${legendBuka ? '' : 'hidden'}`}>
             {kategori.map((k) => {
               const Ikon = ikonKategori(k.ikon)
               return (

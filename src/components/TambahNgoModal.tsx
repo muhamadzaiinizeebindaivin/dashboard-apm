@@ -28,7 +28,7 @@ export function TambahNgoModal({ open, onClose, onSuccess, negeriTetap, existing
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
             transition={{ duration: 0.15 }}
             onClick={(e) => e.stopPropagation()}
-            className="relative max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-white/60 bg-white/90 p-8 shadow-xl backdrop-blur-md"
+            className="relative max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-white/60 bg-white/90 p-5 shadow-xl sm:p-8 backdrop-blur-md"
           >
             <button
               onClick={onClose}

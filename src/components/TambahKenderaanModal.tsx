@@ -112,11 +112,11 @@ export function TambahKenderaanModal({ open, onClose, onSuccess }: TambahKendera
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
             transition={{ duration: 0.15 }}
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-md rounded-2xl border border-white/60 bg-white/95 p-6 shadow-xl backdrop-blur-md"
+            className="relative max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-white/60 bg-white/95 p-5 shadow-xl backdrop-blur-md sm:p-6"
           >
             <button
               onClick={handleClose}
-              className="absolute right-4 top-4 rounded-full p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600"
+              className="absolute right-4 top-4 rounded-full p-2.5 sm:p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600"
             >
               <X size={18} />
             </button>
