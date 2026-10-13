@@ -15,6 +15,7 @@ import { Sekretariat } from './pages/Sekretariat'
 import { LaporanAwal } from './pages/LaporanAwal'
 import { LaporanSemasa } from './pages/LaporanSemasa'
 import { PengurusanPps } from './pages/PengurusanPps'
+import { PengurusanBencana } from './pages/PengurusanBencana'
 import { Logistik } from './pages/Logistik'
 import { SenaraiSumbangan } from './pages/SenaraiSumbangan'
 import { SenaraiSumbanganNegeri } from './pages/SenaraiSumbanganNegeri'
@@ -70,6 +71,7 @@ function App() {
                   <Route path="laporan-awal" element={<LaporanAwal />} />
                   <Route path="laporan-semasa" element={<LaporanSemasa />} />
                   <Route path="pps" element={<PengurusanPps />} />
+                  <Route path="bencana" element={<PengurusanBencana />} />
                 </Route>
                 <Route path="logistik" element={<Logistik />} />
                 <Route path="bencana" element={<Bencana />} />

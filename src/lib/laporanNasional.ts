@@ -11,6 +11,7 @@ export type ItemLaporanNasional = {
   pps: string | null
   jumlahMangsa: number
   jumlahKeluarga: number
+  tamatPada?: string | null // set when the disaster has been ended (Tamat)
 }
 
 type BarisSemasa = {
@@ -99,6 +100,21 @@ export type PpsDitutup = {
   catatan_tutup: string | null
 }
 
+// Deaths / injuries / missing per disaster + state, from the latest report of
+// that state which carried the Damage_Casualties sheet (view korban_semasa)
+export type KorbanNegeri = {
+  nama_bencana: string
+  negeri: string
+  kematian: number
+  kecederaan: number
+  hilang: number
+}
+
+export async function ambilKorbanSemasa(): Promise<KorbanNegeri[]> {
+  const { data } = await supabase.from('korban_semasa').select('nama_bencana, negeri, kematian, kecederaan, hilang')
+  return ((data as KorbanNegeri[]) ?? []).filter((k) => k.kematian + k.kecederaan + k.hilang > 0)
+}
+
 export async function ambilPpsDitutup24Jam(): Promise<PpsDitutup[]> {
   const sejak = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
   const { data } = await supabase
@@ -141,6 +157,14 @@ export async function ambilLaporanNasional(): Promise<ItemLaporanNasional[]> {
     .from('pps_pusat')
     .select('nama_bencana, negeri, daerah, zon, nama, jumlah_mangsa, jumlah_keluarga, status')
 
+  const { data: tamatData } = await supabase.from('bencana_tamat').select('nama_bencana, ditamatkan_pada')
+  const tamatIkutBencana = new Map(
+    ((tamatData as { nama_bencana: string; ditamatkan_pada: string }[]) ?? []).map((t) => [
+      t.nama_bencana,
+      t.ditamatkan_pada,
+    ]),
+  )
+
   const pusatIkutBencana = new Map<string, BarisPusat[]>()
   for (const p of (pusatData as BarisPusat[]) ?? []) {
     if (!pusatIkutBencana.has(p.nama_bencana)) pusatIkutBencana.set(p.nama_bencana, [])
@@ -149,6 +173,24 @@ export async function ambilLaporanNasional(): Promise<ItemLaporanNasional[]> {
 
   for (const [nama, arr] of kumpulan) {
     const terkini = arr[0]
+
+    // Ended disasters stay listed permanently, marked TAMAT, with no live figures
+    const tamatPada = tamatIkutBencana.get(nama.trim())
+    if (tamatPada) {
+      items.push({
+        jenisBencana: terkini.jenis_bencana || 'Lain-lain',
+        namaBencana: nama,
+        trend: null,
+        zon: terkini.negeri ? cariZon(terkini.negeri) : null,
+        negeri: terkini.negeri,
+        daerah: null,
+        pps: null,
+        jumlahMangsa: 0,
+        jumlahKeluarga: 0,
+        tamatPada,
+      })
+      continue
+    }
 
     const pusat = pusatIkutBencana.get(nama.trim())
     if (pusat) {

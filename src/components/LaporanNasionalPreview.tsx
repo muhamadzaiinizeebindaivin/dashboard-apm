@@ -1,7 +1,7 @@
 import { Fragment } from 'react'
 import type { ReactNode } from 'react'
 import { JENIS_BENCANA_SEMASA } from '../lib/laporanBencana'
-import type { ItemLaporanNasional, PpsDitutup } from '../lib/laporanNasional'
+import type { ItemLaporanNasional, KorbanNegeri, PpsDitutup } from '../lib/laporanNasional'
 import type { TitikGraf } from '../lib/laporanNasionalGraf'
 import petaMalaysia from '../assets/peta-malaysia.png'
 
@@ -184,6 +184,7 @@ type LaporanNasionalPreviewProps = {
   harian: TitikGraf[]
   masaJana: Date
   ditutup?: PpsDitutup[]
+  korban?: KorbanNegeri[]
 }
 
 function jejakTitik(mulaX: number, mulaY: number, delta: [number, number][]): [number, number][] {
@@ -440,9 +441,23 @@ function PetaLaporan({ items, negeriAktif }: { items: ItemLaporanNasional[]; neg
   )
 }
 
-export function LaporanNasionalPreview({ items, duaJam, harian, masaJana, ditutup = [] }: LaporanNasionalPreviewProps) {
-  const negeriSet = new Set(items.map((i) => i.negeri).filter(Boolean))
-  const daerahSet = new Set(items.filter((i) => i.daerah).map((i) => `${i.negeri}|${i.daerah}`))
+export function LaporanNasionalPreview({
+  items,
+  duaJam,
+  harian,
+  masaJana,
+  ditutup = [],
+  korban = [],
+}: LaporanNasionalPreviewProps) {
+  const jumlahKorban = {
+    kematian: korban.reduce((n, k) => n + k.kematian, 0),
+    kecederaan: korban.reduce((n, k) => n + k.kecederaan, 0),
+    hilang: korban.reduce((n, k) => n + k.hilang, 0),
+  }
+  // Ended (TAMAT) disasters stay in the table but not in the "active" counters/map
+  const aktif = items.filter((i) => !i.tamatPada)
+  const negeriSet = new Set(aktif.map((i) => i.negeri).filter(Boolean))
+  const daerahSet = new Set(aktif.filter((i) => i.daerah).map((i) => `${i.negeri}|${i.daerah}`))
   const ppsCount = items.reduce((n, i) => n + kiraPps(i.pps), 0)
   const jumlahMangsa = items.reduce((n, i) => n + i.jumlahMangsa, 0)
   const jumlahKeluarga = items.reduce((n, i) => n + i.jumlahKeluarga, 0)
@@ -455,7 +470,7 @@ export function LaporanNasionalPreview({ items, duaJam, harian, masaJana, ditutu
     { label: 'Mangsa', nilai: jumlahMangsa },
   ]
 
-  const negeriAktif = [...new Set(items.map((i) => i.negeri).filter((n): n is string => !!n))]
+  const negeriAktif = [...new Set(aktif.map((i) => i.negeri).filter((n): n is string => !!n))]
 
   const jenisAda = [...new Set(items.map((i) => i.jenisBencana))]
   const jenisSet = [
@@ -487,13 +502,20 @@ export function LaporanNasionalPreview({ items, duaJam, harian, masaJana, ditutu
         </div>
         <p className="mt-2 text-xs text-neutral-500">
           PPS ditutup (24 jam lepas): <span className="font-semibold text-neutral-800">{ditutup.length}</span>
+          {korban.length > 0 && (
+            <>
+              {' · '}Kematian: <span className="font-semibold text-red-700">{jumlahKorban.kematian}</span>
+              {' · '}Kecederaan: <span className="font-semibold text-neutral-800">{jumlahKorban.kecederaan}</span>
+              {' · '}Hilang: <span className="font-semibold text-neutral-800">{jumlahKorban.hilang}</span>
+            </>
+          )}
         </p>
       </div>
 
       <div>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-700">Peta Bencana</h3>
         <div className="rounded-xl border border-neutral-100 bg-white/70 p-3">
-          <PetaLaporan items={items} negeriAktif={negeriAktif} />
+          <PetaLaporan items={aktif} negeriAktif={negeriAktif} />
         </div>
       </div>
 
@@ -549,7 +571,25 @@ export function LaporanNasionalPreview({ items, duaJam, harian, masaJana, ditutu
                             )}
                             <td className="px-3 py-2 text-neutral-800">{i.negeri ?? '—'}</td>
                             <td className="px-3 py-2 text-neutral-800">{i.daerah ?? '—'}</td>
-                            <td className="px-3 py-2 whitespace-pre-wrap text-neutral-800">{i.pps ?? '—'}</td>
+                            <td className="px-3 py-2 whitespace-pre-wrap text-neutral-800">
+                              {i.tamatPada ? (
+                                <span className="inline-flex flex-wrap items-center gap-1.5">
+                                  <span className="rounded-full bg-neutral-200 px-2 py-0.5 text-[11px] font-semibold text-neutral-700">
+                                    TAMAT
+                                  </span>
+                                  <span className="text-xs text-neutral-500">
+                                    {i.namaBencana} ·{' '}
+                                    {new Date(i.tamatPada).toLocaleDateString('ms-MY', {
+                                      day: '2-digit',
+                                      month: 'short',
+                                      year: 'numeric',
+                                    })}
+                                  </span>
+                                </span>
+                              ) : (
+                                (i.pps ?? '—')
+                              )}
+                            </td>
                             <td className="px-3 py-2 text-center text-neutral-800">{i.jumlahMangsa}</td>
                             <td className="px-3 py-2 text-center text-neutral-800">{i.jumlahKeluarga}</td>
                           </tr>
@@ -612,6 +652,38 @@ export function LaporanNasionalPreview({ items, duaJam, harian, masaJana, ditutu
                       })}
                     </td>
                     <td className="px-3 py-2 text-neutral-500">{p.catatan_tutup || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {korban.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-700">
+            Kematian / Kecederaan / Hilang
+          </h3>
+          <div className="overflow-x-auto rounded-lg border border-neutral-200">
+            <table className="w-full min-w-[560px] text-left text-sm">
+              <thead>
+                <tr className="bg-red-800 text-xs text-white">
+                  <th className="px-3 py-2 font-medium">Bencana</th>
+                  <th className="px-3 py-2 font-medium">Negeri</th>
+                  <th className="px-3 py-2 text-center font-medium">Kematian</th>
+                  <th className="px-3 py-2 text-center font-medium">Kecederaan</th>
+                  <th className="px-3 py-2 text-center font-medium">Hilang</th>
+                </tr>
+              </thead>
+              <tbody>
+                {korban.map((k) => (
+                  <tr key={`${k.nama_bencana}-${k.negeri}`} className="border-t border-neutral-100 bg-white/70">
+                    <td className="px-3 py-2 font-medium text-neutral-800">{k.nama_bencana}</td>
+                    <td className="px-3 py-2 text-neutral-600">{k.negeri}</td>
+                    <td className="px-3 py-2 text-center tabular-nums text-neutral-800">{k.kematian}</td>
+                    <td className="px-3 py-2 text-center tabular-nums text-neutral-800">{k.kecederaan}</td>
+                    <td className="px-3 py-2 text-center tabular-nums text-neutral-800">{k.hilang}</td>
                   </tr>
                 ))}
               </tbody>

@@ -86,17 +86,21 @@ export type JalanDitutup = {
 // One sheet row: data + Excel row number + why it is set aside (null = kept)
 export type Baris<T> = T & { _baris: number; _abai: string | null }
 
-export type Lampiran = {
-  mobilisasi: Baris<Mobilisasi>[]
-  korban: Baris<Korban>[]
-  korbanButiran: Baris<KorbanButiran>[]
-  kerosakanKerajaan: Baris<Kerosakan>[]
-  kerosakanSwasta: Baris<Kerosakan>[]
-  pertanian: Baris<Pertanian>[]
-  jalanDitutup: Baris<JalanDitutup>[]
+// The sheets' data, as stored in the database (one table per sheet)
+export type DataLampiran = {
+  mobilisasi: Mobilisasi[]
+  korban: Korban[]
+  korbanButiran: KorbanButiran[]
+  kerosakanKerajaan: Kerosakan[]
+  kerosakanSwasta: Kerosakan[]
+  pertanian: Pertanian[]
+  jalanDitutup: JalanDitutup[]
 }
 
-export type KunciLampiran = keyof Lampiran
+export type KunciLampiran = keyof DataLampiran
+
+// The same data as read from the Excel, with row numbers and set-aside reasons
+export type Lampiran = { [K in KunciLampiran]: Baris<DataLampiran[K][number]>[] }
 
 export const NAMA_HELAIAN_LAMPIRAN: Record<KunciLampiran, string> = {
   mobilisasi: 'Mobilization',

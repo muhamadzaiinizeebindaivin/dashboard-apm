@@ -1,7 +1,7 @@
 import apmLogo from '../assets/apm-logo.png'
 import petaMalaysia from '../assets/peta-malaysia.png'
 import { JENIS_BENCANA_SEMASA } from './laporanBencana'
-import type { ItemLaporanNasional, PpsDitutup } from './laporanNasional'
+import type { ItemLaporanNasional, KorbanNegeri, PpsDitutup } from './laporanNasional'
 import { ambilDataGraf } from './laporanNasionalGraf'
 import type { TapisGraf, TitikGraf } from './laporanNasionalGraf'
 import type { jsPDF } from 'jspdf'
@@ -286,6 +286,7 @@ export async function bangunLaporanNasionalDoc(
   items: ItemLaporanNasional[],
   ditutup: PpsDitutup[] = [],
   tapis: TapisGraf = {},
+  korban: KorbanNegeri[] = [],
 ): Promise<{ doc: jsPDF; namaFail: string }> {
   const { default: JsPDF } = await import('jspdf')
   const { default: autoTable } = await import('jspdf-autotable')
@@ -330,8 +331,10 @@ export async function bangunLaporanNasionalDoc(
   doc.setFontSize(12)
   doc.text('JUMLAH KESELURUHAN PUSAT PEMINDAHAN SEMENTARA', margin, 12)
 
-  const negeriSet = new Set(items.map((i) => i.negeri).filter(Boolean))
-  const daerahSet = new Set(items.filter((i) => i.daerah).map((i) => `${i.negeri}|${i.daerah}`))
+  // Ended (TAMAT) disasters stay in the table but not in the "active" counters/map
+  const aktif = items.filter((i) => !i.tamatPada)
+  const negeriSet = new Set(aktif.map((i) => i.negeri).filter(Boolean))
+  const daerahSet = new Set(aktif.filter((i) => i.daerah).map((i) => `${i.negeri}|${i.daerah}`))
   const ppsCount = items.reduce((n, i) => n + (i.pps ? i.pps.split('\n').filter((s) => s.trim()).length : 0), 0)
   const jumlahMangsa = items.reduce((n, i) => n + i.jumlahMangsa, 0)
   const jumlahKeluarga = items.reduce((n, i) => n + i.jumlahKeluarga, 0)
@@ -370,7 +373,7 @@ export async function bangunLaporanNasionalDoc(
   const petaTinggi = petaLebar / nisbahPeta
   const petaX = margin + kotakLebar + jarakLuar
 
-  const negeriAktif = [...new Set(items.map((i) => i.negeri).filter((n): n is string => !!n))]
+  const negeriAktif = [...new Set(aktif.map((i) => i.negeri).filter((n): n is string => !!n))]
   const kotakTinggi = 5
   const lineTinggi = 2.6
   const langkah = kotakTinggi + 3 + 5 * lineTinggi + 2
@@ -406,7 +409,7 @@ export async function bangunLaporanNasionalDoc(
     const mx = petaX + norm.x * petaLebar
     const my = petaY + norm.y * petaTinggi
 
-    const punyaNegeri = items.filter((i) => i.negeri === negeri)
+    const punyaNegeri = aktif.filter((i) => i.negeri === negeri)
     const jenisUtama = punyaNegeri[0]?.jenisBencana ?? ''
     lukisIkon(doc, jenisUtama, mx, my, 1.9)
 
@@ -525,7 +528,13 @@ export async function bangunLaporanNasionalDoc(
         const baris: Array<string | { content: string; rowSpan?: number }> = [
           i.negeri ?? '—',
           i.daerah ?? '—',
-          i.pps ?? '—',
+          i.tamatPada
+            ? `TAMAT — ${i.namaBencana} (${new Date(i.tamatPada).toLocaleDateString('ms-MY', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+              })})`
+            : (i.pps ?? '—'),
           String(i.jumlahMangsa),
           String(i.jumlahKeluarga),
         ]
@@ -621,6 +630,38 @@ export async function bangunLaporanNasionalDoc(
       theme: 'grid',
       styles: { fontSize: 8, cellPadding: 2, valign: 'middle' },
       headStyles: { fillColor: '#4b5563', textColor: '#ffffff' },
+      margin: { left: margin, right: margin },
+    })
+  }
+
+  // --- Deaths / injuries / missing (from the states' Damage_Casualties sheet) ---
+  if (korban.length > 0) {
+    const selepasDitutup =
+      ditutup.length > 0
+        ? (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10
+        : mulaDitutup + 10
+    let mulaKorban = selepasDitutup
+    if (mulaKorban + 30 > tinggi) {
+      doc.addPage()
+      mulaKorban = 24
+    }
+    const jumlah = (f: (k: KorbanNegeri) => number) => korban.reduce((n, k) => n + f(k), 0)
+    doc.setTextColor(0, 0, 0)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10)
+    doc.text(
+      `KEMATIAN: ${jumlah((k) => k.kematian)}   KECEDERAAN: ${jumlah((k) => k.kecederaan)}   HILANG: ${jumlah((k) => k.hilang)}`,
+      margin,
+      mulaKorban,
+    )
+    autoTable(doc, {
+      startY: mulaKorban + 3,
+      head: [['BENCANA', 'NEGERI', 'KEMATIAN', 'KECEDERAAN', 'HILANG']],
+      body: korban.map((k) => [k.nama_bencana, k.negeri, k.kematian, k.kecederaan, k.hilang]),
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 2, valign: 'middle' },
+      headStyles: { fillColor: '#991b1b', textColor: '#ffffff' },
+      columnStyles: { 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' } },
       margin: { left: margin, right: margin },
     })
   }

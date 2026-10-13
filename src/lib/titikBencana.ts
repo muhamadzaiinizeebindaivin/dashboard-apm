@@ -28,6 +28,7 @@ export type TitikBencana = {
   status: 'aktif' | 'selesai'
   tarikh_mula: string
   tarikh_selesai: string | null
+  nama_bencana: string | null // set for points created from a report (Laporan Awal / Tetapkan lokasi)
 }
 
 // Form state: every field as a string, converted on save
@@ -210,4 +211,79 @@ export function formatTarikh(iso: string | null) {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+// Live figures per disaster + state (view ringkasan_bencana_negeri), fed by Laporan Semasa
+export type RingkasanBencanaNegeri = {
+  nama_bencana: string
+  negeri: string
+  pps_dibuka: number
+  mangsa: number
+  keluarga: number
+  laporan_terakhir: string | null
+  trend: string | null
+  rumah_terjejas: number | null
+}
+
+export type DataTerkini = {
+  mangsa: number
+  keluarga: number
+  ppsDibuka: number
+  rumahTerjejas: number | null
+  laporanTerakhir: string | null
+  trend: string | null
+  seluruhBencana: boolean // no figures for the point's own state: totals of the whole disaster
+}
+
+export function useRingkasanBencana() {
+  const [ringkasan, setRingkasan] = useState<RingkasanBencanaNegeri[]>([])
+
+  const muat = useCallback(async () => {
+    const { data } = await supabase.from('ringkasan_bencana_negeri').select('*')
+    setRingkasan((data as RingkasanBencanaNegeri[]) ?? [])
+  }, [])
+
+  useEffect(() => {
+    muat()
+    // A Laporan Semasa changes the PPS and adds a report: both refresh the figures
+    const channel = supabase
+      .channel('ringkasan-bencana-negeri')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pps_pusat' }, () => muat())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'laporan_bencana' }, () => muat())
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [muat])
+
+  return ringkasan
+}
+
+// Figures for one map point: its disaster in its state, else the whole disaster
+export function dataTerkiniTitik(t: TitikBencana, ringkasan: RingkasanBencanaNegeri[]): DataTerkini | null {
+  if (!t.nama_bencana) return null
+  const baris = ringkasan.filter((r) => r.nama_bencana === t.nama_bencana)
+  if (baris.length === 0) return null
+
+  const sama = baris.find((r) => r.negeri === t.negeri)
+  const pilih = sama ? [sama] : baris
+  const terkini = [...pilih].sort(
+    (a, b) => new Date(b.laporan_terakhir ?? 0).getTime() - new Date(a.laporan_terakhir ?? 0).getTime(),
+  )[0]
+  const rumah = pilih.filter((r) => r.rumah_terjejas != null)
+
+  return {
+    mangsa: pilih.reduce((n, r) => n + r.mangsa, 0),
+    keluarga: pilih.reduce((n, r) => n + r.keluarga, 0),
+    ppsDibuka: pilih.reduce((n, r) => n + r.pps_dibuka, 0),
+    rumahTerjejas: rumah.length ? rumah.reduce((n, r) => n + (r.rumah_terjejas ?? 0), 0) : null,
+    laporanTerakhir: terkini.laporan_terakhir,
+    trend: terkini.trend,
+    seluruhBencana: !sama,
+  }
+}
+
+// Compact number for the marker badge: 1861 -> "1.9k"
+export function nomborRingkas(n: number) {
+  return n >= 1000 ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k` : String(n)
 }

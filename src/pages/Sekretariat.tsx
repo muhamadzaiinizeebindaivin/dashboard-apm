@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
-import { FileText, FileClock, FileDown, Home, ChevronRight, Tent } from 'lucide-react'
+import { FileText, FileClock, FileDown, Home, ChevronRight, Tent, Flag } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { Toast } from '../components/Toast'
 import type { ToastState } from '../components/Toast'
 import { DashboardCard } from '../components/DashboardCard'
 import { LaporanNasionalPreview } from '../components/LaporanNasionalPreview'
 import { useAuth } from '../hooks/useAuth'
-import { ambilLaporanNasional, ambilPpsDitutup24Jam } from '../lib/laporanNasional'
-import type { ItemLaporanNasional, PpsDitutup } from '../lib/laporanNasional'
+import { ambilKorbanSemasa, ambilLaporanNasional, ambilPpsDitutup24Jam } from '../lib/laporanNasional'
+import type { ItemLaporanNasional, KorbanNegeri, PpsDitutup } from '../lib/laporanNasional'
 import { ambilDataGraf } from '../lib/laporanNasionalGraf'
 import type { TitikGraf } from '../lib/laporanNasionalGraf'
 import { bangunLaporanNasionalDoc } from '../lib/janaLaporanNasional'
@@ -37,6 +37,12 @@ const PILIHAN = [
     desc: 'Pantau PPS yang dibuka dan sahkan penutupan.',
     icon: Tent,
   },
+  {
+    to: 'bencana',
+    label: 'Pengurusan Bencana',
+    desc: 'Senarai bencana aktif dan tamatkan bencana yang telah selesai.',
+    icon: Flag,
+  },
 ]
 
 export function Sekretariat() {
@@ -53,6 +59,7 @@ export function Sekretariat() {
   const [previewData, setPreviewData] = useState<{
     items: ItemLaporanNasional[]
     ditutup: PpsDitutup[]
+    korban: KorbanNegeri[]
     masaJana: Date
   } | null>(null)
   const [dataGraf, setDataGraf] = useState<{ duaJam: TitikGraf[]; harian: TitikGraf[] } | null>(null)
@@ -106,12 +113,16 @@ export function Sekretariat() {
   async function handleJanaLaporanNasional() {
     setMenjanaLaporan(true)
     try {
-      const [items, ditutup] = await Promise.all([ambilLaporanNasional(), ambilPpsDitutup24Jam()])
+      const [items, ditutup, korban] = await Promise.all([
+        ambilLaporanNasional(),
+        ambilPpsDitutup24Jam(),
+        ambilKorbanSemasa(),
+      ])
       if (items.length === 0) {
         setToast({ type: 'error', message: 'Tiada data untuk dijana.' })
         return
       }
-      setPreviewData({ items, ditutup, masaJana: new Date() })
+      setPreviewData({ items, ditutup, korban, masaJana: new Date() })
       setTapisNegeri('')
       setTapisJenis('')
       setTapisZon('')
@@ -166,15 +177,30 @@ export function Sekretariat() {
       )
     : []
 
+  // Casualties follow the same filters
+  const korbanTertapis = previewData
+    ? previewData.korban.filter(
+        (k) =>
+          (!tapisNegeri || k.negeri === tapisNegeri) &&
+          (!tapisZon || cariZon(k.negeri) === tapisZon) &&
+          (!tapisJenis || jenisIkutBencana.get(k.nama_bencana) === tapisJenis),
+      )
+    : []
+
   async function muatTurunLaporan() {
     if (!previewData) return
     setMenMuatTurun(true)
     try {
-      const { doc, namaFail } = await bangunLaporanNasionalDoc(itemsTertapis, ditutupTertapis, {
-        negeri: tapisNegeri || undefined,
-        jenis: tapisJenis || undefined,
-        zon: tapisZon || undefined,
-      })
+      const { doc, namaFail } = await bangunLaporanNasionalDoc(
+        itemsTertapis,
+        ditutupTertapis,
+        {
+          negeri: tapisNegeri || undefined,
+          jenis: tapisJenis || undefined,
+          zon: tapisZon || undefined,
+        },
+        korbanTertapis,
+      )
       doc.save(namaFail)
     } catch {
       setToast({ type: 'error', message: 'Gagal menjana PDF. Sila cuba lagi.' })
@@ -316,6 +342,7 @@ export function Sekretariat() {
             <LaporanNasionalPreview
               items={itemsTertapis}
               ditutup={ditutupTertapis}
+              korban={korbanTertapis}
               duaJam={dataGraf?.duaJam ?? []}
               harian={dataGraf?.harian ?? []}
               masaJana={previewData.masaJana}

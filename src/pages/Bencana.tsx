@@ -14,7 +14,7 @@ import { PilihLokasiModal } from '../components/PilihLokasiModal'
 import { NEGERI_FLAG } from '../lib/negeriVisual'
 import { supabase } from '../lib/supabase'
 import { PetaBencana } from '../components/PetaBencana'
-import type { Lapisan, ParasPeta, PpsPeta, TindakanTitik } from '../components/PetaBencana'
+import type { JalanPeta, Lapisan, ParasPeta, PpsPeta, TindakanTitik } from '../components/PetaBencana'
 import { TitikBencanaModal } from '../components/TitikBencanaModal'
 import type { ModTitik } from '../components/TitikBencanaModal'
 import { RingkasanBencanaPanel } from '../components/RingkasanBencanaPanel'
@@ -29,6 +29,8 @@ import {
   keRekod,
   useKategoriBencana,
   useTitikAktif,
+  useRingkasanBencana,
+  dataTerkiniTitik,
   warnaSelamat,
 } from '../lib/titikBencana'
 import type { BorangTitik, TitikBencana } from '../lib/titikBencana'
@@ -66,13 +68,16 @@ export function Bencana() {
   const kategori = useKategoriBencana()
   const petaKategori = Object.fromEntries(kategori.map((k) => [k.key, k]))
   const { titik, loading } = useTitikAktif()
+  // Live figures from Laporan Semasa, so a point follows its disaster's reports
+  const ringkasan = useRingkasanBencana()
 
   const [pps, setPps] = useState<PpsPeta[]>([])
   const [paras, setParas] = useState<(ParasPeta & { created_at: string })[]>([])
 
   const [negeriFokus, setNegeriFokus] = useState('')
   const [tapisKategori, setTapisKategori] = useState('')
-  const [lapisan, setLapisan] = useState<Lapisan>({ titik: true, pps: true, paras: true })
+  const [lapisan, setLapisan] = useState<Lapisan>({ titik: true, pps: true, paras: true, jalan: true })
+  const [jalan, setJalan] = useState<JalanPeta[]>([])
 
   const [meletak, setMeletak] = useState(false)
   const [pilihLokasi, setPilihLokasi] = useState(false)
@@ -104,18 +109,30 @@ export function Bencana() {
     setParas((data as (ParasPeta & { created_at: string })[]) ?? [])
   }, [])
 
+  // Closed roads still in force with coordinates (view jalan_ditutup_semasa)
+  const muatJalan = useCallback(async () => {
+    const { data } = await supabase
+      .from('jalan_ditutup_semasa')
+      .select('id, nama_bencana, negeri, daerah, nama_laluan, lokasi, laluan_alternatif, punca, latitude, longitude, mula')
+      .not('latitude', 'is', null)
+      .not('longitude', 'is', null)
+    setJalan((data as JalanPeta[]) ?? [])
+  }, [])
+
   useEffect(() => {
     muatPps()
     muatParas()
+    muatJalan()
     const channel = supabase
       .channel('peta-bencana-lapisan')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pps_pusat' }, () => muatPps())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'paras_lokasi' }, () => muatParas())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'laporan_bencana' }, () => muatJalan())
       .subscribe()
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [muatPps, muatParas])
+  }, [muatPps, muatParas, muatJalan])
 
   const parasSegar = paras.filter((p) => {
     const umur = Date.now() - new Date(p.created_at).getTime()
@@ -126,8 +143,15 @@ export function Bencana() {
   const titikPapar = titik.filter(
     (t) => (!negeriFokus || t.negeri === negeriFokus) && (!tapisKategori || t.kategori === tapisKategori),
   )
+  const terkini = Object.fromEntries(
+    titikPapar.flatMap((t) => {
+      const d = dataTerkiniTitik(t, ringkasan)
+      return d ? [[t.id, d] as const] : []
+    }),
+  )
   const ppsPapar = pps.filter((p) => !negeriFokus || p.negeri === negeriFokus)
   const parasPapar = parasSegar.filter((p) => !negeriFokus || p.negeri === negeriFokus)
+  const jalanPapar = jalan.filter((j) => !negeriFokus || j.negeri === negeriFokus)
 
   // Per-state activity for the cards (not affected by the category filter)
   const bilTitik = (n: string) => titik.filter((t) => t.negeri === n).length
@@ -193,6 +217,7 @@ export function Bencana() {
     { kunci: 'titik', label: 'Titik Bencana', bil: titikPapar.length, warna: 'bg-red-500' },
     { kunci: 'pps', label: 'PPS', bil: ppsPapar.length, warna: 'bg-emerald-600' },
     { kunci: 'paras', label: 'PARAS', bil: parasPapar.length, warna: 'bg-blue-600' },
+    { kunci: 'jalan', label: 'Jalan Ditutup', bil: jalanPapar.length, warna: 'bg-orange-600' },
   ]
 
   return (
@@ -295,9 +320,11 @@ export function Bencana() {
         ) : (
           <PetaBencana
             titik={titikPapar}
+            terkini={terkini}
             kategori={petaKategori}
             pps={ppsPapar}
             paras={parasPapar}
+            jalan={jalanPapar}
             lapisan={lapisan}
             negeriFokus={negeriFokus}
             meletak={meletak}
@@ -348,6 +375,9 @@ export function Bencana() {
             </li>
             <li className="flex items-center gap-2 text-neutral-600">
               <span className="h-3 w-3 rounded-full border-2 border-white bg-blue-600 shadow" /> PARAS
+            </li>
+            <li className="flex items-center gap-2 text-neutral-600">
+              <span className="h-3 w-3 rounded-[3px] border-2 border-white bg-orange-600 shadow" /> Jalan ditutup
             </li>
           </ul>
         </div>

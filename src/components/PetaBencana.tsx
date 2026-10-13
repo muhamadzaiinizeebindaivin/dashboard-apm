@@ -2,10 +2,12 @@ import { useEffect } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MapContainer, TileLayer, Marker, CircleMarker, Popup, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
+import { Construction } from 'lucide-react'
 import 'leaflet/dist/leaflet.css'
 import { NEGERI_PUSAT } from '../lib/negeriVisual'
-import { formatTarikh, ikonKategori, warnaSelamat } from '../lib/titikBencana'
-import type { KategoriBencana, TitikBencana } from '../lib/titikBencana'
+import { formatTarikh, ikonKategori, nomborRingkas, warnaSelamat } from '../lib/titikBencana'
+import { TREND_LABEL } from '../lib/laporanBencana'
+import type { DataTerkini, KategoriBencana, TitikBencana } from '../lib/titikBencana'
 
 export type PpsPeta = {
   id: string
@@ -29,7 +31,22 @@ export type ParasPeta = {
   keadaan: string | null
 }
 
-export type Lapisan = { titik: boolean; pps: boolean; paras: boolean }
+// Closed road still in force, from the latest report of its disaster + state
+export type JalanPeta = {
+  id: number
+  nama_bencana: string
+  negeri: string
+  daerah: string | null
+  nama_laluan: string | null
+  lokasi: string | null
+  laluan_alternatif: string | null
+  punca: string | null
+  latitude: number
+  longitude: number
+  mula: string | null
+}
+
+export type Lapisan = { titik: boolean; pps: boolean; paras: boolean; jalan: boolean }
 export type TindakanTitik = 'kemaskini' | 'lengkapkan' | 'padam'
 
 // Peninsular Malaysia + Sabah/Sarawak/Labuan. Fitting to bounds (rather than a
@@ -39,21 +56,37 @@ const BATAS_MALAYSIA: L.LatLngBoundsExpression = [
   [7.4, 119.3],
 ]
 
+// Closed-road marker: orange rounded square, distinct from the round PPS/PARAS dots
+const IKON_JALAN = L.divIcon({
+  className: '',
+  html: `<div style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;background:#ea580c;border:2px solid #fff;box-shadow:0 2px 8px rgba(15,23,42,.35)">${renderToStaticMarkup(
+    <Construction size={14} color="#ffffff" strokeWidth={2.25} />,
+  )}</div>`,
+  iconSize: [26, 26],
+  iconAnchor: [13, 13],
+  popupAnchor: [0, -13],
+})
+
 // One DivIcon per (category, colour, icon), built once — the Lucide icon is
 // rendered to static SVG so the marker matches the rest of the UI.
 const cacheIkon = new Map<string, L.DivIcon>()
 
-function ikonTitik(k?: KategoriBencana): L.DivIcon {
+// `bil` = current number of victims, shown as a small badge on the marker
+function ikonTitik(k?: KategoriBencana, bil?: number): L.DivIcon {
   const warna = warnaSelamat(k?.warna)
-  const kunci = `${k?.key}|${warna}|${k?.ikon}`
+  const lencana = bil && bil > 0 ? nomborRingkas(bil) : ''
+  const kunci = `${k?.key}|${warna}|${k?.ikon}|${lencana}`
   const sedia = cacheIkon.get(kunci)
   if (sedia) return sedia
 
   const Ikon = ikonKategori(k?.ikon)
   const svg = renderToStaticMarkup(<Ikon size={16} color="#ffffff" strokeWidth={2.25} />)
+  const htmlLencana = lencana
+    ? `<span style="position:absolute;top:-8px;right:-12px;min-width:20px;height:18px;padding:0 5px;border-radius:9999px;background:#111827;color:#fff;border:2px solid #fff;font:700 10px/14px system-ui,sans-serif;text-align:center;box-shadow:0 1px 4px rgba(15,23,42,.35)">${lencana}</span>`
+    : ''
   const ikon = L.divIcon({
     className: '',
-    html: `<div style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:9999px;background:${warna};border:2px solid #fff;box-shadow:0 2px 8px rgba(15,23,42,.35)">${svg}</div>`,
+    html: `<div style="position:relative;display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:9999px;background:${warna};border:2px solid #fff;box-shadow:0 2px 8px rgba(15,23,42,.35)">${svg}${htmlLencana}</div>`,
     iconSize: [32, 32],
     iconAnchor: [16, 16],
     popupAnchor: [0, -16],
@@ -97,10 +130,11 @@ function BetulkanSaiz() {
 type PopupTitikProps = {
   t: TitikBencana
   k?: KategoriBencana
+  terkini?: DataTerkini
   onTindakan: (t: TitikBencana, jenis: TindakanTitik) => void
 }
 
-function KandunganPopupTitik({ t, k, onTindakan }: PopupTitikProps) {
+function KandunganPopupTitik({ t, k, terkini, onTindakan }: PopupTitikProps) {
   const map = useMap()
   const klik = (jenis: TindakanTitik) => {
     map.closePopup()
@@ -118,22 +152,61 @@ function KandunganPopupTitik({ t, k, onTindakan }: PopupTitikProps) {
         <div className="text-xs text-neutral-500">{[t.daerah, t.negeri].filter(Boolean).join(', ')}</div>
       </div>
 
-      <div className="grid grid-cols-3 gap-1 text-center text-xs">
-        <div className="rounded-md bg-neutral-100 py-1">
-          <div className="font-semibold text-neutral-800">{angka(t.jumlah_mangsa)}</div>
-          <div className="text-neutral-500">Mangsa</div>
+      {terkini ? (
+        // Live figures from the Laporan Semasa (open PPS of this disaster)
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+            <span>Data terkini{terkini.seluruhBencana && ' (seluruh bencana)'}</span>
+            {terkini.trend && TREND_LABEL[terkini.trend] && (
+              <span className={`rounded-full px-2 py-0.5 normal-case ${TREND_LABEL[terkini.trend].className}`}>
+                {TREND_LABEL[terkini.trend].label}
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-3 gap-1 text-center text-xs">
+            <div className="rounded-md bg-emerald-50 py-1">
+              <div className="font-semibold text-neutral-800">{terkini.mangsa}</div>
+              <div className="text-neutral-500">Mangsa</div>
+            </div>
+            <div className="rounded-md bg-emerald-50 py-1">
+              <div className="font-semibold text-neutral-800">{terkini.keluarga}</div>
+              <div className="text-neutral-500">KIR</div>
+            </div>
+            <div className="rounded-md bg-emerald-50 py-1">
+              <div className="font-semibold text-neutral-800">{terkini.ppsDibuka}</div>
+              <div className="text-neutral-500">PPS dibuka</div>
+            </div>
+          </div>
+          {terkini.rumahTerjejas != null && (
+            <div className="text-xs text-neutral-600">Rumah terjejas: {terkini.rumahTerjejas}</div>
+          )}
+          <div className="text-xs text-neutral-400">
+            {terkini.laporanTerakhir
+              ? `Laporan Semasa terakhir: ${formatTarikh(terkini.laporanTerakhir)}`
+              : 'Belum ada Laporan Semasa'}
+          </div>
         </div>
-        <div className="rounded-md bg-neutral-100 py-1">
-          <div className="font-semibold text-neutral-800">{angka(t.jumlah_kir)}</div>
-          <div className="text-neutral-500">KIR</div>
-        </div>
-        <div className="rounded-md bg-neutral-100 py-1">
-          <div className="font-semibold text-neutral-800">{angka(t.jumlah_rumah_terjejas)}</div>
-          <div className="text-neutral-500">Rumah</div>
-        </div>
-      </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-1 text-center text-xs">
+            <div className="rounded-md bg-neutral-100 py-1">
+              <div className="font-semibold text-neutral-800">{angka(t.jumlah_mangsa)}</div>
+              <div className="text-neutral-500">Mangsa</div>
+            </div>
+            <div className="rounded-md bg-neutral-100 py-1">
+              <div className="font-semibold text-neutral-800">{angka(t.jumlah_kir)}</div>
+              <div className="text-neutral-500">KIR</div>
+            </div>
+            <div className="rounded-md bg-neutral-100 py-1">
+              <div className="font-semibold text-neutral-800">{angka(t.jumlah_rumah_terjejas)}</div>
+              <div className="text-neutral-500">Rumah</div>
+            </div>
+          </div>
+          {t.nama_bencana && <div className="text-xs text-neutral-400">Belum ada Laporan Semasa</div>}
+        </>
+      )}
 
-      {t.pps && <div className="text-xs text-neutral-600">PPS: {t.pps}</div>}
+      {t.pps && !terkini && <div className="text-xs text-neutral-600">PPS: {t.pps}</div>}
       {t.catatan && <div className="text-xs italic text-neutral-500">{t.catatan}</div>}
       <div className="text-xs text-neutral-400">Mula: {formatTarikh(t.tarikh_mula)}</div>
 
@@ -163,9 +236,11 @@ function KandunganPopupTitik({ t, k, onTindakan }: PopupTitikProps) {
 
 type PetaBencanaProps = {
   titik: TitikBencana[]
+  terkini: Record<string, DataTerkini> // live figures per point id
   kategori: Record<string, KategoriBencana>
   pps: PpsPeta[]
   paras: ParasPeta[]
+  jalan: JalanPeta[]
   lapisan: Lapisan
   negeriFokus: string
   meletak: boolean
@@ -175,9 +250,11 @@ type PetaBencanaProps = {
 
 export function PetaBencana({
   titik,
+  terkini,
   kategori,
   pps,
   paras,
+  jalan,
   lapisan,
   negeriFokus,
   meletak,
@@ -251,11 +328,38 @@ export function PetaBencana({
           </CircleMarker>
         ))}
 
+      {lapisan.jalan &&
+        jalan.map((j) => (
+          <Marker key={`jalan-${j.id}`} position={[j.latitude, j.longitude]} icon={IKON_JALAN}>
+            <Popup>
+              <div className="space-y-0.5 text-sm">
+                <div className="text-xs font-semibold uppercase tracking-wide text-orange-600">Jalan Ditutup</div>
+                <div className="font-semibold text-neutral-900">
+                  {[j.nama_laluan, j.lokasi].filter(Boolean).join(' · ') || 'Jalan'}
+                </div>
+                <div className="text-xs text-neutral-500">{[j.daerah, j.negeri].filter(Boolean).join(', ')}</div>
+                {j.laluan_alternatif && (
+                  <div className="text-xs text-neutral-600">Alternatif: {j.laluan_alternatif}</div>
+                )}
+                {j.punca && <div className="text-xs text-neutral-600">{j.punca}</div>}
+                <div className="text-xs text-neutral-500">
+                  {j.nama_bencana}
+                  {j.mula && ` · sejak ${formatTarikh(j.mula)}`}
+                </div>
+              </div>
+            </Popup>
+          </Marker>
+        ))}
+
       {lapisan.titik &&
         titik.map((t) => (
-          <Marker key={t.id} position={[t.latitude, t.longitude]} icon={ikonTitik(kategori[t.kategori])}>
+          <Marker
+            key={t.id}
+            position={[t.latitude, t.longitude]}
+            icon={ikonTitik(kategori[t.kategori], terkini[t.id]?.mangsa ?? t.jumlah_mangsa ?? undefined)}
+          >
             <Popup>
-              <KandunganPopupTitik t={t} k={kategori[t.kategori]} onTindakan={onTindakan} />
+              <KandunganPopupTitik t={t} k={kategori[t.kategori]} terkini={terkini[t.id]} onTindakan={onTindakan} />
             </Popup>
           </Marker>
         ))}

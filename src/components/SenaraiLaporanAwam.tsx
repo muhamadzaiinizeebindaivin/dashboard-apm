@@ -27,7 +27,11 @@ import { SEMASA_MAKLUMAT_FIELDS, SEMASA_PENYEDIA_FIELDS, TREND_LABEL } from '../
 import type { FieldDef, LaporanBencanaRow } from '../lib/laporanBencana'
 import { NEGERI_LIST } from '../lib/negeriVisual'
 import { janaRekodKejadian } from '../lib/janaRekodKejadian'
+import { useBencanaTamat } from '../lib/bencanaTamat'
 import { Memuat, PemuatSebaris, SkeletonBaris } from './Memuatkan'
+import { PaparanLampiran } from './PaparanLampiran'
+import { ambilLampiranLaporan } from '../lib/lampiranPaparan'
+import type { DataLampiran } from '../lib/bacaLampiranSemasa'
 
 type SenaraiLaporanAwamProps = {
   jenis: 'awal' | 'semasa'
@@ -85,6 +89,8 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
   const [terbuka, setTerbuka] = useState<string | null>(null)
   const [ppsMap, setPpsMap] = useState<Record<string, PpsRow[]>>({})
   const [loadingPps, setLoadingPps] = useState<Record<string, boolean>>({})
+  // Other Excel sheets stored with each Laporan Semasa (loaded on expand)
+  const [lampiranMap, setLampiranMap] = useState<Record<string, DataLampiran>>({})
   const [tapisNegeri, setTapisNegeri] = useState('')
   const [pendingDelete, setPendingDelete] = useState<LaporanBencanaRow | null>(null)
   const [sahkanId, setSahkanId] = useState<string | null>(null)
@@ -95,6 +101,7 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
   const [deleteError, setDeleteError] = useState('')
   const [fadingId, setFadingId] = useState<string | null>(null)
   const [toast, setToast] = useState<ToastState>(null)
+  const namaTamat = new Set(useBencanaTamat().map((t) => t.nama_bencana))
 
   const muatSemula = useCallback(async () => {
     setLoading(true)
@@ -207,8 +214,12 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
 
     if (akanBuka && jenis === 'semasa' && !ppsMap[id]) {
       setLoadingPps((p) => ({ ...p, [id]: true }))
-      const { data } = await supabase.from('laporan_pps').select('*').eq('laporan_id', id).order('created_at')
+      const [{ data }, lampiran] = await Promise.all([
+        supabase.from('laporan_pps').select('*').eq('laporan_id', id).order('created_at'),
+        ambilLampiranLaporan(id),
+      ])
       setPpsMap((p) => ({ ...p, [id]: (data as PpsRow[]) ?? [] }))
+      setLampiranMap((p) => ({ ...p, [id]: lampiran }))
       setLoadingPps((p) => ({ ...p, [id]: false }))
     }
   }
@@ -386,7 +397,14 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
                       className="flex min-w-0 flex-1 items-center gap-2 text-left"
                     >
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-neutral-900">{tajuk}</p>
+                        <p className="flex items-center gap-2 text-sm font-semibold text-neutral-900">
+                          <span className="truncate">{tajuk}</span>
+                          {row.nama_bencana && namaTamat.has(row.nama_bencana.trim()) && (
+                            <span className="shrink-0 rounded-full bg-neutral-200 px-2 py-0.5 text-[10px] font-semibold text-neutral-700">
+                              TAMAT
+                            </span>
+                          )}
+                        </p>
                         <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-neutral-400">
                           {lokasi && (
                             <span className="flex items-center gap-1">
@@ -497,6 +515,8 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
                           )}
                         </Seksyen>
                       )}
+
+                      {lampiranMap[row.id] && <PaparanLampiran data={lampiranMap[row.id]} />}
 
                       <Bahagian tajuk="Hal-hal Lain" fields={[HAL_LAIN_FIELD]} row={row} />
                       <Bahagian tajuk="Disediakan Oleh" fields={SEMASA_PENYEDIA_FIELDS} row={row} />
