@@ -9,7 +9,7 @@ import { useAuth } from '../hooks/useAuth'
 // - active disasters scroll across ("limpas"),
 // - a PARAS KECEMASAN (officer pressed the emergency button) blinks in red.
 
-type BencanaAktif = { nama: string; jenis: string; negeri: string[]; mangsa: number; ppsDibuka: number }
+type BencanaAktif = { kunci: string; nama: string; jenis: string; negeri: string[]; mangsa: number; ppsDibuka: number }
 
 type Kecemasan = {
   id: string
@@ -32,13 +32,20 @@ function useBencanaAktif() {
   const [senarai, setSenarai] = useState<BencanaAktif[]>(() => simpananBencana ?? [])
 
   const muat = useCallback(async () => {
-    const [{ data: lap }, { data: ring }, { data: tamat }] = await Promise.all([
+    const [{ data: lap }, { data: ring }, { data: tamat }, { data: titik }, { data: kat }] = await Promise.all([
       supabase
         .from('laporan_bencana')
         .select('nama_bencana, jenis_bencana, negeri, created_at')
         .order('created_at', { ascending: false }),
       supabase.from('ringkasan_bencana_negeri').select('nama_bencana, negeri, mangsa, pps_dibuka'),
       supabase.from('bencana_tamat').select('nama_bencana'),
+      // Points added by hand on the Peta Bencana (not linked to a report)
+      supabase
+        .from('titik_bencana')
+        .select('id, kategori, negeri, daerah, lokasi, jumlah_mangsa')
+        .eq('status', 'aktif')
+        .is('nama_bencana', null),
+      supabase.from('kategori_bencana').select('key, label'),
     ])
     const namaTamat = new Set(((tamat as { nama_bencana: string }[]) ?? []).map((t) => t.nama_bencana))
 
@@ -47,7 +54,7 @@ function useBencanaAktif() {
     for (const r of (lap as { nama_bencana: string | null; jenis_bencana: string | null; negeri: string | null }[]) ?? []) {
       const nama = r.nama_bencana?.trim()
       if (!nama || namaTamat.has(nama)) continue
-      const b = ikutNama.get(nama) ?? { nama, jenis: r.jenis_bencana || 'Bencana', negeri: [], mangsa: 0, ppsDibuka: 0 }
+      const b = ikutNama.get(nama) ?? { kunci: nama, nama, jenis: r.jenis_bencana || 'Bencana', negeri: [], mangsa: 0, ppsDibuka: 0 }
       if (r.negeri && !b.negeri.includes(r.negeri)) b.negeri.push(r.negeri)
       ikutNama.set(nama, b)
     }
@@ -58,7 +65,22 @@ function useBencanaAktif() {
       b.ppsDibuka += x.pps_dibuka
       if (!b.negeri.includes(x.negeri)) b.negeri.push(x.negeri)
     }
-    simpananBencana = [...ikutNama.values()]
+    // Manual points: one entry each, named by their location
+    const labelKategori = new Map(((kat as { key: string; label: string }[]) ?? []).map((k) => [k.key, k.label]))
+    type TitikManual = { id: string; kategori: string; negeri: string; daerah: string | null; lokasi: string | null; jumlah_mangsa: number | null }
+    const manual: BencanaAktif[] = ((titik as TitikManual[]) ?? []).map((t) => {
+      const jenis = labelKategori.get(t.kategori) ?? t.kategori
+      return {
+        kunci: `titik-${t.id}`,
+        nama: (t.lokasi || t.daerah || jenis).toUpperCase(),
+        jenis,
+        negeri: t.negeri && t.negeri !== '—' ? [t.negeri] : [],
+        mangsa: t.jumlah_mangsa ?? 0,
+        ppsDibuka: 0,
+      }
+    })
+
+    simpananBencana = [...ikutNama.values(), ...manual]
     setSenarai(simpananBencana)
   }, [])
 
@@ -69,6 +91,7 @@ function useBencanaAktif() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'laporan_bencana' }, () => muat())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pps_pusat' }, () => muat())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bencana_tamat' }, () => muat())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'titik_bencana' }, () => muat())
       .subscribe()
     return () => {
       supabase.removeChannel(channel)
@@ -141,13 +164,14 @@ export function AmaranBanner() {
 
   const itemBencana = (kunci: string) =>
     bencana.map((b) => (
-      <span key={`${kunci}-${b.nama}`} className="flex shrink-0 items-center gap-2 pr-10">
+      <span key={`${kunci}-${b.kunci}`} className="flex shrink-0 items-center gap-2 pr-10">
         <span className="rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-white">BENCANA</span>
         <span className="font-semibold text-red-700">{b.nama}</span>
         <span className="text-neutral-600">
           {b.jenis}
           {b.negeri.length > 0 && ` · ${b.negeri.join(', ')}`}
-          {b.ppsDibuka > 0 && ` · ${b.mangsa} mangsa · ${b.ppsDibuka} PPS dibuka`}
+          {b.mangsa > 0 && ` · ${b.mangsa} mangsa`}
+          {b.ppsDibuka > 0 && ` · ${b.ppsDibuka} PPS dibuka`}
         </span>
       </span>
     ))
