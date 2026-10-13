@@ -56,3 +56,41 @@
     font-size: 16px !important;
   }
 }
+
+/* Laman Utama banner: active disasters scroll ("limpas"), PARAS emergencies blink */
+@keyframes amaran-limpas {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.amaran-limpas {
+  animation: amaran-limpas 30s linear infinite;
+}
+
+.amaran-limpas:hover {
+  animation-play-state: paused;
+}
+
+@keyframes amaran-kelip {
+  0%, 49% { background-color: #dc2626; }
+  50%, 100% { background-color: #7f1d1d; }
+}
+
+.amaran-kelip {
+  background-color: #dc2626;
+  animation: amaran-kelip 1s step-end infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .amaran-limpas {
+    animation: none;
+    flex-wrap: wrap;
+    width: auto;
+  }
+  .amaran-limpas > [aria-hidden='true'] {
+    display: none;
+  }
+  .amaran-kelip {
+    animation: none;
+  }
+}

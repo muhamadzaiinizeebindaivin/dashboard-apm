@@ -5,6 +5,7 @@ import { ShieldCheck, HandCoins, MapPin, Users, AlertTriangle, ClipboardList, Tr
 import { LoginModal } from '../components/LoginModal'
 import { AppShell } from '../components/AppShell'
 import { DokumenAwamCard } from '../components/DokumenAwamCard'
+import { AmaranBanner } from '../components/AmaranBanner'
 import { useAuth } from '../hooks/useAuth'
 import { NAV_TABS } from '../lib/navTabs'
 import { ROLE_LABEL } from '../lib/roles'
@@ -69,6 +70,8 @@ function KandunganLogMasuk() {
 
   return (
     <>
+      <AmaranBanner />
+
       <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/60 bg-white/40 px-5 py-4 shadow-lg backdrop-blur-md">
         <div>
           <p className="text-sm text-neutral-500">{salam},</p>
