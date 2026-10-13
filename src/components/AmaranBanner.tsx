@@ -180,7 +180,7 @@ export function AmaranBanner() {
     <>
       <Siren size={16} className="shrink-0" />
       <span className="font-bold tracking-wide">KECEMASAN PARAS</span>
-      <span className="min-w-0 flex-1 truncate">
+      <span className="w-0 min-w-0 flex-1 truncate">
         {kecemasan
           .map((k) =>
             [k.negeri, [k.pangkat, k.nama].filter(Boolean).join(' '), k.no_tel, minitLalu(k.created_at)]
@@ -230,7 +230,12 @@ export function AmaranBanner() {
                   Bencana Aktif ({bencana.length})
                 </span>
                 {/* Two copies side by side scroll by half their width: a seamless loop */}
-                <div ref={bekasRef} className="relative min-w-0 flex-1 overflow-hidden" aria-label="Senarai bencana aktif">
+                {/* w-0 + contain: the content never widens the page (no feedback with ResizeObserver) */}
+                <div
+                  ref={bekasRef}
+                  className="relative w-0 min-w-0 flex-1 overflow-hidden [contain:inline-size]"
+                  aria-label="Senarai bencana aktif"
+                >
                   <div className="amaran-limpas flex w-max text-sm" style={{ animationDuration: `${tempoh}s` }}>
                     <span className="flex shrink-0" style={{ minWidth: lebarBekas }}>
                       {itemBencana('a')}
