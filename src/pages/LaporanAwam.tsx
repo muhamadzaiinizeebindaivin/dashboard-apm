@@ -86,7 +86,18 @@ type KumpulanPps = { kunci: string; daerah: string; rows: PpsInput[] }
 // Excel details kept per PPS row (by PpsInput.kunci), sent with the counts
 type MetaPps = Pick<
   PpsExcel,
-  'mukim' | 'dibukaPada' | 'ditutup' | 'tutupPada' | 'pengurusNama' | 'pengurusJawatan' | 'pengurusTelefon'
+  | 'mukim'
+  | 'dibukaPada'
+  | 'ditutup'
+  | 'tutupPada'
+  | 'pengurusNama'
+  | 'pengurusJawatan'
+  | 'pengurusTelefon'
+  | 'mangsa'
+  | 'dewasaLelaki'
+  | 'dewasaPerempuan'
+  | 'kanakLelaki'
+  | 'kanakPerempuan'
 >
 
 type MedanProps = { def: FieldDef; value: string; onChange: (v: string) => void; amaran?: string }
@@ -434,6 +445,11 @@ export function LaporanAwam() {
         pengurusNama: p.pengurusNama,
         pengurusJawatan: p.pengurusJawatan,
         pengurusTelefon: p.pengurusTelefon,
+        mangsa: p.mangsa,
+        dewasaLelaki: p.dewasaLelaki,
+        dewasaPerempuan: p.dewasaPerempuan,
+        kanakLelaki: p.kanakLelaki,
+        kanakPerempuan: p.kanakPerempuan,
       }
     }
 
@@ -518,6 +534,8 @@ export function LaporanAwam() {
         pps = kumpulan.map((g) => {
           const items = g.rows.map((r) => {
             const m = metaPps[r.kunci]
+            // Sex/age breakdown only while the victim count is still the one read from the Excel
+            const pecahanSah = !!m && Number(r.mangsa) === m.mangsa
             return {
               nama: r.nama.trim().replace(/\s+/g, ' '),
               jumlah_mangsa: Number(r.mangsa),
@@ -532,6 +550,10 @@ export function LaporanAwam() {
               dibuka_pada: m?.dibukaPada ?? null,
               ditutup: m?.ditutup ?? false,
               tutup_pada: m?.tutupPada ?? null,
+              dewasa_lelaki: pecahanSah ? m.dewasaLelaki : null,
+              dewasa_perempuan: pecahanSah ? m.dewasaPerempuan : null,
+              kanak_lelaki: pecahanSah ? m.kanakLelaki : null,
+              kanak_perempuan: pecahanSah ? m.kanakPerempuan : null,
             }
           })
           return {

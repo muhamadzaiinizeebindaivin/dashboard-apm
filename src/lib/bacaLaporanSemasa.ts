@@ -14,6 +14,11 @@ export type PpsExcel = {
   nama: string
   mangsa: number
   keluarga: number
+  // Victims by sex and age (Dewasa / Kanak-kanak), null when the columns are empty
+  dewasaLelaki: number | null
+  dewasaPerempuan: number | null
+  kanakLelaki: number | null
+  kanakPerempuan: number | null
   dibukaPada: string | null // ISO
   ditutup: boolean // "Tutup" column filled
   tutupPada: string | null // ISO, when the Tutup value could be read
@@ -36,6 +41,7 @@ const teks = (v: unknown) => String(v ?? '').replace(/\s+/g, ' ').trim()
 const teksPanjang = (v: unknown) => String(v ?? '').trim()
 const ada = (v: unknown) => teks(v) !== ''
 const nombor = (v: unknown) => Math.max(0, Math.round(Number(v) || 0))
+const nomborAtauNull = (v: unknown) => (teks(v) === '' ? null : nombor(v))
 const keIso = (nilai: string) => new Date(nilai).toISOString()
 const bersihTelefon = (v: unknown) => teks(v).replace(/^\*+/, '')
 
@@ -161,6 +167,16 @@ export async function bacaLaporanSemasa(fail: File): Promise<HasilSemasa | { ral
       const cPengurus = lajur('pengurus pusat pemindahan')
       const cJawatan = lajur('jawatan')
       const cTelefon = lajur('nombor telefon', 'no telefon', 'no tel')
+      // "Dewasa" / "Kanak-Kanak" sit on the sub-header row, each over Lelaki | Perempuan
+      const cariSubtajuk = (label: string) => {
+        for (let i = hi; i <= hi + 3 && i < rows.length; i++) {
+          const x = rows[i].map((c) => kunci(teks(c))).indexOf(label)
+          if (x >= 0) return x
+        }
+        return -1
+      }
+      const cDewasa = cariSubtajuk('dewasa')
+      const cKanak = cariSubtajuk('kanak kanak')
 
       // "Buka | Tutup" sub-headers sit one or two rows below the header
       let cBuka = cOperasi
@@ -198,6 +214,10 @@ export async function bacaLaporanSemasa(fail: File): Promise<HasilSemasa | { ral
           nama,
           mangsa: nombor(sel(r, cMangsa)),
           keluarga: nombor(sel(r, cKeluarga)),
+          dewasaLelaki: nomborAtauNull(sel(r, cDewasa)),
+          dewasaPerempuan: nomborAtauNull(sel(r, cDewasa >= 0 ? cDewasa + 1 : -1)),
+          kanakLelaki: nomborAtauNull(sel(r, cKanak)),
+          kanakPerempuan: nomborAtauNull(sel(r, cKanak >= 0 ? cKanak + 1 : -1)),
           dibukaPada: buka ? keIso(buka.nilai) : null,
           ditutup: ada(tutupMentah),
           tutupPada: tutup ? keIso(tutup.nilai) : null,

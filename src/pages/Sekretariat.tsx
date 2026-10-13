@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
-import { FileText, FileClock, FileDown, Home, ChevronRight, Tent, Flag } from 'lucide-react'
+import { FileText, FileClock, FileDown, FileSpreadsheet, Home, ChevronRight, Tent, Flag } from 'lucide-react'
+import { janaExcelNasional } from '../lib/eksportExcel'
 import { supabase } from '../lib/supabase'
 import { Toast } from '../components/Toast'
 import type { ToastState } from '../components/Toast'
@@ -52,6 +53,7 @@ export function Sekretariat() {
   const [toast, setToast] = useState<ToastState>(null)
   const [, setMenjanaLaporan] = useState(false)
   const [menMuatTurun, setMenMuatTurun] = useState(false)
+  const [menjanaExcel, setMenjanaExcel] = useState(false)
   const [menjanaGraf, setMenjanaGraf] = useState(false)
   const [tapisNegeri, setTapisNegeri] = useState('')
   const [tapisJenis, setTapisJenis] = useState('')
@@ -187,6 +189,27 @@ export function Sekretariat() {
       )
     : []
 
+  // NDCC "Laporan Situasi Bencana" Excel: one file per disaster type, same filters as the preview
+  async function janaExcel() {
+    setMenjanaExcel(true)
+    try {
+      const bil = await janaExcelNasional({
+        negeri: tapisNegeri || undefined,
+        zon: tapisZon || undefined,
+        jenis: tapisJenis || undefined,
+      })
+      setToast(
+        bil === 0
+          ? { type: 'error', message: 'Tiada bencana aktif untuk tapisan ini.' }
+          : { type: 'success', message: bil === 1 ? 'Fail Excel dijana.' : `${bil} fail Excel dijana (satu bagi setiap jenis bencana).` },
+      )
+    } catch {
+      setToast({ type: 'error', message: 'Gagal menjana Excel. Sila cuba lagi.' })
+    } finally {
+      setMenjanaExcel(false)
+    }
+  }
+
   async function muatTurunLaporan() {
     if (!previewData) return
     setMenMuatTurun(true)
@@ -273,6 +296,19 @@ export function Sekretariat() {
               >
                 <FileDown size={15} />
                 {menMuatTurun ? 'Menjana PDF...' : 'Muat Turun PDF'}
+              </button>
+              <button
+                onClick={janaExcel}
+                disabled={menjanaExcel}
+                title={
+                  tapisJenis
+                    ? `Laporan Situasi Bencana (${tapisJenis}) dalam format Excel NDCC`
+                    : 'Satu fail Excel bagi setiap jenis bencana (dalam satu fail .zip)'
+                }
+                className="flex items-center gap-1.5 rounded-lg border border-emerald-700 bg-white px-3 py-1.5 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50 disabled:opacity-60"
+              >
+                <FileSpreadsheet size={15} />
+                {menjanaExcel ? 'Menjana Excel...' : 'Jana Excel'}
               </button>
               <button
                 onClick={() => {
