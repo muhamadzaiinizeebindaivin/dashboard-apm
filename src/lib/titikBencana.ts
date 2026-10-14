@@ -174,6 +174,19 @@ export async function tambahKategori(label: string, warna: string, ikon: string,
   return { key, error }
 }
 
+// Name, colour and icon of an existing category. The key stays the same, so the
+// map points and reports that use it follow the change automatically.
+export async function kemaskiniKategori(key: string, label: string, warna: string, ikon: string) {
+  const { data, error } = await supabase
+    .from('kategori_bencana')
+    .update({ label: label.trim(), warna, ikon })
+    .eq('key', key)
+    .select('key')
+  // RLS refuses silently (0 rows updated): report it as a permission error
+  if (!error && (!data || data.length === 0)) return { error: { code: '42501', message: 'Tiada kebenaran' } }
+  return { error }
+}
+
 export function useTitikAktif() {
   const [titik, setTitik] = useState<TitikBencana[]>([])
   const [loading, setLoading] = useState(true)

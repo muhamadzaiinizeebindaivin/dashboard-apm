@@ -66,6 +66,8 @@ function App() {
             <Route path="/set-password" element={<SetPassword />} />
 
             <Route element={<RequireAuth />}>
+              {/* Laporan Awal / Semasa sent from inside the dashboard: staff need no access code */}
+              <Route path="hantar-laporan" element={<LaporanAwam dalaman />} />
               <Route element={<Layout />}>
                 <Route path="sekretariat" element={<Sekretariat />}>
                   <Route path="laporan-awal" element={<LaporanAwal />} />

@@ -29,7 +29,7 @@ const NEGERI_NORM: Record<string, { x: number; y: number }> = {
 const WARNA_HEX: Record<string, string> = {
   Ribut: '#3b8ed6',
   Banjir: '#2563eb',
-  'Ombak Besar': '#14828c',
+  Tsunami: '#14828c',
   Kebakaran: '#dc2626',
   'Tanah Runtuh': '#785428',
   Pencemaran: '#ca8a04',
@@ -245,7 +245,7 @@ function IkonBencana({ jenis, cx, cy, r }: { jenis: string; cx: number; cy: numb
         />
       )
       break
-    case 'Ombak Besar':
+    case 'Tsunami':
       glif = (
         <polyline
           points={p(
@@ -461,8 +461,11 @@ export function LaporanNasionalPreview({
   const ppsCount = items.reduce((n, i) => n + kiraPps(i.pps), 0)
   const jumlahMangsa = items.reduce((n, i) => n + i.jumlahMangsa, 0)
   const jumlahKeluarga = items.reduce((n, i) => n + i.jumlahKeluarga, 0)
+  // Different types among the active disasters (e.g. Banjir, Ribut, Tsunami = 3)
+  const jenisAktif = new Set(aktif.map((i) => i.jenisBencana))
 
   const kaunter = [
+    { label: 'Jenis Bencana', nilai: jenisAktif.size },
     { label: 'Negeri', nilai: negeriSet.size },
     { label: 'Daerah', nilai: daerahSet.size },
     { label: 'Pusat Pemindahan', nilai: ppsCount },
@@ -492,7 +495,7 @@ export function LaporanNasionalPreview({
 
       <div>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-700">Jumlah Keseluruhan</h3>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {kaunter.map((k) => (
             <div key={k.label} className="rounded-xl bg-[#0b2a5c] px-3 py-3 text-center text-white">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-400">{k.label}</p>

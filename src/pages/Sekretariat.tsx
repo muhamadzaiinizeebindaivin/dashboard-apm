@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
-import { FileText, FileClock, FileDown, FileSpreadsheet, Home, ChevronRight, Tent, Flag } from 'lucide-react'
+import { FileText, FileClock, FileDown, FileSpreadsheet, Home, ChevronRight, Tent, Flag, Inbox } from 'lucide-react'
 import { janaExcelNasional } from '../lib/eksportExcel'
 import { supabase } from '../lib/supabase'
 import { Toast } from '../components/Toast'
@@ -54,6 +54,8 @@ export function Sekretariat() {
   const [, setMenjanaLaporan] = useState(false)
   const [menMuatTurun, setMenMuatTurun] = useState(false)
   const [menjanaExcel, setMenjanaExcel] = useState(false)
+  // No active report yet: calm empty state instead of an error toast
+  const [tiadaBencana, setTiadaBencana] = useState(false)
   const [menjanaGraf, setMenjanaGraf] = useState(false)
   const [tapisNegeri, setTapisNegeri] = useState('')
   const [tapisJenis, setTapisJenis] = useState('')
@@ -112,6 +114,21 @@ export function Sekretariat() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onLanding, profile?.role])
 
+  // While empty, the first report received shows the national report by itself
+  useEffect(() => {
+    if (!onLanding || !tiadaBencana || profile?.role !== 'pkop') return
+    const channel = supabase
+      .channel('laporan-nasional-pertama')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'laporan_bencana' }, () =>
+        handleJanaLaporanNasional(),
+      )
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onLanding, tiadaBencana, profile?.role])
+
   async function handleJanaLaporanNasional() {
     setMenjanaLaporan(true)
     try {
@@ -121,9 +138,11 @@ export function Sekretariat() {
         ambilKorbanSemasa(),
       ])
       if (items.length === 0) {
-        setToast({ type: 'error', message: 'Tiada data untuk dijana.' })
+        setPreviewData(null)
+        setTiadaBencana(true)
         return
       }
+      setTiadaBencana(false)
       setPreviewData({ items, ditutup, korban, masaJana: new Date() })
       setTapisNegeri('')
       setTapisJenis('')
@@ -282,6 +301,21 @@ export function Sekretariat() {
             </Link>
           ))}
         </div>
+      )}
+
+      {onLanding && tiadaBencana && !previewData && (
+        <DashboardCard className="mt-6">
+          <h2 className="border-b border-neutral-100 pb-4 text-base font-semibold text-neutral-900">
+            Laporan Bencana Nasional
+          </h2>
+          <div className="flex flex-col items-center gap-2 py-10 text-center">
+            <Inbox size={28} className="text-neutral-300" />
+            <p className="text-sm font-medium text-neutral-600">Tiada bencana aktif buat masa ini.</p>
+            <p className="max-w-md text-xs text-neutral-400">
+              Laporan Nasional akan dipaparkan secara automatik sebaik sahaja Laporan Awal atau Laporan Semasa diterima.
+            </p>
+          </div>
+        </DashboardCard>
       )}
 
       {onLanding && previewData && (

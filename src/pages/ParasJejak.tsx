@@ -28,6 +28,7 @@ export function ParasJejak() {
   const [keadaan, setKeadaan] = useState<Keadaan>('biasa')
   const [sahkanKecemasan, setSahkanKecemasan] = useState(false)
   const [menukarKeadaan, setMenukarKeadaan] = useState(false)
+  const [maklum, setMaklum] = useState('')
 
   const trackingIdRef = useRef<string | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -156,6 +157,22 @@ export function ParasJejak() {
     )
   }
 
+  // While in emergency, check whether the Pusat Kawalan has ended it from the dashboard
+  useEffect(() => {
+    if (!sedangJejak || keadaan !== 'kecemasan') return
+    const t = setInterval(async () => {
+      const id = trackingIdRef.current
+      if (!id) return
+      const { data } = await supabase.rpc('keadaan_paras', { p_id: id })
+      if (data && data !== 'kecemasan') {
+        setKeadaan(data as Keadaan)
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ id, negeri, keadaan: data }))
+        setMaklum('Kecemasan anda telah diterima dan dihentikan oleh Pusat Kawalan.')
+      }
+    }, 10_000)
+    return () => clearInterval(t)
+  }, [sedangJejak, keadaan, negeri])
+
   async function tukarKeadaan(baru: Keadaan) {
     const id = trackingIdRef.current
     if (!id) return
@@ -164,6 +181,7 @@ export function ParasJejak() {
     setKeadaan(baru) // optimistic
     setMenukarKeadaan(true)
     setRalat('')
+    setMaklum('')
 
     const { error } = await supabase.rpc('set_paras_keadaan', { p_id: id, p_keadaan: baru })
     setMenukarKeadaan(false)
@@ -301,6 +319,7 @@ export function ParasJejak() {
           )}
 
           {ralat && <p className="text-sm text-red-600">{ralat}</p>}
+          {maklum && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{maklum}</p>}
         </div>
 
         <div className="mt-6 rounded-2xl border border-white/60 bg-white/40 p-4 shadow-lg backdrop-blur-md">

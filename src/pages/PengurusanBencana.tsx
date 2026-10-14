@@ -17,7 +17,7 @@ import { supabase } from '../lib/supabase'
 import { TREND_LABEL } from '../lib/laporanBencana'
 import { formatTarikh } from '../lib/titikBencana'
 import { HAD_TIADA_KEMASKINI_JAM } from '../lib/ppsPusat'
-import { useBencanaTamat } from '../lib/bencanaTamat'
+import { HAD_TAMAT_AUTO_JAM, useBencanaTamat } from '../lib/bencanaTamat'
 import type { BencanaTamat } from '../lib/bencanaTamat'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { Toast } from '../components/Toast'
@@ -145,6 +145,12 @@ function KadBencana({ b, onTamat, onAktif, onLokasi }: KadBencanaProps) {
         <Clock size={12} className="shrink-0" />
         <span>Laporan terakhir {formatTarikh(b.laporanTerakhir)}</span>
         {b.tamat && <span>· Ditamatkan {formatTarikh(b.tamat.ditamatkan_pada)}</span>}
+        {!b.tamat && (
+          <span title={`Ditamatkan secara automatik jika tiada laporan baharu dalam ${HAD_TAMAT_AUTO_JAM} jam`}>
+            · Tamat automatik{' '}
+            {formatTarikh(new Date(new Date(b.laporanTerakhir).getTime() + HAD_TAMAT_AUTO_JAM * 3_600_000).toISOString())}
+          </span>
+        )}
       </p>
       {b.tamat?.catatan && <p className="mt-2 text-xs italic text-neutral-500">“{b.tamat.catatan}”</p>}
 

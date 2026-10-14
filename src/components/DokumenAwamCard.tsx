@@ -1,22 +1,37 @@
 import { useEffect, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
 import { FileText, Upload, Download, Loader2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { Toast } from './Toast'
 import type { ToastState } from './Toast'
 
-type Jenis = 'manual_pengguna' | 'format_laporan'
+type Jenis = 'manual_pengguna' | 'format_laporan_awal' | 'format_laporan_semasa'
 
-const META: Record<Jenis, { label: string; desc: string }> = {
+const SUSUNAN: Jenis[] = ['manual_pengguna', 'format_laporan_awal', 'format_laporan_semasa']
+
+// `terima`: file types suggested in the file picker (others are still allowed)
+const META: Record<Jenis, { label: string; desc: string; terima: string }> = {
   manual_pengguna: {
     label: 'Manual Pengguna',
     desc: 'Panduan penggunaan sistem untuk kakitangan dan NGO.',
+    terima: '.pdf,.doc,.docx',
   },
-  format_laporan: {
-    label: 'Format Kosong Laporan',
-    desc: 'Templat rasmi untuk laporan awal dan laporan semasa.',
+  format_laporan_awal: {
+    label: 'Format Kosong Laporan Awal',
+    desc: 'Templat Word rasmi Laporan Awal NDCC.',
+    terima: '.docx,.doc',
   },
+  format_laporan_semasa: {
+    label: 'Format Kosong Laporan Semasa',
+    desc: 'Templat Excel rasmi Laporan Situasi Bencana.',
+    terima: '.xlsx,.xls',
+  },
+}
+
+const KOSONG: Record<Jenis, DokumenRow | null> = {
+  manual_pengguna: null,
+  format_laporan_awal: null,
+  format_laporan_semasa: null,
 }
 
 type DokumenRow = {
@@ -29,22 +44,20 @@ export function DokumenAwamCard() {
   const { profile } = useAuth()
   const bolehMuatNaik = profile?.role === 'pkop' || profile?.role === 'pkon'
 
-  const [dokumen, setDokumen] = useState<Record<Jenis, DokumenRow | null>>({
-    manual_pengguna: null,
-    format_laporan: null,
-  })
+  const [dokumen, setDokumen] = useState<Record<Jenis, DokumenRow | null>>(KOSONG)
   const [memuatNaik, setMemuatNaik] = useState<Jenis | null>(null)
   const [toast, setToast] = useState<ToastState>(null)
   const inputRefs = useRef<Record<Jenis, HTMLInputElement | null>>({
     manual_pengguna: null,
-    format_laporan: null,
+    format_laporan_awal: null,
+    format_laporan_semasa: null,
   })
 
   async function muatSemula() {
     const { data } = await supabase.from('dokumen_awam').select('jenis, file_name, file_path')
-    const next: Record<Jenis, DokumenRow | null> = { manual_pengguna: null, format_laporan: null }
+    const next: Record<Jenis, DokumenRow | null> = { ...KOSONG }
     for (const row of (data as DokumenRow[]) ?? []) {
-      next[row.jenis] = row
+      if (row.jenis in next) next[row.jenis] = row
     }
     setDokumen(next)
   }
@@ -89,18 +102,15 @@ export function DokumenAwamCard() {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      {(['manual_pengguna', 'format_laporan'] as Jenis[]).map((jenis, i) => {
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {SUSUNAN.map((jenis) => {
         const row = dokumen[jenis]
         const sedangMuatNaik = memuatNaik === jenis
 
         return (
-          <motion.div
+          <div
             key={jenis}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0, transition: { delay: i * 0.05, duration: 0.2 } }}
-            whileHover={{ y: -2, transition: { type: 'spring', stiffness: 400, damping: 25 } }}
-            className="flex flex-col justify-between gap-4 rounded-2xl border border-white/60 bg-white/40 p-5 shadow-lg backdrop-blur-md"
+            className="flex h-full flex-col justify-between gap-4 rounded-2xl border border-white/70 bg-white/60 p-5 shadow-lg"
           >
             <div className="flex items-start gap-3">
               <span
@@ -143,6 +153,7 @@ export function DokumenAwamCard() {
                         inputRefs.current[jenis] = el
                       }}
                       type="file"
+                      accept={META[jenis].terima}
                       className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0]
@@ -153,20 +164,20 @@ export function DokumenAwamCard() {
                     <button
                       onClick={() => inputRefs.current[jenis]?.click()}
                       disabled={sedangMuatNaik}
-                      title={row ? 'Ganti fail' : 'Muat naik fail'}
-                      className="flex h-7 w-7 items-center justify-center rounded-full border border-neutral-200 text-neutral-500 transition-colors hover:border-emerald-500 hover:text-emerald-700 disabled:opacity-60"
+                      className="flex items-center gap-1.5 rounded-full border border-emerald-700 bg-white px-3 py-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-50 disabled:opacity-60"
                     >
                       {sedangMuatNaik ? (
                         <Loader2 size={13} className="animate-spin" />
                       ) : (
                         <Upload size={13} />
                       )}
+                      {sedangMuatNaik ? 'Memuat naik...' : row ? 'Ganti Fail' : 'Muat Naik'}
                     </button>
                   </>
                 )}
               </div>
             </div>
-          </motion.div>
+          </div>
         )
       })}
 

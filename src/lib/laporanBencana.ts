@@ -31,7 +31,7 @@ export type LaporanBencanaRow = {
 export const JENIS_BENCANA = [
   'Ribut',
   'Banjir',
-  'Ombak Besar',
+  'Tsunami',
   'Kebakaran',
   'Tanah Runtuh',
   'Pencemaran',

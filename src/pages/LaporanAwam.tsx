@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   ArrowLeft,
@@ -316,9 +316,14 @@ function KejayaanHantar({ berjaya, onLagi, onKeluar }: KejayaanHantarProps) {
   )
 }
 
-export function LaporanAwam() {
+// `dalaman`: opened from inside the dashboard by logged-in staff (no access code)
+export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
   const navigate = useNavigate()
-  const [jenis, setJenis] = useState<'' | 'awal' | 'semasa'>('')
+  const [params] = useSearchParams()
+  const jenisAwal = params.get('jenis')
+  const [jenis, setJenis] = useState<'' | 'awal' | 'semasa'>(
+    jenisAwal === 'awal' || jenisAwal === 'semasa' ? jenisAwal : '',
+  )
   const [nilai, setNilai] = useState<Record<string, string>>({})
   const [ringkasan, setRingkasan] = useState<string>('')
   const [menghantar, setMenghantar] = useState(false)
@@ -453,11 +458,30 @@ export function LaporanAwam() {
       }
     }
 
+    // PPS already known for this disaster keep their location: only new ones need one
+    const kumpulan = [...ikutDaerah.values()]
+    const senaraiRata = kumpulan.flatMap((g) => g.rows.map((r) => ({ g, r })))
+    if (senaraiRata.length > 0 && hasil.nilai.nama_bencana && hasil.nilai.negeri) {
+      const { data: lokasiSedia } = await supabase.rpc('lokasi_pps_sedia', {
+        p_code: ambilKod('laporan'),
+        p_nama_bencana: hasil.nilai.nama_bencana,
+        p_negeri: hasil.nilai.negeri,
+        p_pps: senaraiRata.map(({ g, r }) => ({ daerah: g.daerah, nama: r.nama })),
+      })
+      for (const x of (lokasiSedia as { i: number; latitude: number; longitude: number }[]) ?? []) {
+        const sasaran = senaraiRata[x.i]
+        if (sasaran) {
+          sasaran.r.latitude = x.latitude
+          sasaran.r.longitude = x.longitude
+        }
+      }
+    }
+
     setFail(f)
     setNilai(hasil.nilai)
     setAmaran(hasil.amaran)
     setRingkasan(hasil.ringkasan)
-    setKumpulanPps([...ikutDaerah.values()])
+    setKumpulanPps(kumpulan)
     setMetaPps(meta)
     setLampiran(hasil.lampiran)
     setPilihanLampiran(pilihanAsal(hasil.lampiran))
@@ -470,6 +494,10 @@ export function LaporanAwam() {
   const medanSemak = jenis === 'awal' ? AWAL_FIELD : SEMASA_FIELD
   const bilAmaran = fail ? medanSemak.filter((f) => amaranUntuk(f)).length : 0
   const bilPps = kumpulanPps.reduce((n, g) => n + g.rows.length, 0)
+  // PPS that still need a location before sending (PPS marked "Tutup" in the file are exempt)
+  const perluLokasi = (r: PpsInput) => (r.latitude == null || r.longitude == null) && !metaPps[r.kunci]?.ditutup
+  const ppsTanpaLokasi = kumpulanPps.flatMap((g) => g.rows.filter(perluLokasi))
+  const bilTanpaLokasi = ppsTanpaLokasi.length
 
   async function handleHantar() {
     setRalat('')
@@ -530,6 +558,15 @@ export function LaporanAwam() {
             return
           }
         }
+        // Every open PPS must be on the Peta Bencana
+        if (bilTanpaLokasi > 0) {
+          const nama = ppsTanpaLokasi.slice(0, 3).map((r) => r.nama.trim() || 'PPS tanpa nama')
+          setRalat(
+            `Sila tetapkan lokasi bagi ${bilTanpaLokasi} PPS sebelum menghantar: ${nama.join(', ')}` +
+              (bilTanpaLokasi > 3 ? ` dan ${bilTanpaLokasi - 3} lagi.` : '.'),
+          )
+          return
+        }
 
         pps = kumpulan.map((g) => {
           const items = g.rows.map((r) => {
@@ -588,6 +625,10 @@ export function LaporanAwam() {
     setMenghantar(false)
 
     if (error?.code === '42501') {
+      if (dalaman) {
+        setRalat('Anda tiada kebenaran untuk menghantar laporan.')
+        return
+      }
       padamKod('laporan')
       window.location.reload()
       return
@@ -744,6 +785,11 @@ export function LaporanAwam() {
                     bilAmaran={bilAmaran}
                     nota={[
                       `${bilPps} PPS dibaca daripada helaian ShelterStatus (${kumpulanPps.length} daerah).`,
+                      ...(bilTanpaLokasi > 0
+                        ? [
+                            `${bilTanpaLokasi} PPS belum ada lokasi. Lokasi wajib ditetapkan (butang "Pilih di peta") sebelum laporan boleh dihantar. PPS yang sudah diketahui lokasinya diisi secara automatik.`,
+                          ]
+                        : []),
                       'PPS yang ditanda "Tutup" dalam fail akan dicadangkan untuk ditutup. Sekretariat akan mengesahkan.',
                     ]}
                     onTukar={kosongkanFail}
@@ -834,11 +880,16 @@ export function LaporanAwam() {
                             <p className="text-xs text-neutral-500">
                               {g.rows.length} PPS
                               {bilTutup > 0 && ` · ${bilTutup} ditanda "Tutup" dalam fail`}
+                              {(() => {
+                                const tiada = g.rows.filter(perluLokasi).length
+                                return tiada > 0 ? <span className="font-medium text-red-600"> · {tiada} perlu lokasi</span> : null
+                              })()}
                             </p>
                             <SenaraiPpsInput
                               rows={g.rows}
                               onChange={(rows) => ubahKumpulan(g.kunci, { rows })}
                               negeri={nilai.negeri}
+                              perluLokasi={perluLokasi}
                             />
                           </div>
                         )

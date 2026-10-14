@@ -37,8 +37,8 @@ const KATA_JENIS: [string, string][] = [
   ['puting beliung', 'Ribut'],
   ['bumbung terbang', 'Ribut'],
   ['runtuhan tanah', 'Tanah Runtuh'],
-  ['air pasang', 'Ombak Besar'],
-  ['ombak', 'Ombak Besar'],
+  ['air pasang', 'Tsunami'],
+  ['ombak', 'Tsunami'],
   ['kebakar', 'Kebakaran'],
 ]
 

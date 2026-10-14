@@ -39,7 +39,7 @@ export function ConfirmModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 px-4 py-8"
+          className="fixed inset-0 z-[1350] flex items-center justify-center bg-black/30 px-4 py-8"
           onClick={() => !loading && onCancel()}
         >
           <motion.div

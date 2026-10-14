@@ -1,26 +1,22 @@
-import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, ArrowLeft, HandCoins, MapPin, FileWarning } from 'lucide-react'
+import { X, ArrowLeft } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { LoginForm } from './LoginForm'
 import { AccessCodeForm } from './AccessCodeForm'
 import apmLogo from '../assets/apm-logo.png'
 
+export type PautanAwam = { page: string; to: string; label: string; withPetugas?: boolean }
+
 type LoginModalProps = {
   open: boolean
   onClose: () => void
   onSuccess: () => void
+  pending: PautanAwam | null
+  setPending: (pautan: PautanAwam | null) => void
 }
 
-const QUICK_LINKS = [
-  { page: 'sumbangan', to: '/sumbangan', label: 'Sumbangan', icon: HandCoins },
-  { page: 'paras', to: '/paras', label: 'PARAS', icon: MapPin, withPetugas: true },
-  { page: 'laporan', to: '/laporan', label: 'Laporan', icon: FileWarning },
-]
-
-export function LoginModal({ open, onClose, onSuccess }: LoginModalProps) {
+export function LoginModal({ open, onClose, onSuccess, pending, setPending }: LoginModalProps) {
   const navigate = useNavigate()
-  const [pending, setPending] = useState<{ page: string; to: string; label: string; withPetugas?: boolean } | null>(null)
 
   function handleClose() {
     setPending(null)
@@ -42,7 +38,7 @@ export function LoginModal({ open, onClose, onSuccess }: LoginModalProps) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 px-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[1350] flex items-center justify-center bg-black/20 px-4 backdrop-blur-sm"
           onClick={handleClose}
         >
           <motion.div
@@ -103,19 +99,6 @@ export function LoginModal({ open, onClose, onSuccess }: LoginModalProps) {
                   transition={{ duration: 0.15 }}
                 >
                   <LoginForm onSuccess={onSuccess} />
-
-                  <div className="mt-6 grid grid-cols-3 gap-2 border-t border-neutral-100 pt-5">
-                    {QUICK_LINKS.map(({ to, label, page, icon: Icon, withPetugas }) => (
-                      <button
-                        key={to}
-                        onClick={() => setPending({ page, to, label, withPetugas })}
-                        className="flex flex-col items-center gap-1.5 rounded-xl border border-white/60 bg-white/30 px-2 py-3 text-xs font-medium text-neutral-700 backdrop-blur-md transition-colors hover:border-emerald-500 hover:bg-emerald-700/10 hover:text-emerald-800"
-                      >
-                        <Icon size={18} />
-                        {label}
-                      </button>
-                    ))}
-                  </div>
                 </motion.div>
               )}
             </AnimatePresence>

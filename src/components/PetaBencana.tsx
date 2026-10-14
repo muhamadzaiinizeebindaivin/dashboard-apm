@@ -131,14 +131,14 @@ type PopupTitikProps = {
   t: TitikBencana
   k?: KategoriBencana
   terkini?: DataTerkini
-  onTindakan: (t: TitikBencana, jenis: TindakanTitik) => void
+  onTindakan?: (t: TitikBencana, jenis: TindakanTitik) => void // absent = display only (Laman Utama)
 }
 
 function KandunganPopupTitik({ t, k, terkini, onTindakan }: PopupTitikProps) {
   const map = useMap()
   const klik = (jenis: TindakanTitik) => {
     map.closePopup()
-    onTindakan(t, jenis)
+    onTindakan?.(t, jenis)
   }
   const angka = (n: number | null) => (n == null ? '—' : n)
 
@@ -210,6 +210,7 @@ function KandunganPopupTitik({ t, k, terkini, onTindakan }: PopupTitikProps) {
       {t.catatan && <div className="text-xs italic text-neutral-500">{t.catatan}</div>}
       <div className="text-xs text-neutral-400">Mula: {formatTarikh(t.tarikh_mula)}</div>
 
+      {onTindakan && (
       <div className="flex gap-1.5 border-t border-neutral-100 pt-2">
         <button
           onClick={() => klik('kemaskini')}
@@ -230,6 +231,7 @@ function KandunganPopupTitik({ t, k, terkini, onTindakan }: PopupTitikProps) {
           Padam
         </button>
       </div>
+      )}
     </div>
   )
 }
@@ -243,9 +245,11 @@ type PetaBencanaProps = {
   jalan: JalanPeta[]
   lapisan: Lapisan
   negeriFokus: string
-  meletak: boolean
-  onLetak: (lat: number, lng: number) => void
-  onTindakan: (t: TitikBencana, jenis: TindakanTitik) => void
+  // Editing (Bencana tab). Left out on the Laman Utama, where the map is display only.
+  meletak?: boolean
+  onLetak?: (lat: number, lng: number) => void
+  onTindakan?: (t: TitikBencana, jenis: TindakanTitik) => void
+  zoomRoda?: boolean // mouse-wheel zoom; off on the Laman Utama so scrolling the page isn't captured
 }
 
 export function PetaBencana({
@@ -257,19 +261,25 @@ export function PetaBencana({
   jalan,
   lapisan,
   negeriFokus,
-  meletak,
+  meletak = false,
   onLetak,
   onTindakan,
+  zoomRoda = true,
 }: PetaBencanaProps) {
   return (
-    <MapContainer bounds={BATAS_MALAYSIA} boundsOptions={{ padding: [20, 20] }} scrollWheelZoom className="h-full w-full">
+    <MapContainer
+      bounds={BATAS_MALAYSIA}
+      boundsOptions={{ padding: [20, 20] }}
+      scrollWheelZoom={zoomRoda}
+      className="h-full w-full"
+    >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       <BetulkanSaiz />
       <Fokus negeri={negeriFokus} />
-      <KlikLetak aktif={meletak} onLetak={onLetak} />
+      {onLetak && <KlikLetak aktif={meletak} onLetak={onLetak} />}
 
       {lapisan.pps &&
         pps.map((p) => (

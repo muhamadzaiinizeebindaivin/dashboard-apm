@@ -1,27 +1,21 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { NavLink } from 'react-router-dom'
-import { ShieldCheck, HandCoins, MapPin, Users, AlertTriangle, ClipboardList, Truck, UserCog, ChevronRight } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { ShieldCheck, FileText, FileSpreadsheet, HandCoins, MapPin, FileWarning } from 'lucide-react'
 import { LoginModal } from '../components/LoginModal'
+import type { PautanAwam } from '../components/LoginModal'
 import { AppShell } from '../components/AppShell'
 import { DokumenAwamCard } from '../components/DokumenAwamCard'
 import { AmaranBanner } from '../components/AmaranBanner'
+import { PapanUtama } from '../components/PapanUtama'
 import { useAuth } from '../hooks/useAuth'
-import { NAV_TABS } from '../lib/navTabs'
-import { ROLE_LABEL } from '../lib/roles'
 import apmLogo from '../assets/apm-logo.png'
 
-
-
-const MODULE_META: Record<string, { icon: typeof HandCoins; className: string }> = {
-  '/ngo': { icon: Users, className: 'bg-sky-100 text-sky-700' },
-  '/bencana': { icon: AlertTriangle, className: 'bg-red-100 text-red-700' },
-  '/sekretariat': { icon: ClipboardList, className: 'bg-violet-100 text-violet-700' },
-  '/logistik': { icon: Truck, className: 'bg-amber-100 text-amber-700' },
-  '/senarai-sumbangan': { icon: HandCoins, className: 'bg-emerald-100 text-emerald-700' },
-  '/senarai-paras': { icon: MapPin, className: 'bg-cyan-100 text-cyan-700' },
-  '/admin': { icon: UserCog, className: 'bg-neutral-200 text-neutral-700' },
-}
+const QUICK_LINKS = [
+  { page: 'sumbangan', to: '/sumbangan', label: 'Sumbangan', icon: HandCoins },
+  { page: 'paras', to: '/paras', label: 'PARAS', icon: MapPin, withPetugas: true },
+  { page: 'laporan', to: '/laporan', label: 'Laporan', icon: FileWarning },
+]
 
 function SectionTitle({ eyebrow, title }: { eyebrow: string; title: string }) {
   return (
@@ -52,9 +46,12 @@ function KandunganAwam() {
         satu portal.
       </p>
 
+      {/* Situation at a glance: map (display only) + figures */}
+      <div className="mt-8 text-left">
+        <PapanUtama />
+      </div>
 
-
-      <div className="mx-auto mt-10 max-w-2xl text-left">
+      <div className="mx-auto mt-10 max-w-5xl text-left">
         <SectionTitle eyebrow="Rujukan" title="Dokumen Rasmi" />
         <DokumenAwamCard />
       </div>
@@ -64,7 +61,6 @@ function KandunganAwam() {
 
 function KandunganLogMasuk() {
   const { profile } = useAuth()
-  const modul = NAV_TABS.filter((tab) => tab.to !== '/' && profile && tab.allow.includes(profile.role))
   const jam = new Date().getHours()
   const salam = jam < 12 ? 'Selamat pagi' : jam < 18 ? 'Selamat tengah hari' : 'Selamat petang'
 
@@ -79,43 +75,28 @@ function KandunganLogMasuk() {
             {profile?.full_name || 'Pengguna'}
           </h1>
         </div>
-        {profile && (
-          <span className="rounded-full bg-emerald-700/90 px-3 py-1 text-xs font-medium text-white shadow-md">
-            {ROLE_LABEL[profile.role] ?? profile.role}
-          </span>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Send a report from inside the dashboard (same upload + review as /laporan, no access code) */}
+          <Link
+            to="/hantar-laporan?jenis=awal"
+            className="flex items-center gap-1.5 rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-md transition-colors hover:bg-orange-600"
+          >
+            <FileText size={15} />
+            Hantar Laporan Awal
+          </Link>
+          <Link
+            to="/hantar-laporan?jenis=semasa"
+            className="flex items-center gap-1.5 rounded-full bg-[#0b2a5c] px-4 py-2 text-sm font-semibold text-white shadow-md transition-colors hover:bg-[#123a7a]"
+          >
+            <FileSpreadsheet size={15} />
+            Hantar Laporan Semasa
+          </Link>
+        </div>
       </div>
 
-      <div className="mt-8">
-        <SectionTitle eyebrow="Navigasi Pantas" title="Modul Anda" />
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {modul.map((tab, i) => {
-            const meta = MODULE_META[tab.to] ?? { icon: ClipboardList, className: 'bg-neutral-100 text-neutral-600' }
-            const Icon = meta.icon
-            return (
-              <motion.div
-                key={tab.to}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0, transition: { delay: i * 0.04, duration: 0.2 } }}
-                whileHover={{ y: -2, transition: { type: 'spring', stiffness: 400, damping: 25 } }}
-              >
-                <NavLink
-                  to={tab.to}
-                  className="group flex h-full items-center gap-3 rounded-2xl border border-white/60 bg-white/40 p-4 shadow-lg backdrop-blur-md transition-colors hover:border-emerald-500"
-                >
-                  <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${meta.className}`}>
-                    <Icon size={18} />
-                  </span>
-                  <span className="min-w-0 flex-1 text-sm font-medium text-neutral-800">{tab.label}</span>
-                  <ChevronRight
-                    size={15}
-                    className="shrink-0 text-neutral-300 transition-colors group-hover:text-emerald-600"
-                  />
-                </NavLink>
-              </motion.div>
-            )
-          })}
-        </div>
+      {/* Situation at a glance: map (display only, editing stays in the Bencana tab) + figures */}
+      <div className="mt-6">
+        <PapanUtama />
       </div>
 
       <div className="mt-8">
@@ -128,6 +109,7 @@ function KandunganLogMasuk() {
 
 export function HomeScreen() {
   const [modalOpen, setModalOpen] = useState(false)
+  const [pending, setPending] = useState<PautanAwam | null>(null)
   const { session } = useAuth()
 
   if (session) {
@@ -147,21 +129,52 @@ export function HomeScreen() {
       <div className="relative">
         <header className="flex items-center justify-between px-4 py-4 sm:px-8 sm:py-5">
           <img src={apmLogo} alt="Logo APM" className="h-11 w-11 object-contain sm:h-14 sm:w-14" />
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            onClick={() => setModalOpen(true)}
-            className="rounded-full bg-emerald-700 px-6 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
-          >
-            Log Masuk
-          </motion.button>
+          <div className="flex items-center gap-2">
+            {QUICK_LINKS.map(({ to, label, page, icon: Icon, withPetugas }) => (
+              <button
+                key={to}
+                onClick={() => {
+                  setPending({ page, to, label, withPetugas })
+                  setModalOpen(true)
+                }}
+                title={label}
+                aria-label={label}
+                className="flex items-center gap-1.5 rounded-full border border-white/60 bg-white/40 px-3 py-2 text-sm font-medium text-neutral-700 backdrop-blur-md transition-colors hover:border-emerald-500 hover:bg-emerald-700/10 hover:text-emerald-800"
+              >
+                <Icon size={16} />
+                <span className="hidden sm:inline">{label}</span>
+              </button>
+            ))}
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={() => {
+                setPending(null)
+                setModalOpen(true)
+              }}
+              className="rounded-full bg-emerald-700 px-6 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
+            >
+              Log Masuk
+            </motion.button>
+          </div>
         </header>
 
-        <main className="mx-auto max-w-4xl px-4 pb-16 pt-8 text-center">
+        {/* Active disasters, visible before login too */}
+        <div className="mx-auto max-w-6xl px-4">
+          <AmaranBanner awam />
+        </div>
+
+        <main className="mx-auto max-w-6xl px-4 pb-16 pt-8 text-center">
           <KandunganAwam />
         </main>
       </div>
 
-      <LoginModal open={modalOpen} onClose={() => setModalOpen(false)} onSuccess={() => setModalOpen(false)} />
+      <LoginModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSuccess={() => setModalOpen(false)}
+        pending={pending}
+        setPending={setPending}
+      />
     </div>
   )
 }

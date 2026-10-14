@@ -12,9 +12,10 @@ type SenaraiPpsInputProps = {
   onChange: (rows: PpsInput[]) => void
   memuat?: boolean
   negeri?: string
+  perluLokasi?: (r: PpsInput) => boolean // rows that still need a location are marked (Excel review step)
 }
 
-export function SenaraiPpsInput({ rows, onChange, memuat = false, negeri }: SenaraiPpsInputProps) {
+export function SenaraiPpsInput({ rows, onChange, memuat = false, negeri, perluLokasi }: SenaraiPpsInputProps) {
   const [mencariLokasi, setMencariLokasi] = useState<string | null>(null)
   const [petaUntuk, setPetaUntuk] = useState<string | null>(null) // kunci of the PPS being located
   const barisPeta = rows.find((r) => r.kunci === petaUntuk)
@@ -78,6 +79,11 @@ export function SenaraiPpsInput({ rows, onChange, memuat = false, negeri }: Sena
               {r.sedia && (
                 <span className="ml-2 rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-700">
                   Sedia ada
+                </span>
+              )}
+              {perluLokasi?.(r) && (
+                <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">
+                  Lokasi wajib
                 </span>
               )}
             </span>

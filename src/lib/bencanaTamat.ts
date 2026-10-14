@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabase'
 
+// A disaster with no new report for this long is ended automatically (pg_cron job)
+export const HAD_TAMAT_AUTO_JAM = 24
+
 export type BencanaTamat = {
   nama_bencana: string
   ditamatkan_pada: string

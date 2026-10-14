@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Plus, Loader2, MapPin } from 'lucide-react'
+import { X, Plus, Loader2, MapPin, Pencil } from 'lucide-react'
 import { NEGERI_LIST } from '../lib/negeriVisual'
 import {
   ikonKategori,
+  kemaskiniKategori,
   PILIHAN_IKON,
   PILIHAN_WARNA,
   semakBorang,
@@ -37,8 +38,8 @@ export function TitikBencanaModal({ mod, awal, koordinat, kategori, onSimpan, on
   const [menyimpan, setMenyimpan] = useState(false)
   const [ralat, setRalat] = useState('')
 
-  // Inline "new category" sub-form
-  const [kategoriBaru, setKategoriBaru] = useState(false)
+  // Inline category sub-form: add a new one, or edit an existing one
+  const [bentukKategori, setBentukKategori] = useState<null | 'baru' | 'sunting'>(null)
   const [labelBaru, setLabelBaru] = useState('')
   const [warnaBaru, setWarnaBaru] = useState(PILIHAN_WARNA[0])
   const [ikonBaru, setIkonBaru] = useState('MapPin')
@@ -46,21 +47,58 @@ export function TitikBencanaModal({ mod, awal, koordinat, kategori, onSimpan, on
 
   const set = (kunci: keyof BorangTitik, nilai: string) => setBorang((b) => ({ ...b, [kunci]: nilai }))
 
-  async function simpanKategoriBaru() {
+  const kategoriDipilih = kategori.find((k) => k.key === borang.kategori)
+
+  function bukaKategoriBaru() {
+    setLabelBaru('')
+    setWarnaBaru(PILIHAN_WARNA[0])
+    setIkonBaru('MapPin')
+    setRalat('')
+    setBentukKategori('baru')
+  }
+
+  function bukaSuntingKategori(k: KategoriBencana) {
+    setLabelBaru(k.label)
+    setWarnaBaru(warnaSelamat(k.warna))
+    setIkonBaru(k.ikon)
+    setRalat('')
+    setBentukKategori('sunting')
+  }
+
+  async function simpanKategori() {
     if (!labelBaru.trim()) {
       setRalat('Sila isi nama kategori.')
       return
     }
-    setMenambahKategori(true)
-    setRalat('')
-    const { key, error } = await tambahKategori(labelBaru, warnaBaru, ikonBaru, kategori.length + 1)
-    setMenambahKategori(false)
-    if (error) {
-      setRalat(error.code === '23505' ? 'Kategori ini sudah wujud.' : 'Gagal menambah kategori.')
+    // Another category already uses this name (case and spaces ignored)
+    const sama = kategori.find(
+      (k) =>
+        k.label.trim().toLowerCase() === labelBaru.trim().toLowerCase() &&
+        (bentukKategori === 'baru' || k.key !== borang.kategori),
+    )
+    if (sama) {
+      setRalat('Kategori ini sudah wujud.')
       return
     }
-    set('kategori', key)
-    setKategoriBaru(false)
+    setMenambahKategori(true)
+    setRalat('')
+    if (bentukKategori === 'sunting' && kategoriDipilih) {
+      const { error } = await kemaskiniKategori(kategoriDipilih.key, labelBaru, warnaBaru, ikonBaru)
+      setMenambahKategori(false)
+      if (error) {
+        setRalat(error.code === '42501' ? 'Anda tiada kebenaran untuk menyunting kategori.' : 'Gagal menyimpan kategori.')
+        return
+      }
+    } else {
+      const { key, error } = await tambahKategori(labelBaru, warnaBaru, ikonBaru, kategori.length + 1)
+      setMenambahKategori(false)
+      if (error) {
+        setRalat(error.code === '23505' ? 'Kategori ini sudah wujud.' : 'Gagal menambah kategori.')
+        return
+      }
+      set('kategori', key)
+    }
+    setBentukKategori(null)
     setLabelBaru('')
   }
 
@@ -123,10 +161,10 @@ export function TitikBencanaModal({ mod, awal, koordinat, kategori, onSimpan, on
                   </button>
                 )
               })}
-              {!kategoriBaru && (
+              {!bentukKategori && (
                 <button
                   type="button"
-                  onClick={() => setKategoriBaru(true)}
+                  onClick={bukaKategoriBaru}
                   className="flex items-center gap-1 rounded-full border border-dashed border-emerald-300 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
                 >
                   <Plus size={13} />
@@ -135,8 +173,22 @@ export function TitikBencanaModal({ mod, awal, koordinat, kategori, onSimpan, on
               )}
             </div>
 
-            {kategoriBaru && (
+            {!bentukKategori && kategoriDipilih && (
+              <button
+                type="button"
+                onClick={() => bukaSuntingKategori(kategoriDipilih)}
+                className="mt-2 flex items-center gap-1 text-xs font-medium text-neutral-500 hover:text-emerald-700"
+              >
+                <Pencil size={12} />
+                Sunting kategori "{kategoriDipilih.label}"
+              </button>
+            )}
+
+            {bentukKategori && (
               <div className="mt-3 space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
+                <p className="text-xs font-semibold text-emerald-800">
+                  {bentukKategori === 'sunting' ? `Sunting kategori "${kategoriDipilih?.label ?? ''}"` : 'Kategori baharu'}
+                </p>
                 <input
                   value={labelBaru}
                   onChange={(e) => setLabelBaru(e.target.value)}
@@ -182,18 +234,18 @@ export function TitikBencanaModal({ mod, awal, koordinat, kategori, onSimpan, on
                 <div className="flex justify-end gap-2">
                   <button
                     type="button"
-                    onClick={() => setKategoriBaru(false)}
+                    onClick={() => setBentukKategori(null)}
                     className="rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-600"
                   >
                     Batal
                   </button>
                   <button
                     type="button"
-                    onClick={simpanKategoriBaru}
+                    onClick={simpanKategori}
                     disabled={menambahKategori}
                     className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
                   >
-                    {menambahKategori ? 'Menyimpan...' : 'Tambah Kategori'}
+                    {menambahKategori ? 'Menyimpan...' : bentukKategori === 'sunting' ? 'Simpan Perubahan' : 'Tambah Kategori'}
                   </button>
                 </div>
               </div>

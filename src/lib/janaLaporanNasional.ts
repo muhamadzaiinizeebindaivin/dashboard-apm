@@ -47,7 +47,7 @@ const NEGERI_NORM: Record<string, { x: number; y: number }> = {
 const WARNA_BENCANA: Record<string, [number, number, number]> = {
   Ribut: [56, 142, 214],
   Banjir: [37, 99, 235],
-  'Ombak Besar': [20, 130, 140],
+  Tsunami: [20, 130, 140],
   Kebakaran: [220, 38, 38],
   'Tanah Runtuh': [120, 84, 40],
   Pencemaran: [202, 138, 4],
@@ -109,7 +109,7 @@ function lukisIkon(doc: jsPDF, jenis: string, cx: number, cy: number, r: number)
         false,
       )
       break
-    case 'Ombak Besar':
+    case 'Tsunami':
       // one bigger wave with a curled crest
       doc.setLineWidth(Math.max(r * 0.24, 0.28))
       doc.lines(
@@ -339,14 +339,16 @@ export async function bangunLaporanNasionalDoc(
   const jumlahMangsa = items.reduce((n, i) => n + i.jumlahMangsa, 0)
   const jumlahKeluarga = items.reduce((n, i) => n + i.jumlahKeluarga, 0)
 
+  const jenisAktif = new Set(aktif.map((i) => i.jenisBencana))
   const kaunter: [string, number][] = [
+    ['JENIS BENCANA', jenisAktif.size],
     ['NEGERI', negeriSet.size],
     ['DAERAH', daerahSet.size],
     ['PUSAT PEMINDAHAN', ppsCount],
     ['KELUARGA', jumlahKeluarga],
     ['MANGSA', jumlahMangsa],
   ]
-  const lebarKaunter = (lebar - margin * 2 - 4 * 6) / 5
+  const lebarKaunter = (lebar - margin * 2 - (kaunter.length - 1) * 6) / kaunter.length
   kaunter.forEach(([label, nilai], i) => {
     const x = margin + i * (lebarKaunter + 6)
     doc.setFillColor(11, 42, 92)
