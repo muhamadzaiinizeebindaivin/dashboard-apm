@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Plus, Loader2, MapPin, Pencil } from 'lucide-react'
+import { X, Plus, Loader2, MapPin, Pencil, ChevronDown, Search, Check } from 'lucide-react'
 import { NEGERI_LIST } from '../lib/negeriVisual'
 import {
   ikonKategori,
@@ -24,6 +24,131 @@ const TAJUK: Record<ModTitik, { tajuk: string; butang: string }> = {
 
 const inputClass =
   'w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 outline-none focus:border-emerald-600'
+
+type PilihKategoriProps = {
+  kategori: KategoriBencana[]
+  nilai: string
+  onPilih: (key: string) => void
+}
+
+// Category picker: one field that opens a searchable list (icon + colour + name),
+// so the form stays compact however many categories there are
+function PilihKategori({ kategori, nilai, onPilih }: PilihKategoriProps) {
+  const [buka, setBuka] = useState(false)
+  const [carian, setCarian] = useState('')
+  const kotak = useRef<HTMLDivElement>(null)
+  const dipilih = kategori.find((k) => k.key === nilai)
+  const IkonDipilih = dipilih ? ikonKategori(dipilih.ikon) : null
+  const ditapis = kategori.filter((k) => k.label.toLowerCase().includes(carian.trim().toLowerCase()))
+
+  // Close on a click/tap outside, or on Esc
+  useEffect(() => {
+    if (!buka) return
+    function luar(e: MouseEvent | TouchEvent) {
+      if (kotak.current && !kotak.current.contains(e.target as Node)) setBuka(false)
+    }
+    function kekunci(e: KeyboardEvent) {
+      if (e.key === 'Escape') setBuka(false)
+    }
+    document.addEventListener('mousedown', luar)
+    document.addEventListener('touchstart', luar)
+    document.addEventListener('keydown', kekunci)
+    return () => {
+      document.removeEventListener('mousedown', luar)
+      document.removeEventListener('touchstart', luar)
+      document.removeEventListener('keydown', kekunci)
+    }
+  }, [buka])
+
+  function pilih(key: string) {
+    onPilih(key)
+    setBuka(false)
+  }
+
+  return (
+    <div ref={kotak} className="relative">
+      <button
+        type="button"
+        onClick={() => {
+          setCarian('')
+          setBuka((b) => !b)
+        }}
+        aria-haspopup="listbox"
+        aria-expanded={buka}
+        className={`${inputClass} flex items-center gap-2 text-left`}
+      >
+        {dipilih && IkonDipilih ? (
+          <>
+            <span
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white"
+              style={{ background: warnaSelamat(dipilih.warna) }}
+            >
+              <IkonDipilih size={13} />
+            </span>
+            <span className="flex-1 truncate">{dipilih.label}</span>
+          </>
+        ) : (
+          <span className="flex-1 text-neutral-400">— Pilih kategori —</span>
+        )}
+        <ChevronDown size={16} className={`shrink-0 text-neutral-400 transition-transform ${buka ? 'rotate-180' : ''}`} />
+      </button>
+
+      {buka && (
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg">
+          <div className="border-b border-neutral-100 p-2">
+            <div className="flex items-center gap-2 rounded-lg border border-neutral-200 px-2.5 focus-within:border-emerald-600">
+              <Search size={14} className="shrink-0 text-neutral-400" />
+              <input
+                // Focus the search on desktop only: on phones the keyboard would cover the list
+                autoFocus={window.matchMedia('(pointer: fine)').matches}
+                value={carian}
+                onChange={(e) => setCarian(e.target.value)}
+                onKeyDown={(e) => {
+                  // Enter picks the first match
+                  if (e.key === 'Enter' && ditapis[0]) {
+                    e.preventDefault()
+                    pilih(ditapis[0].key)
+                  }
+                }}
+                placeholder="Cari kategori"
+                className="w-full bg-transparent py-1.5 text-sm text-neutral-800 outline-none"
+              />
+            </div>
+          </div>
+          <ul role="listbox" className="max-h-60 overflow-y-auto py-1">
+            {ditapis.length === 0 && <li className="px-3 py-2 text-sm text-neutral-400">Tiada kategori sepadan.</li>}
+            {ditapis.map((k) => {
+              const Ikon = ikonKategori(k.ikon)
+              const aktif = k.key === nilai
+              return (
+                <li key={k.key}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={aktif}
+                    onClick={() => pilih(k.key)}
+                    className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-neutral-50 ${
+                      aktif ? 'bg-emerald-50 font-medium text-emerald-800' : 'text-neutral-700'
+                    }`}
+                  >
+                    <span
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white"
+                      style={{ background: warnaSelamat(k.warna) }}
+                    >
+                      <Ikon size={13} />
+                    </span>
+                    <span className="flex-1 truncate">{k.label}</span>
+                    {aktif && <Check size={15} className="shrink-0 text-emerald-700" />}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
 
 type TitikBencanaModalProps = {
   mod: ModTitik
@@ -147,46 +272,29 @@ export function TitikBencanaModal({ mod, awal, koordinat, kategori, terkini, onS
             <label className="mb-1.5 block text-sm font-medium text-neutral-700">
               Kategori <span className="text-red-500">*</span>
             </label>
-            <div className="flex flex-wrap gap-2">
-              {kategori.map((k) => {
-                const Ikon = ikonKategori(k.ikon)
-                const aktif = borang.kategori === k.key
-                return (
-                  <button
-                    key={k.key}
-                    type="button"
-                    onClick={() => set('kategori', k.key)}
-                    className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                      aktif ? 'border-transparent text-white' : 'border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300'
-                    }`}
-                    style={aktif ? { background: warnaSelamat(k.warna) } : undefined}
-                  >
-                    <Ikon size={13} style={aktif ? undefined : { color: warnaSelamat(k.warna) }} />
-                    {k.label}
-                  </button>
-                )
-              })}
-              {!bentukKategori && (
+            <PilihKategori kategori={kategori} nilai={borang.kategori} onPilih={(key) => set('kategori', key)} />
+
+            {!bentukKategori && (
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
                 <button
                   type="button"
                   onClick={bukaKategoriBaru}
-                  className="flex items-center gap-1 rounded-full border border-dashed border-emerald-300 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+                  className="flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-800"
                 >
-                  <Plus size={13} />
+                  <Plus size={12} />
                   Kategori baharu
                 </button>
-              )}
-            </div>
-
-            {!bentukKategori && kategoriDipilih && (
-              <button
-                type="button"
-                onClick={() => bukaSuntingKategori(kategoriDipilih)}
-                className="mt-2 flex items-center gap-1 text-xs font-medium text-neutral-500 hover:text-emerald-700"
-              >
-                <Pencil size={12} />
-                Sunting kategori "{kategoriDipilih.label}"
-              </button>
+                {kategoriDipilih && (
+                  <button
+                    type="button"
+                    onClick={() => bukaSuntingKategori(kategoriDipilih)}
+                    className="flex items-center gap-1 text-xs font-medium text-neutral-500 hover:text-emerald-700"
+                  >
+                    <Pencil size={12} />
+                    Sunting kategori "{kategoriDipilih.label}"
+                  </button>
+                )}
+              </div>
             )}
 
             {bentukKategori && (
