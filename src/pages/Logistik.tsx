@@ -60,13 +60,18 @@ export function Logistik() {
 
   async function muatSemulaDokumen() {
     setLoadingDokumen(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('logistik_dokumen')
       .select('id, file_name, file_path, created_at')
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
 
+    if (error) {
+      beriNotifikasi('error', 'Gagal memuatkan data Logistik. Semak sambungan internet anda.')
+      setLoadingDokumen(false)
+      return
+    }
     const row = (data as DokumenRow | null) ?? null
     setDokumen(row)
 
@@ -83,13 +88,17 @@ export function Logistik() {
 
   async function muatSemulaKenderaan() {
     setLoadingKenderaan(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('logistik_kenderaan')
       .select('id, nama_kenderaan, nombor_plat, jenis_kenderaan, keadaan, keterangan_kerosakan, foto_url, created_at')
       .order('created_at', { ascending: false })
 
-    setKenderaan((data as KenderaanRow[]) ?? [])
     setLoadingKenderaan(false)
+    if (error) {
+      beriNotifikasi('error', 'Gagal memuatkan data Logistik. Semak sambungan internet anda.')
+      return
+    }
+    setKenderaan((data as KenderaanRow[]) ?? [])
   }
 
   useEffect(() => {

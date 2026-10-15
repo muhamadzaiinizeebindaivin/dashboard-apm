@@ -10,6 +10,7 @@ import { Toast } from '../components/Toast'
 import type { ToastState } from '../components/Toast'
 import { NEGERI_FLAG } from '../lib/negeriVisual'
 import { supabase } from '../lib/supabase'
+import { ambilSemua } from '../lib/ambilSemua'
 import { Memuat, SkeletonJadual } from '../components/Memuatkan'
 
 type NgoRow = {
@@ -44,14 +45,21 @@ export function SenaraiNgoNegeri() {
 
   const muatSemula = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('ngo')
-      .select('id, nama_kumpulan, lokasi_bencana, jenis_bantuan, created_at')
-      .eq('negeri', negeri)
-      .order('created_at', { ascending: false })
-
-    setRows((data as NgoRow[]) ?? [])
-    setLoading(false)
+    try {
+      const data = await ambilSemua<NgoRow>(() =>
+        supabase
+          .from('ngo')
+          .select('id, nama_kumpulan, lokasi_bencana, jenis_bantuan, created_at')
+          .eq('negeri', negeri)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false }),
+      )
+      setRows(data)
+    } catch {
+      setToast({ type: 'error', message: 'Gagal memuatkan senarai NGO. Semak sambungan internet anda.' })
+    } finally {
+      setLoading(false)
+    }
   }, [negeri])
 
   useEffect(() => {

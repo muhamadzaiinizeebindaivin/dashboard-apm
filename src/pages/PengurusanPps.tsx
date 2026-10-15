@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Home,
@@ -15,6 +15,8 @@ import {
   BellOff,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { useRealtime } from '../lib/realtime'
+import { ambilSemua } from '../lib/ambilSemua'
 import { NEGERI_LIST } from '../lib/negeriVisual'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { EditPpsModal } from '../components/EditPpsModal'
@@ -270,27 +272,25 @@ export function PengurusanPps() {
   }, [])
 
   // Initial load + live refresh whenever a report or an action changes a PPS
-  useEffect(() => {
-    let batal = false
-
-    async function muat() {
-      const { data } = await supabase.from('pps_pusat').select('*').order('dikemaskini_pada', { ascending: false })
-      if (batal) return
-      setSenarai((data as PpsPusat[]) ?? [])
+  const muat = useCallback(async () => {
+    try {
+      const data = await ambilSemua<PpsPusat>(() =>
+        supabase.from('pps_pusat').select('*').order('dikemaskini_pada', { ascending: false }).order('id'),
+      )
+      setSenarai(data)
+    } catch {
+      setToast((t) =>
+        t?.type === 'error' ? t : { type: 'error', message: 'Gagal memuatkan senarai PPS. Semak sambungan internet anda.' },
+      )
+    } finally {
       setLoading(false)
     }
-
-    muat()
-    const channel = supabase
-      .channel('pps-pusat-urus')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pps_pusat' }, () => muat())
-      .subscribe()
-
-    return () => {
-      batal = true
-      supabase.removeChannel(channel)
-    }
   }, [])
+
+  useEffect(() => {
+    muat()
+  }, [muat])
+  useRealtime('pps-pusat-urus', ['pps_pusat'], muat)
 
   const bilDibuka = senarai.filter((p) => p.status === 'dibuka').length
   const bilCadangan = senarai.filter((p) => p.status === 'cadangan_tutup').length

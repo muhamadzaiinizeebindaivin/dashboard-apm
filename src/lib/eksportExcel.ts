@@ -2,6 +2,8 @@ import type { Cell, Row, Style, Workbook, Worksheet } from 'exceljs'
 import { supabase } from './supabase'
 import { cariZon } from './laporanBencana'
 import { kunci } from './normalisasi'
+import { pastikan } from './pastikan'
+import { ambilSemua, dalamKepingan } from './ambilSemua'
 import type { DataLampiran } from './bacaLampiranSemasa'
 
 // "Jana Excel" of the Laporan Nasional: one NDCC "Laporan Situasi Bencana"
@@ -404,23 +406,17 @@ type BarisLaporan = {
   created_at: string
 }
 
-async function dalamKepingan<T>(ids: string[], ambil: (ids: string[]) => PromiseLike<{ data: unknown }>) {
-  const hasil: T[] = []
-  for (let i = 0; i < ids.length; i += 100) {
-    const { data } = await ambil(ids.slice(i, i + 100))
-    hasil.push(...((data as T[]) ?? []))
-  }
-  return hasil
-}
-
 export async function ambilDataEksport(tapis: TapisEksport): Promise<DataEksport[]> {
-  const [{ data: lapData }, { data: ppsData }, { data: tamatData }] = await Promise.all([
-    supabase
-      .from('laporan_bencana')
-      .select('id, nama_bencana, jenis_bencana, negeri, jenis_laporan, hal_lain, created_at')
-      .order('created_at', { ascending: false }),
-    supabase.from('pps_pusat').select('*'),
-    supabase.from('bencana_tamat').select('nama_bencana'),
+  const [lapData, ppsData, tamatData] = await Promise.all([
+    ambilSemua<BarisLaporan>(() =>
+      supabase
+        .from('laporan_bencana')
+        .select('id, nama_bencana, jenis_bencana, negeri, jenis_laporan, hal_lain, created_at')
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false }),
+    ),
+    ambilSemua<PpsEksport>(() => supabase.from('pps_pusat').select('*').order('id')),
+    supabase.from('bencana_tamat').select('nama_bencana').then(pastikan),
   ])
   const laporan = (lapData as BarisLaporan[]) ?? []
   const semuaPps = (ppsData as PpsEksport[]) ?? []

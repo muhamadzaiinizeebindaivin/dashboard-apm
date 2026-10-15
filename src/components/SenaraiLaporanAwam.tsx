@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -16,12 +16,16 @@ import {
   TrendingDown,
   Minus,
   Inbox,
+  AlertTriangle,
 } from 'lucide-react'
 import { DashboardCard } from './DashboardCard'
 import { ConfirmModal } from './ConfirmModal'
 import { Toast } from './Toast'
 import type { ToastState } from './Toast'
 import { supabase } from '../lib/supabase'
+import { saluranUnik } from '../lib/realtime'
+import { ambilSemua } from '../lib/ambilSemua'
+import { pastikan } from '../lib/pastikan'
 import { TARIKH_MASA_FIELD, KEJADIAN_FIELDS, HAL_LAIN_FIELD, PENYEDIA_FIELDS } from '../lib/laporanBencana'
 import { SEMASA_MAKLUMAT_FIELDS, SEMASA_PENYEDIA_FIELDS, TREND_LABEL } from '../lib/laporanBencana'
 import type { FieldDef, LaporanBencanaRow } from '../lib/laporanBencana'
@@ -37,6 +41,9 @@ type SenaraiLaporanAwamProps = {
   jenis: 'awal' | 'semasa'
   label: string
 }
+
+// Reports per batch ("Muat lagi" loads the next one)
+const SAIZ_KUMPULAN = 50
 
 function formatNilai(def: FieldDef, v: string | null) {
   if (!v) return '—'
@@ -85,10 +92,18 @@ function Bahagian({ tajuk, fields, row }: { tajuk: string; fields: FieldDef[]; r
 export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
   const navigate = useNavigate()
   const [rows, setRows] = useState<LaporanBencanaRow[]>([])
+  // Total matching the filter (from the server); null while unknown
+  const [jumlah, setJumlah] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
+  const [ralatSenarai, setRalatSenarai] = useState(false)
+  // true once a batch came back shorter than SAIZ_KUMPULAN: nothing older left
+  const [habis, setHabis] = useState(false)
+  const [memuatLagi, setMemuatLagi] = useState(false)
   const [terbuka, setTerbuka] = useState<string | null>(null)
   const [ppsMap, setPpsMap] = useState<Record<string, PpsRow[]>>({})
   const [loadingPps, setLoadingPps] = useState<Record<string, boolean>>({})
+  // Details (PPS + sheets) that failed to load: reopening the report retries
+  const [ralatButiran, setRalatButiran] = useState<Record<string, boolean>>({})
   // Other Excel sheets stored with each Laporan Semasa (loaded on expand)
   const [lampiranMap, setLampiranMap] = useState<Record<string, DataLampiran>>({})
   const [tapisNegeri, setTapisNegeri] = useState('')
@@ -103,32 +118,96 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
   const [toast, setToast] = useState<ToastState>(null)
   const namaTamat = new Set(useBencanaTamat().map((t) => t.nama_bencana))
 
-  const muatSemula = useCallback(async () => {
-    setLoading(true)
-    const { data } = await supabase
-      .from('laporan_bencana')
-      .select('*')
-      .eq('jenis_laporan', jenis)
-      .order('created_at', { ascending: false })
+  // Answers that arrive after the filter changed are ignored
+  const permintaan = useRef(0)
 
-    setRows((data as LaporanBencanaRow[]) ?? [])
+  // Same type + negeri filter for the list, "Muat lagi" and the PDF
+  const asas = useCallback(() => {
+    const q = supabase.from('laporan_bencana').select('*').eq('jenis_laporan', jenis)
+    return tapisNegeri ? q.eq('negeri', tapisNegeri) : q
+  }, [jenis, tapisNegeri])
+
+  const kiraJumlah = useCallback(async () => {
+    const id = permintaan.current
+    let q = supabase.from('laporan_bencana').select('id', { count: 'exact', head: true }).eq('jenis_laporan', jenis)
+    if (tapisNegeri) q = q.eq('negeri', tapisNegeri)
+    const { count, error } = await q
+    if (id !== permintaan.current) return
+    if (!error && count !== null) setJumlah(count)
+  }, [jenis, tapisNegeri])
+
+  // First batch: on opening the page and whenever the filter changes
+  const muatPertama = useCallback(async () => {
+    const id = ++permintaan.current
+    setLoading(true)
+    setRalatSenarai(false)
+    setJumlah(null)
+    kiraJumlah()
+    const { data, error } = await asas()
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(SAIZ_KUMPULAN)
+    if (id !== permintaan.current) return
     setLoading(false)
-  }, [jenis])
+    if (error) {
+      // Never show the previous filter's reports under the new filter
+      setRows([])
+      setRalatSenarai(true)
+      return
+    }
+    const baru = (data as LaporanBencanaRow[]) ?? []
+    setRows(baru)
+    setHabis(baru.length < SAIZ_KUMPULAN)
+  }, [asas, kiraJumlah])
 
   useEffect(() => {
-    muatSemula()
-  }, [muatSemula])
+    muatPertama()
+  }, [muatPertama])
+
+  // Next batch: reports older than the last one shown (a cursor, not a page
+  // number, so reports arriving or deleted meanwhile never cause a duplicate or a gap)
+  async function handleMuatLagi() {
+    const akhir = rows[rows.length - 1]
+    if (!akhir || memuatLagi) return
+    const id = permintaan.current
+    setMemuatLagi(true)
+    const { data, error } = await asas()
+      .or(`created_at.lt."${akhir.created_at}",and(created_at.eq."${akhir.created_at}",id.lt.${akhir.id})`)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(SAIZ_KUMPULAN)
+    setMemuatLagi(false)
+    if (id !== permintaan.current) return
+    if (error) {
+      setToast({ type: 'error', message: 'Gagal memuatkan laporan seterusnya. Sila cuba lagi.' })
+      return
+    }
+    const baru = (data as LaporanBencanaRow[]) ?? []
+    setRows((prev) => [...prev, ...baru.filter((b) => !prev.some((r) => r.id === b.id))])
+    setHabis(baru.length < SAIZ_KUMPULAN)
+  }
+
+  // Latest filter and counter for the realtime handlers (subscribed once per type)
+  const tapisRef = useRef(tapisNegeri)
+  const kiraRef = useRef(kiraJumlah)
+  useEffect(() => {
+    tapisRef.current = tapisNegeri
+    kiraRef.current = kiraJumlah
+  })
 
   useEffect(() => {
     const channel = supabase
-      .channel(`laporan-bencana-${jenis}`)
+      .channel(saluranUnik(`laporan-bencana-${jenis}`))
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'laporan_bencana', filter: `jenis_laporan=eq.${jenis}` },
         (payload) => {
           const baru = payload.new as LaporanBencanaRow
-          setRows((prev) => (prev.some((r) => r.id === baru.id) ? prev : [baru, ...prev]))
           setToast({ type: 'success', message: 'Laporan baru diterima.' })
+          kiraRef.current()
+          // Added to the list only if it matches the negeri filter
+          if (tapisRef.current && baru.negeri !== tapisRef.current) return
+          setRows((prev) => (prev.some((r) => r.id === baru.id) ? prev : [baru, ...prev]))
         },
       )
       .on(
@@ -136,7 +215,9 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
         { event: 'DELETE', schema: 'public', table: 'laporan_bencana' },
         (payload) => {
           const id = (payload.old as { id?: string }).id
-          if (id) setRows((prev) => prev.filter((r) => r.id !== id))
+          if (!id) return
+          setRows((prev) => prev.filter((r) => r.id !== id))
+          kiraRef.current()
         },
       )
       .subscribe()
@@ -146,14 +227,16 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
     }
   }, [jenis])
 
-  const rowsTapis = tapisNegeri ? rows.filter((r) => r.negeri === tapisNegeri) : rows
-
   const [menjanaPdf, setMenjanaPdf] = useState(false)
 
   async function handleJanaPdf() {
     setMenjanaPdf(true)
     try {
-      await janaRekodKejadian(rowsTapis, jenis, label, tapisNegeri)
+      // Every report matching the filter, not only the batches on screen
+      const semua = await ambilSemua<LaporanBencanaRow>(() =>
+        asas().order('created_at', { ascending: false }).order('id', { ascending: false }),
+      )
+      await janaRekodKejadian(semua, jenis, label, tapisNegeri)
     } catch {
       setToast({ type: 'error', message: 'Gagal menjana PDF. Sila cuba lagi.' })
     } finally {
@@ -214,13 +297,20 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
 
     if (akanBuka && jenis === 'semasa' && !ppsMap[id]) {
       setLoadingPps((p) => ({ ...p, [id]: true }))
-      const [{ data }, lampiran] = await Promise.all([
-        supabase.from('laporan_pps').select('*').eq('laporan_id', id).order('created_at'),
-        ambilLampiranLaporan(id),
-      ])
-      setPpsMap((p) => ({ ...p, [id]: (data as PpsRow[]) ?? [] }))
-      setLampiranMap((p) => ({ ...p, [id]: lampiran }))
-      setLoadingPps((p) => ({ ...p, [id]: false }))
+      setRalatButiran((p) => ({ ...p, [id]: false }))
+      try {
+        const [pps, lampiran] = await Promise.all([
+          supabase.from('laporan_pps').select('*').eq('laporan_id', id).order('created_at').then(pastikan),
+          ambilLampiranLaporan(id),
+        ])
+        setPpsMap((p) => ({ ...p, [id]: (pps as PpsRow[]) ?? [] }))
+        setLampiranMap((p) => ({ ...p, [id]: lampiran }))
+      } catch {
+        // Nothing cached, so closing and reopening the report tries again
+        setRalatButiran((p) => ({ ...p, [id]: true }))
+      } finally {
+        setLoadingPps((p) => ({ ...p, [id]: false }))
+      }
     }
   }
 
@@ -288,6 +378,7 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
     const id = pendingDelete.id
     setPendingDelete(null)
     setToast({ type: 'success', message: 'Laporan berjaya dipadam.' })
+    kiraJumlah()
 
     setFadingId(id)
     setTimeout(() => {
@@ -295,6 +386,8 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
       setFadingId(null)
     }, 300)
   }
+
+  const adaLagi = !habis && (jumlah === null || rows.length < jumlah)
 
   return (
     <div>
@@ -334,7 +427,13 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 pb-4">
           <div>
             <h2 className="text-base font-semibold text-neutral-900">Laporan Diterima</h2>
-            {!loading && <p className="text-xs text-neutral-400">{rowsTapis.length} laporan</p>}
+            {!loading && !ralatSenarai && (
+              <p className="text-xs text-neutral-400">
+                {jumlah !== null && jumlah > rows.length
+                  ? `${rows.length} / ${jumlah} laporan`
+                  : `${jumlah ?? rows.length} laporan`}
+              </p>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -352,7 +451,7 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
             </select>
             <button
               onClick={handleJanaPdf}
-              disabled={menjanaPdf || rowsTapis.length === 0}
+              disabled={menjanaPdf || loading || rows.length === 0}
               className="flex h-9 items-center gap-1.5 rounded-lg bg-emerald-700 px-3 text-sm font-medium text-white transition-colors hover:bg-emerald-800 disabled:opacity-60"
             >
               <FileDown size={15} />
@@ -367,7 +466,18 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
               <SkeletonBaris key={i} />
             ))}
           </Memuat>
-        ) : rowsTapis.length === 0 ? (
+        ) : ralatSenarai ? (
+          <div className="mt-6 flex flex-col items-center gap-3 py-8 text-center">
+            <AlertTriangle size={28} className="text-red-300" />
+            <p className="text-sm text-neutral-500">Gagal memuatkan laporan. Semak sambungan internet anda.</p>
+            <button
+              onClick={muatPertama}
+              className="rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 transition-colors hover:border-emerald-600 hover:text-emerald-700"
+            >
+              Cuba lagi
+            </button>
+          </div>
+        ) : rows.length === 0 ? (
           <div className="mt-6 flex flex-col items-center gap-2 py-8 text-center">
             <Inbox size={28} className="text-neutral-300" />
             <p className="text-sm text-neutral-400">
@@ -375,168 +485,192 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
             </p>
           </div>
         ) : (
-          <div className="mt-4 space-y-3">
-            {rowsTapis.map((row) => {
-              const buka = terbuka === row.id
-              const tajuk = row.nama_bencana || row.jenis_bencana || 'Laporan'
-              const lokasi = [row.negeri, row.daerah].filter(Boolean).join(' · ')
-              return (
-                <div
-                  key={row.id}
-                  className={`rounded-xl border border-white/60 bg-white/40 shadow-lg backdrop-blur-md transition-all duration-300 hover:border-emerald-400 ${
-                    fadingId === row.id ? 'opacity-0' : 'opacity-100'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 p-4">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800">
-                      <FileText size={18} />
+          <>
+            <div className="mt-4 space-y-3">
+              {rows.map((row) => {
+                const buka = terbuka === row.id
+                const tajuk = row.nama_bencana || row.jenis_bencana || 'Laporan'
+                const lokasi = [row.negeri, row.daerah].filter(Boolean).join(' · ')
+                return (
+                  <div
+                    key={row.id}
+                    className={`rounded-xl border border-white/60 bg-white/40 shadow-lg backdrop-blur-md transition-all duration-300 hover:border-emerald-400 ${
+                      fadingId === row.id ? 'opacity-0' : 'opacity-100'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 p-4">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800">
+                        <FileText size={18} />
+                      </div>
+
+                      <button
+                        onClick={() => bukaTutup(row.id)}
+                        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                      >
+                        <div className="min-w-0">
+                          <p className="flex items-center gap-2 text-sm font-semibold text-neutral-900">
+                            <span className="truncate">{tajuk}</span>
+                            {row.nama_bencana && namaTamat.has(row.nama_bencana.trim()) && (
+                              <span className="shrink-0 rounded-full bg-neutral-200 px-2 py-0.5 text-[10px] font-semibold text-neutral-700">
+                                TAMAT
+                              </span>
+                            )}
+                          </p>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-neutral-400">
+                            {lokasi && (
+                              <span className="flex items-center gap-1">
+                                <MapPin size={12} />
+                                {lokasi}
+                              </span>
+                            )}
+                            <span className="flex items-center gap-1">
+                              <Clock3 size={12} />
+                              {new Date(row.created_at).toLocaleString('ms-MY')}
+                            </span>
+                          </div>
+                        </div>
+                        <ChevronDown
+                          size={16}
+                          className={`ml-auto shrink-0 text-neutral-400 transition-transform ${buka ? 'rotate-180' : ''}`}
+                        />
+                      </button>
+
+                      {row.perhatian_nama ? (
+                        <span className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                          <CheckCircle2 size={12} />
+                          Disahkan
+                        </span>
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            bukaSahkan(row)
+                          }}
+                          className="flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-200"
+                        >
+                          <Clock3 size={12} />
+                          Belum Disahkan
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() => setPendingDelete(row)}
+                        title="Padam"
+                        className="shrink-0 rounded-lg border border-transparent p-2 text-neutral-400 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                      >
+                        <Trash2 size={15} />
+                      </button>
                     </div>
 
-                    <button
-                      onClick={() => bukaTutup(row.id)}
-                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                    >
-                      <div className="min-w-0">
-                        <p className="flex items-center gap-2 text-sm font-semibold text-neutral-900">
-                          <span className="truncate">{tajuk}</span>
-                          {row.nama_bencana && namaTamat.has(row.nama_bencana.trim()) && (
-                            <span className="shrink-0 rounded-full bg-neutral-200 px-2 py-0.5 text-[10px] font-semibold text-neutral-700">
-                              TAMAT
-                            </span>
-                          )}
-                        </p>
-                        <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-neutral-400">
-                          {lokasi && (
-                            <span className="flex items-center gap-1">
-                              <MapPin size={12} />
-                              {lokasi}
-                            </span>
-                          )}
-                          <span className="flex items-center gap-1">
-                            <Clock3 size={12} />
-                            {new Date(row.created_at).toLocaleString('ms-MY')}
-                          </span>
-                        </div>
-                      </div>
-                      <ChevronDown
-                        size={16}
-                        className={`ml-auto shrink-0 text-neutral-400 transition-transform ${buka ? 'rotate-180' : ''}`}
-                      />
-                    </button>
+                    {buka && jenis === 'semasa' && (
+                      <div className="space-y-3 border-t border-neutral-100 p-4">
+                        {ralatButiran[row.id] && (
+                          <p className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+                            <AlertTriangle size={14} className="shrink-0" />
+                            Gagal memuatkan PPS dan lampiran laporan ini. Tutup dan buka semula untuk cuba lagi.
+                          </p>
+                        )}
 
-                    {row.perhatian_nama ? (
-                      <span className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">
-                        <CheckCircle2 size={12} />
-                        Disahkan
-                      </span>
-                    ) : (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          bukaSahkan(row)
-                        }}
-                        className="flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-200"
-                      >
-                        <Clock3 size={12} />
-                        Belum Disahkan
-                      </button>
+                        <Bahagian tajuk="Maklumat Bencana" fields={[...SEMASA_MAKLUMAT_FIELDS, TARIKH_MASA_FIELD]} row={row} />
+                        {row.kandungan && (
+                          <Bahagian
+                            tajuk="Ringkasan Laporan"
+                            fields={[{ key: 'kandungan', label: 'Ringkasan', wide: true }]}
+                            row={row}
+                          />
+                        )}
+
+                        {row.trend && (
+                          <Seksyen tajuk="Trend">
+                            {(() => {
+                              const t = TREND_LABEL[row.trend] ?? TREND_LABEL.kekal
+                              const Ikon = row.trend === 'naik' ? TrendingUp : row.trend === 'turun' ? TrendingDown : Minus
+                              return (
+                                <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${t.className}`}>
+                                  <Ikon size={12} />
+                                  {t.label}
+                                </span>
+                              )
+                            })()}
+                          </Seksyen>
+                        )}
+
+                        <Seksyen tajuk="Ringkasan Laporan">
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
+                              row.ringkasan_status === 'ada_perubahan'
+                                ? 'bg-amber-100 text-amber-700'
+                                : 'bg-emerald-100 text-emerald-700'
+                            }`}
+                          >
+                            {row.ringkasan_status === 'ada_perubahan' ? 'Ada Perubahan' : 'Tiada Perubahan'}
+                          </span>
+                        </Seksyen>
+
+                        {row.ringkasan_status === 'ada_perubahan' && !ralatButiran[row.id] && (
+                          <Seksyen tajuk="Pusat Pemindahan Sementara">
+                            {loadingPps[row.id] ? (
+                              <PemuatSebaris teks="Memuatkan PPS" />
+                            ) : (ppsMap[row.id]?.length ?? 0) === 0 ? (
+                              <p className="text-xs text-neutral-400">Tiada rekod PPS.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {ppsMap[row.id].map((p) => (
+                                  <div key={p.id} className="rounded-lg border border-white/60 bg-white/50 p-3 text-sm backdrop-blur-sm">
+                                    <p className="whitespace-pre-wrap font-medium text-neutral-800">
+                                      {p.pps} <span className="text-xs text-neutral-400">({p.zon})</span>
+                                    </p>
+                                    <p className="mt-0.5 flex items-center gap-1 text-xs text-neutral-500">
+                                      <MapPin size={12} />
+                                      {p.negeri} · {p.daerah}
+                                    </p>
+                                    <p className="mt-1 text-xs text-neutral-600">
+                                      Mangsa: {p.jumlah_mangsa ?? '—'} · Keluarga: {p.jumlah_keluarga ?? '—'}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </Seksyen>
+                        )}
+
+                        {lampiranMap[row.id] && <PaparanLampiran data={lampiranMap[row.id]} />}
+
+                        <Bahagian tajuk="Hal-hal Lain" fields={[HAL_LAIN_FIELD]} row={row} />
+                        <Bahagian tajuk="Disediakan Oleh" fields={SEMASA_PENYEDIA_FIELDS} row={row} />
+                        {pengesahanBlok(row)}
+                      </div>
                     )}
 
-                    <button
-                      onClick={() => setPendingDelete(row)}
-                      title="Padam"
-                      className="shrink-0 rounded-lg border border-transparent p-2 text-neutral-400 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
-                    >
-                      <Trash2 size={15} />
-                    </button>
+                    {buka && jenis === 'awal' && (
+                      <div className="space-y-3 border-t border-neutral-100 p-4">
+                        <Bahagian tajuk="Tarikh / Masa" fields={[TARIKH_MASA_FIELD]} row={row} />
+                        <Bahagian tajuk="Maklumat Kejadian" fields={KEJADIAN_FIELDS} row={row} />
+                        <Bahagian tajuk="Hal-hal Lain" fields={[HAL_LAIN_FIELD]} row={row} />
+                        <Bahagian tajuk="Disediakan Oleh" fields={PENYEDIA_FIELDS} row={row} />
+                        {pengesahanBlok(row)}
+                      </div>
+                    )}
                   </div>
+                )
+              })}
+            </div>
 
-                  {buka && jenis === 'semasa' && (
-                    <div className="space-y-3 border-t border-neutral-100 p-4">
-                      <Bahagian tajuk="Maklumat Bencana" fields={[...SEMASA_MAKLUMAT_FIELDS, TARIKH_MASA_FIELD]} row={row} />
-                      {row.kandungan && (
-                        <Bahagian
-                          tajuk="Ringkasan Laporan"
-                          fields={[{ key: 'kandungan', label: 'Ringkasan', wide: true }]}
-                          row={row}
-                        />
-                      )}
-
-                      {row.trend && (
-                        <Seksyen tajuk="Trend">
-                          {(() => {
-                            const t = TREND_LABEL[row.trend] ?? TREND_LABEL.kekal
-                            const Ikon = row.trend === 'naik' ? TrendingUp : row.trend === 'turun' ? TrendingDown : Minus
-                            return (
-                              <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${t.className}`}>
-                                <Ikon size={12} />
-                                {t.label}
-                              </span>
-                            )
-                          })()}
-                        </Seksyen>
-                      )}
-
-                      <Seksyen tajuk="Ringkasan Laporan">
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
-                            row.ringkasan_status === 'ada_perubahan'
-                              ? 'bg-amber-100 text-amber-700'
-                              : 'bg-emerald-100 text-emerald-700'
-                          }`}
-                        >
-                          {row.ringkasan_status === 'ada_perubahan' ? 'Ada Perubahan' : 'Tiada Perubahan'}
-                        </span>
-                      </Seksyen>
-
-                      {row.ringkasan_status === 'ada_perubahan' && (
-                        <Seksyen tajuk="Pusat Pemindahan Sementara">
-                          {loadingPps[row.id] ? (
-                            <PemuatSebaris teks="Memuatkan PPS" />
-                          ) : (ppsMap[row.id]?.length ?? 0) === 0 ? (
-                            <p className="text-xs text-neutral-400">Tiada rekod PPS.</p>
-                          ) : (
-                            <div className="space-y-2">
-                              {ppsMap[row.id].map((p) => (
-                                <div key={p.id} className="rounded-lg border border-white/60 bg-white/50 p-3 text-sm backdrop-blur-sm">
-                                  <p className="whitespace-pre-wrap font-medium text-neutral-800">
-                                    {p.pps} <span className="text-xs text-neutral-400">({p.zon})</span>
-                                  </p>
-                                  <p className="mt-0.5 flex items-center gap-1 text-xs text-neutral-500">
-                                    <MapPin size={12} />
-                                    {p.negeri} · {p.daerah}
-                                  </p>
-                                  <p className="mt-1 text-xs text-neutral-600">
-                                    Mangsa: {p.jumlah_mangsa ?? '—'} · Keluarga: {p.jumlah_keluarga ?? '—'}
-                                  </p>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </Seksyen>
-                      )}
-
-                      {lampiranMap[row.id] && <PaparanLampiran data={lampiranMap[row.id]} />}
-
-                      <Bahagian tajuk="Hal-hal Lain" fields={[HAL_LAIN_FIELD]} row={row} />
-                      <Bahagian tajuk="Disediakan Oleh" fields={SEMASA_PENYEDIA_FIELDS} row={row} />
-                      {pengesahanBlok(row)}
-                    </div>
-                  )}
-
-                  {buka && jenis === 'awal' && (
-                    <div className="space-y-3 border-t border-neutral-100 p-4">
-                      <Bahagian tajuk="Tarikh / Masa" fields={[TARIKH_MASA_FIELD]} row={row} />
-                      <Bahagian tajuk="Maklumat Kejadian" fields={KEJADIAN_FIELDS} row={row} />
-                      <Bahagian tajuk="Hal-hal Lain" fields={[HAL_LAIN_FIELD]} row={row} />
-                      <Bahagian tajuk="Disediakan Oleh" fields={PENYEDIA_FIELDS} row={row} />
-                      {pengesahanBlok(row)}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
+            {adaLagi && (
+              <button
+                onClick={handleMuatLagi}
+                disabled={memuatLagi}
+                className="mx-auto mt-4 flex h-9 items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-4 text-sm font-medium text-neutral-700 transition-colors hover:border-emerald-600 hover:text-emerald-700 disabled:opacity-60"
+              >
+                <ChevronDown size={15} />
+                {memuatLagi
+                  ? 'Memuatkan...'
+                  : jumlah !== null
+                    ? `Muat lagi (${jumlah - rows.length} lagi)`
+                    : 'Muat lagi'}
+              </button>
+            )}
+          </>
         )}
       </DashboardCard>
 

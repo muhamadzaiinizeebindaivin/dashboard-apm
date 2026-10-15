@@ -5,6 +5,7 @@ import { AlertTriangle, Siren, Loader2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { ConfirmModal } from './ConfirmModal'
+import { useRealtime } from '../lib/realtime'
 
 // Banner of the Laman Utama, like the APM Labuan dashboard:
 // - active disasters scroll across ("limpas"), on the public page and once logged in,
@@ -45,19 +46,10 @@ function useBencanaAktif() {
 
   useEffect(() => {
     muat()
-    const channel = supabase
-      .channel('amaran-banner-bencana')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'laporan_bencana' }, () => muat())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pps_pusat' }, () => muat())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bencana_tamat' }, () => muat())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'titik_bencana' }, () => muat())
-      .subscribe()
-    const t = setInterval(muat, 60_000)
-    return () => {
-      supabase.removeChannel(channel)
-      clearInterval(t)
-    }
   }, [muat])
+  useRealtime('amaran-banner-bencana', ['laporan_bencana', 'pps_pusat', 'bencana_tamat', 'titik_bencana'], muat, {
+    tinjau: 60_000,
+  })
 
   return senarai
 }
@@ -67,11 +59,12 @@ function useKecemasanParas(aktif: boolean) {
   const [kini, setKini] = useState(() => Date.now())
 
   const muat = useCallback(async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('paras_lokasi')
       .select('id, negeri, nama, pangkat, no_tel, created_at')
       .eq('status', 'aktif')
       .eq('keadaan', 'kecemasan')
+    if (error) return // an emergency must not disappear because of one failed refresh
     simpananKecemasan = (data as Kecemasan[]) ?? []
     setLokasi(simpananKecemasan)
   }, [])
@@ -79,17 +72,11 @@ function useKecemasanParas(aktif: boolean) {
   useEffect(() => {
     if (!aktif) return
     muat()
-    const channel = supabase
-      .channel('amaran-banner-paras')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'paras_lokasi' }, () => muat())
-      .subscribe()
     // The 30-min window also moves with time alone
     const t = setInterval(() => setKini(Date.now()), 30_000)
-    return () => {
-      supabase.removeChannel(channel)
-      clearInterval(t)
-    }
+    return () => clearInterval(t)
   }, [aktif, muat])
+  useRealtime('amaran-banner-paras', ['paras_lokasi'], muat, { aktif })
 
   const semasa = aktif ? lokasi.filter((p) => kini - new Date(p.created_at).getTime() < TEMPOH_KECEMASAN) : []
   return { kecemasan: semasa, muatSemula: muat, buang: (id: string) => setLokasi((l) => l.filter((x) => x.id !== id)) }

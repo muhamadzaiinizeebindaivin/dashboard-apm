@@ -21,6 +21,7 @@ import { SenaraiSumbangan } from './pages/SenaraiSumbangan'
 import { SenaraiSumbanganNegeri } from './pages/SenaraiSumbanganNegeri'
 import { Admin } from './pages/Admin'
 import { SetPassword } from './pages/SetPassword'
+import { TidakDijumpai } from './pages/TidakDijumpai'
 
 // Lazy-loaded: these three pull in Leaflet/react-leaflet, which is a large
 // dependency — only download it when someone actually visits a map page,
@@ -89,6 +90,7 @@ function App() {
                 </Route>
               </Route>
             </Route>
+            <Route path="*" element={<TidakDijumpai />} />
           </Routes>
         </Suspense>
       </AuthProvider>

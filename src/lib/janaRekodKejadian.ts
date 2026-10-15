@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { dalamKepingan } from './ambilSemua'
 import apmLogo from '../assets/apm-logo.png'
 import type { LaporanBencanaRow } from './laporanBencana'
 
@@ -36,13 +37,23 @@ export async function janaRekodKejadian(
   // itself contained, not a "current status" view.
   const ppsMap: Record<string, PpsRingkas> = {}
   if (jenis === 'semasa' && rows.length > 0) {
-    const { data } = await supabase
-      .from('laporan_pps')
-      .select('laporan_id, negeri, daerah, pps, jumlah_mangsa, jumlah_keluarga')
-      .in(
-        'laporan_id',
-        rows.map((r) => r.id),
-      )
+    // The PDF can now cover hundreds of reports: ids are sent 100 at a time
+    const data = await dalamKepingan<{
+      laporan_id: string
+      negeri: string | null
+      daerah: string | null
+      pps: string | null
+      jumlah_mangsa: number | null
+      jumlah_keluarga: number | null
+    }>(
+      rows.map((r) => r.id),
+      (ids) =>
+        supabase
+          .from('laporan_pps')
+          .select('laporan_id, negeri, daerah, pps, jumlah_mangsa, jumlah_keluarga')
+          .in('laporan_id', ids)
+          .order('id'),
+    )
     for (const p of data ?? []) {
       const sedia = ppsMap[p.laporan_id] ?? { negeri: p.negeri, daerah: p.daerah, pps: '', mangsa: 0, keluarga: 0 }
       sedia.pps = [sedia.pps, p.pps].filter(Boolean).join('\n')

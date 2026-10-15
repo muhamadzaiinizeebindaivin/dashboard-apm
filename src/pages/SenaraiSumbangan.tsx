@@ -4,23 +4,35 @@ import { motion } from 'framer-motion'
 import { Home, ChevronRight } from 'lucide-react'
 import { NEGERI_FLAG, NEGERI_LIST } from '../lib/negeriVisual'
 import { supabase } from '../lib/supabase'
+import { ambilSemua } from '../lib/ambilSemua'
 import { Skeleton } from '../components/Memuatkan'
+import { Toast } from '../components/Toast'
+import type { ToastState } from '../components/Toast'
 
 export function SenaraiSumbangan() {
   const navigate = useNavigate()
   const [kiraanNegeri, setKiraanNegeri] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
+  // Failed load: badges show "—" instead of a misleading 0
+  const [ralat, setRalat] = useState(false)
+  const [toast, setToast] = useState<ToastState>(null)
 
   const muatSemula = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase.from('sumbangan').select('negeri')
-
-    const kiraan: Record<string, number> = {}
-    for (const row of (data as { negeri: string }[]) ?? []) {
-      kiraan[row.negeri] = (kiraan[row.negeri] ?? 0) + 1
+    try {
+      const data = await ambilSemua<{ negeri: string }>(() => supabase.from('sumbangan').select('negeri').order('id'))
+      const kiraan: Record<string, number> = {}
+      for (const row of data) {
+        kiraan[row.negeri] = (kiraan[row.negeri] ?? 0) + 1
+      }
+      setKiraanNegeri(kiraan)
+      setRalat(false)
+    } catch {
+      setRalat(true)
+      setToast({ type: 'error', message: 'Gagal memuatkan bilangan sumbangan. Semak sambungan internet anda.' })
+    } finally {
+      setLoading(false)
     }
-    setKiraanNegeri(kiraan)
-    setLoading(false)
   }, [])
 
   useEffect(() => {
@@ -64,12 +76,14 @@ export function SenaraiSumbangan() {
               <Skeleton className="h-5 w-8 rounded-full" />
             ) : (
               <span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs font-medium text-neutral-600">
-                {kiraanNegeri[negeri] ?? 0}
+                {ralat ? '—' : kiraanNegeri[negeri] ?? 0}
               </span>
             )}
           </motion.button>
         ))}
       </div>
+
+      <Toast toast={toast} onDismiss={() => setToast(null)} />
     </div>
   )
 }

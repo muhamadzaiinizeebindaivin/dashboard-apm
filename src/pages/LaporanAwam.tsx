@@ -37,8 +37,9 @@ import type { PpsExcel } from '../lib/bacaLaporanSemasa'
 import { lampiranUntukHantar, pilihanAsal } from '../lib/bacaLampiranSemasa'
 import type { KunciLampiran, Lampiran } from '../lib/bacaLampiranSemasa'
 import { SemakLampiran } from '../components/SemakLampiran'
-import { kunci } from '../lib/normalisasi'
+import { hurufBesar, kemasNamaTempat, kunci } from '../lib/normalisasi'
 import { semakPps } from '../lib/ppsPusat'
+import { useJenisBencana } from '../lib/jenisBencana'
 import type { PpsInput } from '../lib/ppsPusat'
 
 const AWAL_FIELD: FieldDef[] = [
@@ -343,6 +344,8 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
   const [lampiran, setLampiran] = useState<Lampiran | null>(null)
   const [pilihanLampiran, setPilihanLampiran] = useState<Record<KunciLampiran, boolean> | null>(null)
   const [cadanganNama, setCadanganNama] = useState<string[]>([])
+  // Jenis Bencana choices = the categories of the Bencana map (Urus Kategori)
+  const senaraiJenis = useJenisBencana().map((j) => j.label)
 
   // Existing disaster names (last 90 days) for the Nama Bencana suggestions
   useEffect(() => {
@@ -355,7 +358,8 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
     }
   }, [])
 
-  function renderMedan(def: FieldDef) {
+  function renderMedan(medan: FieldDef) {
+    const def = medan.key === 'jenis_bencana' ? { ...medan, options: senaraiJenis } : medan
     return (
       <Medan
         key={def.key}
@@ -407,7 +411,7 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
     setMembacaFail(true)
 
     if (jenis === 'awal') {
-      const hasil = await bacaLaporanAwal(f)
+      const hasil = await bacaLaporanAwal(f, senaraiJenis)
       setMembacaFail(false)
       if ('ralat' in hasil) {
         setRalatFail(hasil.ralat)
@@ -419,7 +423,7 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
       return
     }
 
-    const hasil = await bacaLaporanSemasa(f)
+    const hasil = await bacaLaporanSemasa(f, senaraiJenis)
     setMembacaFail(false)
     if ('ralat' in hasil) {
       setRalatFail(hasil.ralat)
@@ -574,15 +578,15 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
             // Sex/age breakdown only while the victim count is still the one read from the Excel
             const pecahanSah = !!m && Number(r.mangsa) === m.mangsa
             return {
-              nama: r.nama.trim().replace(/\s+/g, ' '),
+              nama: hurufBesar(r.nama),
               jumlah_mangsa: Number(r.mangsa),
               jumlah_keluarga: Number(r.keluarga),
               latitude: r.latitude,
               longitude: r.longitude,
               // Excel details (absent for PPS added by hand here)
-              mukim: m?.mukim || null,
-              pengurus_nama: m?.pengurusNama || null,
-              pengurus_jawatan: m?.pengurusJawatan || null,
+              mukim: m?.mukim ? hurufBesar(m.mukim) : null,
+              pengurus_nama: m?.pengurusNama ? hurufBesar(m.pengurusNama) : null,
+              pengurus_jawatan: m?.pengurusJawatan ? hurufBesar(m.pengurusJawatan) : null,
               pengurus_telefon: m?.pengurusTelefon || null,
               dibuka_pada: m?.dibukaPada ?? null,
               ditutup: m?.ditutup ?? false,
@@ -595,7 +599,7 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
           })
           return {
             negeri: nilai.negeri,
-            daerah: g.daerah.trim(),
+            daerah: kemasNamaTempat(g.daerah),
             zon: cariZon(nilai.negeri),
             // Legacy group fields, still read by older views
             pps: items.map((i) => i.nama).join('\n'),
@@ -614,6 +618,9 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
       // Verified by the state officer in the Excel ("Disahkan Oleh")
       if (rekod.perhatian_nama) rekod.perhatian_masa = rekod.tarikh_masa
     }
+
+    // Same district spelling in every report ("labuan" -> "Labuan")
+    if (rekod.daerah) rekod.daerah = kemasNamaTempat(rekod.daerah)
 
     setMenghantar(true)
     const { error } = await supabase.rpc('submit_laporan_bencana', {

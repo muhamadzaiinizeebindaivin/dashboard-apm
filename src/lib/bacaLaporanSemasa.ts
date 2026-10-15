@@ -76,7 +76,11 @@ const LABEL_ORANG: Record<string, string> = {
   'no telefon': 'telefon',
 }
 
-export async function bacaLaporanSemasa(fail: File): Promise<HasilSemasa | { ralat: string }> {
+// `jenisDikenali`: current category names, so any of them is recognised in the file
+export async function bacaLaporanSemasa(
+  fail: File,
+  jenisDikenali: string[] = [],
+): Promise<HasilSemasa | { ralat: string }> {
   if (!/\.xlsx?$/i.test(fail.name)) return { ralat: 'Sila muat naik fail Excel (.xlsx).' }
   if (fail.size > SAIZ_MAKS) return { ralat: 'Fail melebihi 10 MB.' }
 
@@ -245,8 +249,8 @@ export async function bacaLaporanSemasa(fail: File): Promise<HasilSemasa | { ral
   }
 
   // No "Jenis Bencana" in the template: guess from the name, then the file name
-  const daripadaNama = normalJenis(namaAsal)
-  const daripadaFail = normalJenis(fail.name.replace(/\.[^.]+$/, ''))
+  const daripadaNama = normalJenis(namaAsal, jenisDikenali)
+  const daripadaFail = normalJenis(fail.name.replace(/\.[^.]+$/, ''), jenisDikenali)
   nilai.jenis_bencana = daripadaNama ?? daripadaFail ?? ''
   amaran.jenis_bencana = daripadaNama
     ? `Diteka daripada nama bencana. Sila periksa.`

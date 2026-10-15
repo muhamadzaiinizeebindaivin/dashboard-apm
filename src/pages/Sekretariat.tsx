@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { FileText, FileClock, FileDown, FileSpreadsheet, Home, ChevronRight, Tent, Flag, Inbox } from 'lucide-react'
 import { janaExcelNasional } from '../lib/eksportExcel'
 import { supabase } from '../lib/supabase'
+import { useRealtime } from '../lib/realtime'
 import { Toast } from '../components/Toast'
 import type { ToastState } from '../components/Toast'
 import { DashboardCard } from '../components/DashboardCard'
@@ -13,7 +14,8 @@ import type { ItemLaporanNasional, KorbanNegeri, PpsDitutup } from '../lib/lapor
 import { ambilDataGraf } from '../lib/laporanNasionalGraf'
 import type { TitikGraf } from '../lib/laporanNasionalGraf'
 import { bangunLaporanNasionalDoc } from '../lib/janaLaporanNasional'
-import { JENIS_BENCANA_SEMASA, cariZon } from '../lib/laporanBencana'
+import { cariZon } from '../lib/laporanBencana'
+import { useJenisBencana } from '../lib/jenisBencana'
 import { NEGERI_LIST } from '../lib/negeriVisual'
 import { HAD_TIADA_KEMASKINI_JAM } from '../lib/ppsPusat'
 
@@ -49,6 +51,8 @@ const PILIHAN = [
 export function Sekretariat() {
   const location = useLocation()
   const { profile } = useAuth()
+  // Filter choices = the categories of the Bencana map (also loads their colours for the report)
+  const senaraiJenis = useJenisBencana()
   const onLanding = location.pathname === '/sekretariat'
   const [toast, setToast] = useState<ToastState>(null)
   const [, setMenjanaLaporan] = useState(false)
@@ -72,39 +76,29 @@ export function Sekretariat() {
 
   // Badges on the Pengurusan PPS card: PPS waiting for a closure decision,
   // and open PPS with no report for more than HAD_TIADA_KEMASKINI_JAM hours
+  const kiraBadge = useCallback(async () => {
+    const had = new Date(Date.now() - HAD_TIADA_KEMASKINI_JAM * 3_600_000).toISOString()
+    const [cadangan, senyap] = await Promise.all([
+      supabase.from('pps_pusat').select('id', { count: 'exact', head: true }).eq('status', 'cadangan_tutup'),
+      supabase
+        .from('pps_pusat')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'dibuka')
+        .lt('dilapor_pada', had),
+    ])
+    if (cadangan.error || senyap.error) return // keep the last counts
+    setBilCadangan(cadangan.count ?? 0)
+    setBilSenyap(senyap.count ?? 0)
+  }, [])
+
   useEffect(() => {
     if (!onLanding) return
-    let batal = false
-
-    async function kira() {
-      const had = new Date(Date.now() - HAD_TIADA_KEMASKINI_JAM * 3_600_000).toISOString()
-      const [cadangan, senyap] = await Promise.all([
-        supabase.from('pps_pusat').select('id', { count: 'exact', head: true }).eq('status', 'cadangan_tutup'),
-        supabase
-          .from('pps_pusat')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'dibuka')
-          .lt('dilapor_pada', had),
-      ])
-      if (batal) return
-      setBilCadangan(cadangan.count ?? 0)
-      setBilSenyap(senyap.count ?? 0)
-    }
-
-    kira()
+    kiraBadge()
     // The "no update" count also changes with time alone
-    const t = setInterval(kira, 5 * 60 * 1000)
-    const channel = supabase
-      .channel('pps-badge')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pps_pusat' }, () => kira())
-      .subscribe()
-
-    return () => {
-      batal = true
-      clearInterval(t)
-      supabase.removeChannel(channel)
-    }
-  }, [onLanding])
+    const t = setInterval(kiraBadge, 5 * 60 * 1000)
+    return () => clearInterval(t)
+  }, [onLanding, kiraBadge])
+  useRealtime('pps-badge', ['pps_pusat'], kiraBadge, { aktif: onLanding })
 
   // Load the national report's content automatically as soon as the page opens.
   useEffect(() => {
@@ -115,19 +109,12 @@ export function Sekretariat() {
   }, [onLanding, profile?.role])
 
   // While empty, the first report received shows the national report by itself
-  useEffect(() => {
-    if (!onLanding || !tiadaBencana || profile?.role !== 'pkop') return
-    const channel = supabase
-      .channel('laporan-nasional-pertama')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'laporan_bencana' }, () =>
-        handleJanaLaporanNasional(),
-      )
-      .subscribe()
-    return () => {
-      supabase.removeChannel(channel)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onLanding, tiadaBencana, profile?.role])
+  useRealtime(
+    'laporan-nasional-pertama',
+    [{ jadual: 'laporan_bencana', peristiwa: 'INSERT' }],
+    () => handleJanaLaporanNasional(),
+    { aktif: onLanding && tiadaBencana && profile?.role === 'pkop' },
+  )
 
   async function handleJanaLaporanNasional() {
     setMenjanaLaporan(true)
@@ -168,6 +155,11 @@ export function Sekretariat() {
     })
       .then((hasil) => {
         if (!dibatalkan) setDataGraf(hasil)
+      })
+      .catch(() => {
+        if (dibatalkan) return
+        setDataGraf(null)
+        setToast({ type: 'error', message: 'Gagal memuatkan graf. Sila cuba lagi.' })
       })
       .finally(() => {
         if (!dibatalkan) setMenjanaGraf(false)
@@ -375,9 +367,9 @@ export function Sekretariat() {
               className="h-9 rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-700 outline-none focus:border-emerald-600"
             >
               <option value="">Semua Jenis Bencana</option>
-              {JENIS_BENCANA_SEMASA.map((j) => (
-                <option key={j} value={j}>
-                  {j}
+              {senaraiJenis.map((j) => (
+                <option key={j.key} value={j.label}>
+                  {j.label}
                 </option>
               ))}
             </select>

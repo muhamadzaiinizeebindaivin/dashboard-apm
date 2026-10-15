@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { ambilSemua } from './ambilSemua'
 
 type BarisSemasa = {
   id: string
@@ -190,26 +191,34 @@ const pad = (n: number) => String(n).padStart(2, '0')
 const NAMA_BULAN = ['Jan', 'Feb', 'Mac', 'Apr', 'Mei', 'Jun', 'Jul', 'Ogo', 'Sep', 'Okt', 'Nov', 'Dis']
 
 export async function ambilDataGraf(tapis: TapisGraf = {}): Promise<{ duaJam: TitikGraf[]; harian: TitikGraf[] }> {
-  const [
-    { data: semasaData },
-    { data: ppsData },
-    { data: pusatData },
-    { data: itemData },
-    { data: logData },
-    { data: tamatData },
-    { data: suntinganData },
-  ] = await Promise.all([
-    supabase
-      .from('laporan_bencana')
-      .select('id, nama_bencana, jenis_bencana, ringkasan_status, created_at')
-      .eq('jenis_laporan', 'semasa')
-      .order('created_at', { ascending: true }),
-    supabase.from('laporan_pps').select('laporan_id, negeri, zon, pps, jumlah_mangsa, jumlah_keluarga'),
-    supabase.from('pps_pusat').select('id, nama_bencana, negeri, zon'),
-    supabase.from('laporan_pps_item').select('laporan_id, pps_id, jumlah_mangsa, jumlah_keluarga'),
-    supabase.from('pps_status_log').select('pps_id, ke, masa'),
-    supabase.from('bencana_tamat').select('nama_bencana, ditamatkan_pada'),
-    supabase.from('pps_suntingan').select('pps_id, masa, selepas'),
+  // Whole history: loaded in batches, these tables grow past Supabase's 1000-row limit
+  const [semasaData, ppsData, pusatData, itemData, logData, tamatData, suntinganData] = await Promise.all([
+    ambilSemua<BarisSemasa>(() =>
+      supabase
+        .from('laporan_bencana')
+        .select('id, nama_bencana, jenis_bencana, ringkasan_status, created_at')
+        .eq('jenis_laporan', 'semasa')
+        .order('created_at', { ascending: true })
+        .order('id'),
+    ),
+    ambilSemua<BarisPps>(() =>
+      supabase.from('laporan_pps').select('laporan_id, negeri, zon, pps, jumlah_mangsa, jumlah_keluarga').order('id'),
+    ),
+    ambilSemua<BarisPusat>(() => supabase.from('pps_pusat').select('id, nama_bencana, negeri, zon').order('id')),
+    ambilSemua<BarisItem>(() =>
+      supabase
+        .from('laporan_pps_item')
+        .select('laporan_id, pps_id, jumlah_mangsa, jumlah_keluarga')
+        .order('laporan_id')
+        .order('pps_id'),
+    ),
+    ambilSemua<BarisLog>(() => supabase.from('pps_status_log').select('pps_id, ke, masa').order('pps_id').order('masa')),
+    ambilSemua<{ nama_bencana: string; ditamatkan_pada: string }>(() =>
+      supabase.from('bencana_tamat').select('nama_bencana, ditamatkan_pada').order('nama_bencana'),
+    ),
+    ambilSemua<BarisSuntingan>(() =>
+      supabase.from('pps_suntingan').select('pps_id, masa, selepas').order('pps_id').order('masa'),
+    ),
   ])
 
   const tamat = new Map(

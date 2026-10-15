@@ -33,12 +33,16 @@ export function Admin() {
 
   const muatSemula = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('profiles')
       .select('id, full_name, email, role, created_at')
       .order('created_at', { ascending: false })
-    setUsers((data as ProfileRow[]) ?? [])
     setLoading(false)
+    if (error) {
+      setToast({ type: 'error', message: 'Gagal memuatkan senarai pengguna. Semak sambungan internet anda.' })
+      return
+    }
+    setUsers((data as ProfileRow[]) ?? [])
   }, [])
 
   useEffect(() => {

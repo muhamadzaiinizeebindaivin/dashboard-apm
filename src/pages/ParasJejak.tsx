@@ -41,9 +41,10 @@ export function ParasJejak() {
   // Supabase Realtime also enforces the table's RLS for anon clients.
   useEffect(() => {
     async function muatSemula() {
-      const { data } = await supabase.rpc('get_paras_lokasi_by_negeri', {
+      const { data, error } = await supabase.rpc('get_paras_lokasi_by_negeri', {
         p_negeri: negeri,
       })
+      if (error) return // retried by the next poll in 3 s; the markers stay meanwhile
       const semua = (data as LokasiPoint[]) ?? []
       setLokasiAwam(semua.filter((p) => p.status === 'aktif'))
     }

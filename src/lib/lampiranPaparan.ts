@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { pastikan } from './pastikan'
 import type { DataLampiran, KunciLampiran } from './bacaLampiranSemasa'
 
 // How each extra Excel sheet is summarised and tabulated. Shared by the
@@ -129,6 +130,8 @@ export async function ambilLampiranLaporan(laporanId: string): Promise<DataLampi
     dari('laporan_pertanian'),
     dari('laporan_jalan_ditutup'),
   ])
+  // A missing sheet would read as "no casualties": fail instead
+  for (const r of [mob, kor, but, ker, per, jal]) pastikan(r)
   const kerosakan = (ker.data ?? []) as (DataLampiran['kerosakanKerajaan'][number] & { jenis: string })[]
   return {
     mobilisasi: (mob.data ?? []) as DataLampiran['mobilisasi'],

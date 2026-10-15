@@ -9,15 +9,18 @@ import {
   Tent,
   AlertTriangle,
   MousePointerClick,
+  Tags,
 } from 'lucide-react'
 import { PilihLokasiModal } from '../components/PilihLokasiModal'
-import { NEGERI_FLAG } from '../lib/negeriVisual'
+import { NEGERI_FLAG, NEGERI_LIST } from '../lib/negeriVisual'
 import { supabase } from '../lib/supabase'
+import { useRealtime } from '../lib/realtime'
 import { PetaBencana } from '../components/PetaBencana'
 import type { JalanPeta, Lapisan, ParasPeta, PpsPeta, TindakanTitik } from '../components/PetaBencana'
 import { TitikBencanaModal } from '../components/TitikBencanaModal'
 import type { ModTitik } from '../components/TitikBencanaModal'
 import { RingkasanBencanaPanel } from '../components/RingkasanBencanaPanel'
+import { UrusKategoriModal } from '../components/UrusKategoriModal'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { Toast } from '../components/Toast'
 import type { ToastState } from '../components/Toast'
@@ -25,6 +28,7 @@ import { Memuat, Skeleton } from '../components/Memuatkan'
 import {
   borangDaripada,
   borangKosong,
+  denganDataTerkini,
   ikonKategori,
   keRekod,
   useKategoriBencana,
@@ -34,25 +38,6 @@ import {
   warnaSelamat,
 } from '../lib/titikBencana'
 import type { BorangTitik, TitikBencana } from '../lib/titikBencana'
-
-const NEGERI_LIST = [
-  'Perlis',
-  'Kedah',
-  'Pulau Pinang',
-  'Perak',
-  'Selangor',
-  'Negeri Sembilan',
-  'Melaka',
-  'Johor',
-  'Pahang',
-  'Terengganu',
-  'Kelantan',
-  'Sabah',
-  'Sarawak',
-  'Kuala Lumpur',
-  'Labuan',
-  'Putrajaya',
-]
 
 const DUA_MINIT = 2 * 60 * 1000
 const TIGA_PULUH_MINIT = 30 * 60 * 1000
@@ -67,7 +52,7 @@ type BukaModal = { mod: ModTitik; koordinat: [number, number]; titik?: TitikBenc
 export function Bencana() {
   const kategori = useKategoriBencana()
   const petaKategori = Object.fromEntries(kategori.map((k) => [k.key, k]))
-  const { titik, loading } = useTitikAktif()
+  const { titik, loading, ralat: ralatTitik } = useTitikAktif()
   // Live figures from Laporan Semasa, so a point follows its disaster's reports
   const ringkasan = useRingkasanBencana()
 
@@ -87,52 +72,62 @@ export function Bencana() {
   const [hendakPadam, setHendakPadam] = useState<TitikBencana | null>(null)
   const [memadam, setMemadam] = useState(false)
   const [panelRingkasan, setPanelRingkasan] = useState(false)
+  const [urusKategori, setUrusKategori] = useState(false)
   const [toast, setToast] = useState<ToastState>(null)
+
+  // One error toast at a time (not one per failed refresh); the map keeps its last data
+  const laporRalat = useCallback(() => {
+    setToast((t) =>
+      t?.type === 'error' ? t : { type: 'error', message: 'Gagal memuatkan data peta. Semak sambungan internet anda.' },
+    )
+  }, [])
+
+  useEffect(() => {
+    if (ralatTitik) laporRalat()
+  }, [ralatTitik, laporRalat])
 
   // Open PPS with a location (pps_pusat)
   const muatPps = useCallback(async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('pps_pusat')
       .select('id, nama, nama_bencana, negeri, daerah, latitude, longitude, status, jumlah_mangsa')
       .neq('status', 'ditutup')
       .not('latitude', 'is', null)
       .not('longitude', 'is', null)
+    if (error) return laporRalat()
     setPps((data as PpsPeta[]) ?? [])
-  }, [])
+  }, [laporRalat])
 
   // Active PARAS sessions (same freshness rules as the PARAS page)
   const muatParas = useCallback(async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('paras_lokasi')
       .select('id, negeri, latitude, longitude, nama, pangkat, keadaan, created_at')
       .eq('status', 'aktif')
+    if (error) return laporRalat()
     setParas((data as (ParasPeta & { created_at: string })[]) ?? [])
-  }, [])
+  }, [laporRalat])
 
   // Closed roads still in force with coordinates (view jalan_ditutup_semasa)
   const muatJalan = useCallback(async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('jalan_ditutup_semasa')
       .select('id, nama_bencana, negeri, daerah, nama_laluan, lokasi, laluan_alternatif, punca, latitude, longitude, mula')
       .not('latitude', 'is', null)
       .not('longitude', 'is', null)
+    if (error) return laporRalat()
     setJalan((data as JalanPeta[]) ?? [])
-  }, [])
+  }, [laporRalat])
 
   useEffect(() => {
     muatPps()
     muatParas()
     muatJalan()
-    const channel = supabase
-      .channel('peta-bencana-lapisan')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pps_pusat' }, () => muatPps())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'paras_lokasi' }, () => muatParas())
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'laporan_bencana' }, () => muatJalan())
-      .subscribe()
-    return () => {
-      supabase.removeChannel(channel)
-    }
   }, [muatPps, muatParas, muatJalan])
+
+  useRealtime('peta-bencana-pps', ['pps_pusat'], muatPps)
+  useRealtime('peta-bencana-paras', ['paras_lokasi'], muatParas)
+  useRealtime('peta-bencana-jalan', [{ jadual: 'laporan_bencana', peristiwa: 'INSERT' }], muatJalan)
 
   const parasSegar = paras.filter((p) => {
     const umur = Date.now() - new Date(p.created_at).getTime()
@@ -167,7 +162,10 @@ export function Bencana() {
       setHendakPadam(t)
       return
     }
-    setModal({ mod: jenis, koordinat: [t.latitude, t.longitude], titik: t, awal: borangDaripada(t) })
+    // "Lengkapkan" keeps the final figures: start from the latest Laporan Semasa ones
+    const d = dataTerkiniTitik(t, ringkasan)
+    const awal = jenis === 'lengkapkan' && d ? denganDataTerkini(borangDaripada(t), d) : borangDaripada(t)
+    setModal({ mod: jenis, koordinat: [t.latitude, t.longitude], titik: t, awal })
   }
 
   const mesejRalat = (code?: string) =>
@@ -175,7 +173,10 @@ export function Bencana() {
 
   async function simpan(borang: BorangTitik): Promise<string | null> {
     if (!modal) return null
-    const rekod = keRekod(borang)
+    // A point that follows its Laporan Semasa stores the live figures, so the
+    // database matches what the map shows (old hand-typed numbers are replaced)
+    const d = modal.mod === 'kemaskini' && modal.titik ? dataTerkiniTitik(modal.titik, ringkasan) : null
+    const rekod = keRekod(d ? denganDataTerkini(borang, d) : borang)
 
     const { error } =
       modal.mod === 'tambah'
@@ -298,6 +299,14 @@ export function Bencana() {
             </option>
           ))}
         </select>
+
+        <button
+          onClick={() => setUrusKategori(true)}
+          className="flex h-8 items-center gap-1.5 rounded-full border border-white/70 bg-white/70 px-3 text-xs font-medium text-neutral-700 transition-colors hover:border-emerald-500 hover:text-emerald-700"
+        >
+          <Tags size={13} />
+          Urus Kategori
+        </button>
 
         {negeriFokus && (
           <button
@@ -449,6 +458,7 @@ export function Bencana() {
           awal={modal.awal}
           koordinat={modal.koordinat}
           kategori={kategori}
+          terkini={modal.titik ? dataTerkiniTitik(modal.titik, ringkasan) : null}
           onSimpan={simpan}
           onClose={() => setModal(null)}
         />
@@ -479,6 +489,16 @@ export function Bencana() {
       />
 
       <RingkasanBencanaPanel open={panelRingkasan} onClose={() => setPanelRingkasan(false)} kategori={kategori} />
+
+      <UrusKategoriModal
+        open={urusKategori}
+        kategori={kategori}
+        onClose={() => setUrusKategori(false)}
+        onDipadam={(key) => {
+          if (tapisKategori === key) setTapisKategori('')
+          setToast({ type: 'success', message: 'Kategori dipadam.' })
+        }}
+      />
 
       <Toast toast={toast} onDismiss={() => setToast(null)} />
     </div>

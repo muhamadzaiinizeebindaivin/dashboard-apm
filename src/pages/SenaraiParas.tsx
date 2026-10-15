@@ -3,6 +3,7 @@ import { Home, ChevronRight, AlertTriangle, BellOff, Bell, History, MapPinOff } 
 import { RekodParasPanel } from '../components/RekodParasPanel'
 import { Memuat, Skeleton } from '../components/Memuatkan'
 import { supabase } from '../lib/supabase'
+import { saluranUnik } from '../lib/realtime'
 import { ParasMap } from '../components/ParasMap'
 import type { LokasiPoint } from '../components/ParasMap'
 
@@ -56,7 +57,7 @@ export function SenaraiParas() {
       })
 
     const channel = supabase
-      .channel('senarai-paras-changes')
+      .channel(saluranUnik('senarai-paras'))
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'paras_lokasi' },

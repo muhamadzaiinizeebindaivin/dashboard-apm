@@ -42,11 +42,26 @@ const KATA_JENIS: [string, string][] = [
   ['kebakar', 'Kebakaran'],
 ]
 
-// "Banjir kilat" -> "Banjir", "BENCANA RIBUT NEGERI SARAWAK" -> "Ribut"
-export function normalJenis(asal: string): string | null {
+// "Banjir kilat" -> "Banjir", "BENCANA RIBUT NEGERI SARAWAK" -> "Ribut".
+// `dikenali`: the current category names (Urus Kategori), checked first and
+// longest first, so "Fenomena Air Pasang" wins over the "air pasang" synonym.
+export function normalJenis(asal: string, dikenali: string[] = []): string | null {
   const k = ` ${kunci(asal)} `
-  return KATA_JENIS.find(([kata]) => k.includes(kata))?.[1] ?? null
+  const kategori = dikenali
+    .map((j): [string, string] => [kunci(j), j])
+    .filter(([kata]) => kata)
+    .sort((a, b) => b[0].length - a[0].length)
+  return [...kategori, ...KATA_JENIS].find(([kata]) => k.includes(kata))?.[1] ?? null
 }
+
+// PPS details (name, district, mukim, manager) are stored in capitals, like the
+// NDCC Excel: "Dewan  Kg. Kiamsam" -> "DEWAN KG. KIAMSAM", "labuan" -> "LABUAN"
+export function hurufBesar(s: string) {
+  return s.replace(/\s+/g, ' ').trim().toUpperCase()
+}
+
+// District names follow the same rule
+export const kemasNamaTempat = hurufBesar
 
 // Disaster names are stored in one canonical form (same rule as the database)
 export function normalNamaBencana(s: string) {

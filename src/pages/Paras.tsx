@@ -2,41 +2,9 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft } from 'lucide-react'
 import apmLogo from '../assets/apm-logo.png'
-import logoJohor from '../assets/negeri/johor.png'
-import logoKedah from '../assets/negeri/kedah.png'
-import logoKelantan from '../assets/negeri/kelantan.png'
-import logoMelaka from '../assets/negeri/melaka.png'
-import logoNegeriSembilan from '../assets/negeri/negeri_sembilan.png'
-import logoPahang from '../assets/negeri/pahang.png'
-import logoPulauPinang from '../assets/negeri/pulau_pinang.png'
-import logoPerak from '../assets/negeri/perak.png'
-import logoPerlis from '../assets/negeri/perlis.png'
-import logoSabah from '../assets/negeri/sabah.png'
-import logoSarawak from '../assets/negeri/sarawak.png'
-import logoSelangor from '../assets/negeri/selangor.png'
-import logoTerengganu from '../assets/negeri/terengganu.png'
-import logoKualaLumpur from '../assets/negeri/kuala_lumpur.png'
-import logoPutrajaya from '../assets/negeri/putrajaya.png'
-import logoLabuan from '../assets/negeri/labuan.png'
+import { NEGERI_FLAG, NEGERI_LIST } from '../lib/negeriVisual'
 
-const NEGERI_LIST = [
-  { nama: 'Johor', logo: logoJohor },
-  { nama: 'Kedah', logo: logoKedah },
-  { nama: 'Kelantan', logo: logoKelantan },
-  { nama: 'Melaka', logo: logoMelaka },
-  { nama: 'Negeri Sembilan', logo: logoNegeriSembilan },
-  { nama: 'Pahang', logo: logoPahang },
-  { nama: 'Pulau Pinang', logo: logoPulauPinang },
-  { nama: 'Perak', logo: logoPerak },
-  { nama: 'Perlis', logo: logoPerlis },
-  { nama: 'Sabah', logo: logoSabah },
-  { nama: 'Sarawak', logo: logoSarawak },
-  { nama: 'Selangor', logo: logoSelangor },
-  { nama: 'Terengganu', logo: logoTerengganu },
-  { nama: 'Kuala Lumpur', logo: logoKualaLumpur },
-  { nama: 'Putrajaya', logo: logoPutrajaya },
-  { nama: 'Labuan', logo: logoLabuan },
-]
+const NEGERI_LOGO = NEGERI_LIST.map((nama) => ({ nama, logo: NEGERI_FLAG[nama] }))
 
 export function Paras() {
   const navigate = useNavigate()
@@ -68,7 +36,7 @@ export function Paras() {
         </div>
 
         <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
-          {NEGERI_LIST.map(({ nama, logo }, i) => (
+          {NEGERI_LOGO.map(({ nama, logo }, i) => (
             <motion.button
               key={nama}
               initial={{ opacity: 0, y: 8 }}

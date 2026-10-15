@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabase'
+import { useRealtime } from './realtime'
 import type { KategoriBencana, RingkasanBencanaNegeri, TitikBencana } from './titikBencana'
 import type { JalanPeta } from '../components/PetaBencana'
 
@@ -56,21 +57,13 @@ const KOSONG: PetaAwam = { kategori: [], titik: [], pps: [], jalan: [], ringkasa
 let simpanan: PetaAwam | null = null
 
 // Realtime refreshes staff screens; the 60 s poll covers the public page
-// (Realtime is filtered by RLS for anonymous visitors)
-function useSegarkan(muat: () => void, saluran: string, jadual: string[]) {
+// (Realtime is filtered by RLS for anonymous visitors). On a failed load the
+// widgets keep their last data instead of going blank.
+function useSegarkan(muat: () => void, nama: string, jadual: string[]) {
   useEffect(() => {
     muat()
-    let channel = supabase.channel(saluran)
-    for (const t of jadual) {
-      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => muat())
-    }
-    channel.subscribe()
-    const t = setInterval(muat, 60_000)
-    return () => {
-      supabase.removeChannel(channel)
-      clearInterval(t)
-    }
-  }, [muat, saluran, jadual])
+  }, [muat])
+  useRealtime(nama, jadual, muat, { tinjau: 60_000 })
 }
 
 const JADUAL_PETA = ['titik_bencana', 'pps_pusat', 'laporan_bencana', 'bencana_tamat', 'kategori_bencana']
@@ -98,7 +91,8 @@ export function useTrendMangsa(tempoh: '24j' | '7h') {
   const [trend, setTrend] = useState<TitikTrend[]>([])
 
   const muat = useCallback(async () => {
-    const { data } = await supabase.rpc('trend_mangsa_awam', { p_tempoh: tempoh })
+    const { data, error } = await supabase.rpc('trend_mangsa_awam', { p_tempoh: tempoh })
+    if (error) return
     setTrend((data as TitikTrend[]) ?? [])
   }, [tempoh])
 
@@ -112,7 +106,8 @@ export function useLaporanTerkini(had = 5) {
   const [senarai, setSenarai] = useState<LaporanTerkini[]>([])
 
   const muat = useCallback(async () => {
-    const { data } = await supabase.rpc('laporan_terkini_awam', { p_had: had })
+    const { data, error } = await supabase.rpc('laporan_terkini_awam', { p_had: had })
+    if (error) return
     setSenarai((data as LaporanTerkini[]) ?? [])
   }, [had])
 

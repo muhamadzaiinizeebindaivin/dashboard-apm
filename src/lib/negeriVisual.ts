@@ -74,3 +74,25 @@ export const NEGERI_PUSAT: Record<string, { pusat: [number, number]; zoom: numbe
 }
 
 export const PUSAT_MALAYSIA: { pusat: [number, number]; zoom: number } = { pusat: [4.2, 108.0], zoom: 5 }
+
+// Normalized (0–1) label positions on the peta-malaysia.png image, shared by the
+// Laporan Nasional preview and its PDF. Taken from the source SVG's label_points
+// (viewBox 0 0 1000 332) — cx/1000, cy/332.
+export const NEGERI_NORM: Record<string, { x: number; y: number }> = {
+  Sabah: { x: 0.8398, y: 0.3364 },
+  Perlis: { x: 0.0734, y: 0.1663 },
+  Kedah: { x: 0.0937, y: 0.2437 },
+  Kelantan: { x: 0.1565, y: 0.357 },
+  Perak: { x: 0.1086, y: 0.3874 },
+  Sarawak: { x: 0.6986, y: 0.7226 },
+  'Pulau Pinang': { x: 0.0831, y: 0.3195 },
+  Selangor: { x: 0.1315, y: 0.597 },
+  'Negeri Sembilan': { x: 0.1646, y: 0.6809 },
+  Melaka: { x: 0.1703, y: 0.7506 },
+  Johor: { x: 0.2192, y: 0.7898 },
+  Pahang: { x: 0.1746, y: 0.5527 },
+  Terengganu: { x: 0.1967, y: 0.3675 },
+  Labuan: { x: 0.7666, y: 0.331 },
+  'Kuala Lumpur': { x: 0.1403, y: 0.6352 },
+  Putrajaya: { x: 0.1406, y: 0.665 },
+}

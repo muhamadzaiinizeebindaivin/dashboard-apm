@@ -1,6 +1,7 @@
 import apmLogo from '../assets/apm-logo.png'
 import petaMalaysia from '../assets/peta-malaysia.png'
-import { JENIS_BENCANA_SEMASA } from './laporanBencana'
+import { NEGERI_NORM } from './negeriVisual'
+import { ambilJenisBencana, susunJenis, warnaJenisRgb } from './jenisBencana'
 import type { ItemLaporanNasional, KorbanNegeri, PpsDitutup } from './laporanNasional'
 import { ambilDataGraf } from './laporanNasionalGraf'
 import type { TapisGraf, TitikGraf } from './laporanNasionalGraf'
@@ -23,40 +24,8 @@ async function muatGambar(src: string): Promise<string | null> {
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
-// Normalized (0–1) positions within the map image, taken directly from the
-// source SVG's label_points (viewBox 0 0 1000 332) — cx/1000, cy/332.
-const NEGERI_NORM: Record<string, { x: number; y: number }> = {
-  Sabah: { x: 0.8398, y: 0.3364 },
-  Perlis: { x: 0.0734, y: 0.1663 },
-  Kedah: { x: 0.0937, y: 0.2437 },
-  Kelantan: { x: 0.1565, y: 0.357 },
-  Perak: { x: 0.1086, y: 0.3874 },
-  Sarawak: { x: 0.6986, y: 0.7226 },
-  'Pulau Pinang': { x: 0.0831, y: 0.3195 },
-  Selangor: { x: 0.1315, y: 0.597 },
-  'Negeri Sembilan': { x: 0.1646, y: 0.6809 },
-  Melaka: { x: 0.1703, y: 0.7506 },
-  Johor: { x: 0.2192, y: 0.7898 },
-  Pahang: { x: 0.1746, y: 0.5527 },
-  Terengganu: { x: 0.1967, y: 0.3675 },
-  Labuan: { x: 0.7666, y: 0.331 },
-  'Kuala Lumpur': { x: 0.1403, y: 0.6352 },
-  Putrajaya: { x: 0.1406, y: 0.665 },
-}
-
-const WARNA_BENCANA: Record<string, [number, number, number]> = {
-  Ribut: [56, 142, 214],
-  Banjir: [37, 99, 235],
-  Tsunami: [20, 130, 140],
-  Kebakaran: [220, 38, 38],
-  'Tanah Runtuh': [120, 84, 40],
-  Pencemaran: [202, 138, 4],
-  'Bangunan Runtuh': [107, 114, 128],
-}
-
-function warnaBencana(jenis: string): [number, number, number] {
-  return WARNA_BENCANA[jenis] ?? [90, 90, 90]
-}
+// Colour of each disaster type = its category's colour (Urus Kategori)
+const warnaBencana = warnaJenisRgb
 
 // A small, simplified pictogram per disaster type, drawn inside a filled
 // circle — not a copy of any specific icon set, just enough to be visually
@@ -290,7 +259,8 @@ export async function bangunLaporanNasionalDoc(
 ): Promise<{ doc: jsPDF; namaFail: string }> {
   const { default: JsPDF } = await import('jspdf')
   const { default: autoTable } = await import('jspdf-autotable')
-  const [logo, peta] = await Promise.all([muatGambar(apmLogo), muatGambar(petaMalaysia)])
+  // ambilJenisBencana: latest category colours and order before drawing
+  const [logo, peta] = await Promise.all([muatGambar(apmLogo), muatGambar(petaMalaysia), ambilJenisBencana()])
 
   const doc = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' })
   const lebar = doc.internal.pageSize.getWidth()
@@ -474,19 +444,35 @@ export async function bangunLaporanNasionalDoc(
     baris.forEach((t, i) => doc.text(t, cx, cy + kotakTinggi + 3 + i * lineTinggi))
   }
 
-  // --- Legend — its Y adapts to however tall the tallest column actually ended up ---
+  // --- Legend — its Y adapts to however tall the tallest column actually ended up.
+  // Only the types on this map, wrapping to a new row when the line is full ---
   const legendY = Math.max(petaY + petaTinggi, yLuarKiri, yTengah, yLuarKanan) + 6
-  doc.setDrawColor(180, 180, 180)
-  doc.setFillColor(235, 238, 244)
-  doc.roundedRect(margin, legendY, lebar - margin * 2, 10, 1, 1, 'FD')
-  let lx = margin + 6
+  const jenisPeta = susunJenis(aktif.map((i) => i.jenisBencana))
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7)
-  for (const jenis of JENIS_BENCANA_SEMASA) {
-    lukisIkon(doc, jenis, lx, legendY + 5, 2.6)
+  const kedudukan: { jenis: string; x: number; y: number }[] = []
+  let lx = margin + 6
+  let ly = legendY
+  for (const jenis of jenisPeta) {
+    const w = doc.getTextWidth(jenis) + 12
+    if (lx + w > lebar - margin && lx > margin + 6) {
+      lx = margin + 6
+      ly += 10
+    }
+    kedudukan.push({ jenis, x: lx, y: ly })
+    lx += w
+  }
+  if (jenisPeta.length > 0) {
+    doc.setDrawColor(180, 180, 180)
+    doc.setFillColor(235, 238, 244)
+    doc.roundedRect(margin, legendY, lebar - margin * 2, ly - legendY + 10, 1, 1, 'FD')
+  }
+  for (const { jenis, x, y } of kedudukan) {
+    lukisIkon(doc, jenis, x, y + 5, 2.6)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7)
     doc.setTextColor(30, 30, 30)
-    doc.text(jenis, lx + 4, legendY + 6)
-    lx += doc.getTextWidth(jenis) + 12
+    doc.text(jenis, x + 4, y + 6)
   }
 
   doc.setTextColor(0, 0, 0)
@@ -494,11 +480,8 @@ export async function bangunLaporanNasionalDoc(
   doc.text(`${tarikh.toUpperCase()} (KEMASKINI SEHINGGA ${masa})`, lebar - margin, tinggi - 6, { align: 'right' })
 
   // --- Table page(s), grouped by Jenis Bencana (fixed order) then Zon ---
-  const jenisAda = [...new Set(items.map((i) => i.jenisBencana))]
-  const jenisSet = [
-    ...JENIS_BENCANA_SEMASA.filter((j) => jenisAda.includes(j)),
-    ...jenisAda.filter((j) => !JENIS_BENCANA_SEMASA.includes(j)),
-  ]
+  // Same order as the category list (Urus Kategori)
+  const jenisSet = susunJenis(items.map((i) => i.jenisBencana))
   const badan: Array<
     Array<string | { content: string; colSpan?: number; rowSpan?: number; styles?: Record<string, unknown> }>
   > = []

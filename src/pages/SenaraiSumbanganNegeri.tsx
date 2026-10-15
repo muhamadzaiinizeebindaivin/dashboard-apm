@@ -10,6 +10,7 @@ import { Toast } from '../components/Toast'
 import type { ToastState } from '../components/Toast'
 import { NEGERI_FLAG } from '../lib/negeriVisual'
 import { supabase } from '../lib/supabase'
+import { ambilSemua } from '../lib/ambilSemua'
 import { STATUS_LIST, STATUS_LABEL, STATUS_BADGE_CLASS } from '../lib/sumbanganStatus'
 import type { SumbanganStatus } from '../lib/sumbanganStatus'
 import { Memuat, SkeletonJadual } from '../components/Memuatkan'
@@ -53,16 +54,23 @@ export function SenaraiSumbanganNegeri() {
 
   const muatSemula = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('sumbangan')
-      .select(
-        'id, jenis_kumpulan, nama_kumpulan, no_tel, jenis_sumbangan, lokasi_bantuan, status, created_at',
+    try {
+      const data = await ambilSemua<SumbanganRow>(() =>
+        supabase
+          .from('sumbangan')
+          .select(
+            'id, jenis_kumpulan, nama_kumpulan, no_tel, jenis_sumbangan, lokasi_bantuan, status, created_at',
+          )
+          .eq('negeri', negeri)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false }),
       )
-      .eq('negeri', negeri)
-      .order('created_at', { ascending: false })
-
-    setRows((data as SumbanganRow[]) ?? [])
-    setLoading(false)
+      setRows(data)
+    } catch {
+      setToast({ type: 'error', message: 'Gagal memuatkan senarai sumbangan. Semak sambungan internet anda.' })
+    } finally {
+      setLoading(false)
+    }
   }, [negeri])
 
   async function handleStatusChange(row: SumbanganRow, status: SumbanganStatus) {

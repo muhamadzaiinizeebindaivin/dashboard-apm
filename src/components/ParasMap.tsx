@@ -3,41 +3,7 @@ import { useEffect } from 'react'
 import { LocateFixed } from 'lucide-react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import logoJohor from '../assets/negeri/johor.png'
-import logoKedah from '../assets/negeri/kedah.png'
-import logoKelantan from '../assets/negeri/kelantan.png'
-import logoMelaka from '../assets/negeri/melaka.png'
-import logoNegeriSembilan from '../assets/negeri/negeri_sembilan.png'
-import logoPahang from '../assets/negeri/pahang.png'
-import logoPulauPinang from '../assets/negeri/pulau_pinang.png'
-import logoPerak from '../assets/negeri/perak.png'
-import logoPerlis from '../assets/negeri/perlis.png'
-import logoSabah from '../assets/negeri/sabah.png'
-import logoSarawak from '../assets/negeri/sarawak.png'
-import logoSelangor from '../assets/negeri/selangor.png'
-import logoTerengganu from '../assets/negeri/terengganu.png'
-import logoKualaLumpur from '../assets/negeri/kuala_lumpur.png'
-import logoPutrajaya from '../assets/negeri/putrajaya.png'
-import logoLabuan from '../assets/negeri/labuan.png'
-
-const NEGERI_LOGOS: Record<string, string> = {
-  Johor: logoJohor,
-  Kedah: logoKedah,
-  Kelantan: logoKelantan,
-  Melaka: logoMelaka,
-  'Negeri Sembilan': logoNegeriSembilan,
-  Pahang: logoPahang,
-  'Pulau Pinang': logoPulauPinang,
-  Perak: logoPerak,
-  Perlis: logoPerlis,
-  Sabah: logoSabah,
-  Sarawak: logoSarawak,
-  Selangor: logoSelangor,
-  Terengganu: logoTerengganu,
-  'Kuala Lumpur': logoKualaLumpur,
-  Putrajaya: logoPutrajaya,
-  Labuan: logoLabuan,
-}
+import { NEGERI_FLAG } from '../lib/negeriVisual'
 
 // One icon per (negeri, keadaan) pair, built lazily and cached so the
 // realtime updates don't recreate DivIcons on every render.
@@ -59,7 +25,7 @@ function ikonUntuk(negeri: string, keadaan: string = 'biasa'): L.DivIcon {
   const ikon = L.divIcon({
     className: '',
     html: `<div class="${kelas}" style="width:32px;height:22px;border-radius:4px;overflow:hidden;box-shadow:${bayang};">
-      <img src="${NEGERI_LOGOS[negeri] ?? ''}" style="width:100%;height:100%;object-fit:cover;" />
+      <img src="${NEGERI_FLAG[negeri] ?? ''}" style="width:100%;height:100%;object-fit:cover;" />
     </div>`,
     iconSize: [32, 22],
     iconAnchor: [16, 11],

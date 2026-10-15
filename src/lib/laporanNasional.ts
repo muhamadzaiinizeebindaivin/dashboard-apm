@@ -1,5 +1,8 @@
 import { supabase } from './supabase'
 import { cariZon } from './laporanBencana'
+import { pastikan } from './pastikan'
+import { kemasNamaTempat, kunci as kunciTeks } from './normalisasi'
+import { ambilSemua, dalamKepingan } from './ambilSemua'
 
 export type ItemLaporanNasional = {
   jenisBencana: string
@@ -75,7 +78,8 @@ function itemDariPusat(nama: string, terkini: BarisSemasa, pusat: BarisPusat[]):
 
   const kumpulan = new Map<string, BarisPusat[]>()
   for (const p of dibuka) {
-    const kunci = `${p.negeri}|${p.daerah ?? ''}`
+    // "labuan" and "Labuan" are the same district
+    const kunci = `${p.negeri}|${kunciTeks(p.daerah ?? '')}`
     if (!kumpulan.has(kunci)) kumpulan.set(kunci, [])
     kumpulan.get(kunci)!.push(p)
   }
@@ -84,7 +88,7 @@ function itemDariPusat(nama: string, terkini: BarisSemasa, pusat: BarisPusat[]):
     ...asas,
     zon: arr[0].zon,
     negeri: arr[0].negeri,
-    daerah: arr[0].daerah,
+    daerah: arr[0].daerah ? kemasNamaTempat(arr[0].daerah) : null,
     pps: arr.map((p) => p.nama).join('\n'),
     jumlahMangsa: arr.reduce((n, p) => n + p.jumlah_mangsa, 0),
     jumlahKeluarga: arr.reduce((n, p) => n + p.jumlah_keluarga, 0),
@@ -111,19 +115,23 @@ export type KorbanNegeri = {
 }
 
 export async function ambilKorbanSemasa(): Promise<KorbanNegeri[]> {
-  const { data } = await supabase.from('korban_semasa').select('nama_bencana, negeri, kematian, kecederaan, hilang')
+  const data = await supabase
+    .from('korban_semasa')
+    .select('nama_bencana, negeri, kematian, kecederaan, hilang')
+    .then(pastikan)
   return ((data as KorbanNegeri[]) ?? []).filter((k) => k.kematian + k.kecederaan + k.hilang > 0)
 }
 
 export async function ambilPpsDitutup24Jam(): Promise<PpsDitutup[]> {
   const sejak = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-  const { data } = await supabase
+  const data = await supabase
     .from('pps_pusat')
     .select('nama, nama_bencana, negeri, daerah, ditutup_pada, catatan_tutup')
     .eq('status', 'ditutup')
     .gte('ditutup_pada', sejak)
     .order('ditutup_pada', { ascending: false })
-  return (data as PpsDitutup[]) ?? []
+    .then(pastikan)
+  return ((data as PpsDitutup[]) ?? []).map((p) => ({ ...p, daerah: p.daerah ? kemasNamaTempat(p.daerah) : null }))
 }
 
 // For each disaster (grouped by Nama Bencana), the PPS numbers come from its
@@ -133,11 +141,14 @@ export async function ambilPpsDitutup24Jam(): Promise<PpsDitutup[]> {
 // PPS data is still listed, using its own Negeri and zero counts, rather
 // than being left out entirely.
 export async function ambilLaporanNasional(): Promise<ItemLaporanNasional[]> {
-  const { data } = await supabase
-    .from('laporan_bencana')
-    .select('id, nama_bencana, jenis_bencana, negeri, ringkasan_status, trend, created_at')
-    .eq('jenis_laporan', 'semasa')
-    .order('created_at', { ascending: false })
+  const data = await ambilSemua<BarisSemasa>(() =>
+    supabase
+      .from('laporan_bencana')
+      .select('id, nama_bencana, jenis_bencana, negeri, ringkasan_status, trend, created_at')
+      .eq('jenis_laporan', 'semasa')
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false }),
+  )
 
   const baris = (data as BarisSemasa[]) ?? []
 
@@ -153,11 +164,14 @@ export async function ambilLaporanNasional(): Promise<ItemLaporanNasional[]> {
 
   // Disasters reported in the new per-PPS format read from pps_pusat, which
   // excludes closed PPS and covers every negeri (not just the latest report's).
-  const { data: pusatData } = await supabase
-    .from('pps_pusat')
-    .select('nama_bencana, negeri, daerah, zon, nama, jumlah_mangsa, jumlah_keluarga, status')
+  const pusatData = await ambilSemua<BarisPusat>(() =>
+    supabase
+      .from('pps_pusat')
+      .select('nama_bencana, negeri, daerah, zon, nama, jumlah_mangsa, jumlah_keluarga, status')
+      .order('id'),
+  )
 
-  const { data: tamatData } = await supabase.from('bencana_tamat').select('nama_bencana, ditamatkan_pada')
+  const tamatData = await supabase.from('bencana_tamat').select('nama_bencana, ditamatkan_pada').then(pastikan)
   const tamatIkutBencana = new Map(
     ((tamatData as { nama_bencana: string; ditamatkan_pada: string }[]) ?? []).map((t) => [
       t.nama_bencana,
@@ -224,13 +238,15 @@ export async function ambilLaporanNasional(): Promise<ItemLaporanNasional[]> {
   }
 
   if (sumber.length > 0) {
-    const { data: ppsData } = await supabase
-      .from('laporan_pps')
-      .select('laporan_id, zon, negeri, daerah, pps, jumlah_mangsa, jumlah_keluarga')
-      .in(
-        'laporan_id',
-        sumber.map((s) => s.laporanId),
-      )
+    const ppsData = await dalamKepingan<BarisPps>(
+      sumber.map((s) => s.laporanId),
+      (ids) =>
+        supabase
+          .from('laporan_pps')
+          .select('laporan_id, zon, negeri, daerah, pps, jumlah_mangsa, jumlah_keluarga')
+          .in('laporan_id', ids)
+          .order('id'),
+    )
 
     const baris_pps = (ppsData as BarisPps[]) ?? []
 
@@ -243,12 +259,22 @@ export async function ambilLaporanNasional(): Promise<ItemLaporanNasional[]> {
         trend: s.trend,
         zon: p.zon,
         negeri: p.negeri,
-        daerah: p.daerah,
+        daerah: p.daerah ? kemasNamaTempat(p.daerah) : null,
         pps: p.pps,
         jumlahMangsa: p.jumlah_mangsa ?? 0,
         jumlahKeluarga: p.jumlah_keluarga ?? 0,
       })
     }
+  }
+
+  // One spelling per district across the whole report, so the DAERAH counts
+  // and the table rows match ("Kota kinabalu" / "Kota Kinabalu" -> the first one seen)
+  const ejaan = new Map<string, string>()
+  for (const i of items) {
+    if (!i.daerah) continue
+    const k = `${i.negeri}|${kunciTeks(i.daerah)}`
+    if (!ejaan.has(k)) ejaan.set(k, i.daerah)
+    i.daerah = ejaan.get(k)!
   }
 
   return items

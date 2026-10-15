@@ -7,11 +7,12 @@ import {
   kemaskiniKategori,
   PILIHAN_IKON,
   PILIHAN_WARNA,
+  formatTarikh,
   semakBorang,
   tambahKategori,
   warnaSelamat,
 } from '../lib/titikBencana'
-import type { BorangTitik, KategoriBencana } from '../lib/titikBencana'
+import type { BorangTitik, DataTerkini, KategoriBencana } from '../lib/titikBencana'
 
 export type ModTitik = 'tambah' | 'kemaskini' | 'lengkapkan'
 
@@ -29,11 +30,15 @@ type TitikBencanaModalProps = {
   awal: BorangTitik
   koordinat: [number, number]
   kategori: KategoriBencana[]
+  // Live figures from Laporan Semasa (same as the map popup), when the point has them
+  terkini?: DataTerkini | null
   onSimpan: (borang: BorangTitik) => Promise<string | null> // returns an error message or null
   onClose: () => void
 }
 
-export function TitikBencanaModal({ mod, awal, koordinat, kategori, onSimpan, onClose }: TitikBencanaModalProps) {
+export function TitikBencanaModal({ mod, awal, koordinat, kategori, terkini, onSimpan, onClose }: TitikBencanaModalProps) {
+  // Editing a point that follows its Laporan Semasa: its figures are read-only here
+  const ikutLaporan = mod === 'kemaskini' && !!terkini
   const [borang, setBorang] = useState<BorangTitik>(awal)
   const [menyimpan, setMenyimpan] = useState(false)
   const [ralat, setRalat] = useState('')
@@ -279,43 +284,73 @@ export function TitikBencanaModal({ mod, awal, koordinat, kategori, onSimpan, on
                 className={inputClass}
               />
             </div>
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-sm font-medium text-neutral-700">PPS</label>
-              <input value={borang.pps} onChange={(e) => set('pps', e.target.value)} className={inputClass} />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-neutral-700">Jumlah KIR</label>
-              <input
-                type="number"
-                min={0}
-                inputMode="numeric"
-                value={borang.jumlah_kir}
-                onChange={(e) => set('jumlah_kir', e.target.value)}
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-neutral-700">Jumlah Mangsa</label>
-              <input
-                type="number"
-                min={0}
-                inputMode="numeric"
-                value={borang.jumlah_mangsa}
-                onChange={(e) => set('jumlah_mangsa', e.target.value)}
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-neutral-700">Jumlah Rumah Terjejas</label>
-              <input
-                type="number"
-                min={0}
-                inputMode="numeric"
-                value={borang.jumlah_rumah_terjejas}
-                onChange={(e) => set('jumlah_rumah_terjejas', e.target.value)}
-                className={inputClass}
-              />
-            </div>
+            {ikutLaporan && terkini ? (
+              // Figures follow the Laporan Semasa: shown, not typed (same numbers as the map popup)
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 sm:col-span-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">
+                  Data Terkini (daripada Laporan Semasa){terkini.seluruhBencana && ' · seluruh bencana'}
+                </p>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
+                  {(
+                    [
+                      ['Mangsa', terkini.mangsa],
+                      ['KIR', terkini.keluarga],
+                      ['PPS dibuka', terkini.ppsDibuka],
+                      ['Rumah terjejas', terkini.rumahTerjejas ?? '—'],
+                    ] as const
+                  ).map(([label, nilai]) => (
+                    <div key={label} className="rounded-lg bg-white px-2 py-1.5">
+                      <div className="text-sm font-semibold text-neutral-800">{nilai}</div>
+                      <div className="text-[11px] text-neutral-500">{label}</div>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-emerald-800">
+                  Angka ini dikemaskini secara automatik melalui Laporan Semasa
+                  {terkini.laporanTerakhir && ` (terakhir: ${formatTarikh(terkini.laporanTerakhir)})`}.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">PPS</label>
+                  <input value={borang.pps} onChange={(e) => set('pps', e.target.value)} className={inputClass} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">Jumlah KIR</label>
+                  <input
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    value={borang.jumlah_kir}
+                    onChange={(e) => set('jumlah_kir', e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">Jumlah Mangsa</label>
+                  <input
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    value={borang.jumlah_mangsa}
+                    onChange={(e) => set('jumlah_mangsa', e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">Jumlah Rumah Terjejas</label>
+                  <input
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    value={borang.jumlah_rumah_terjejas}
+                    onChange={(e) => set('jumlah_rumah_terjejas', e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+              </>
+            )}
             <div className="sm:col-span-2">
               <label className="mb-1 block text-sm font-medium text-neutral-700">Catatan (pilihan)</label>
               <textarea
@@ -330,6 +365,7 @@ export function TitikBencanaModal({ mod, awal, koordinat, kategori, onSimpan, on
           {mod === 'lengkapkan' && (
             <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
               Titik ini akan ditanda selesai, dikeluarkan dari peta dan dimasukkan ke Ringkasan Bencana.
+              {terkini && ' Angka di atas diisi daripada Laporan Semasa terakhir. Sila semak sebelum menyimpan.'}
             </p>
           )}
         </div>

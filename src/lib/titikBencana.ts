@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { MapPin, Droplets, Waves, Mountain, Flame, Wind, CloudRain, Zap, Siren, Building2, Biohazard } from 'lucide-react'
 import { supabase } from './supabase'
+import { useRealtime } from './realtime'
+import { ambilSemua } from './ambilSemua'
 
 export type KategoriBencana = {
   id: string
@@ -112,6 +114,17 @@ export function borangDaripada(t: TitikBencana): BorangTitik {
   }
 }
 
+// Live figures (Laporan Semasa) written into the form's number fields: used when
+// saving a point that follows its reports, and to pre-fill "Lengkapkan"
+export function denganDataTerkini(b: BorangTitik, d: DataTerkini): BorangTitik {
+  return {
+    ...b,
+    jumlah_kir: String(d.keluarga),
+    jumlah_mangsa: String(d.mangsa),
+    jumlah_rumah_terjejas: d.rumahTerjejas != null ? String(d.rumahTerjejas) : b.jumlah_rumah_terjejas,
+  }
+}
+
 export function semakBorang(b: BorangTitik): string | null {
   if (!b.kategori) return 'Sila pilih kategori.'
   if (!b.negeri) return 'Sila pilih negeri.'
@@ -146,31 +159,34 @@ export function useKategoriBencana() {
   const [kategori, setKategori] = useState<KategoriBencana[]>([])
 
   const muat = useCallback(async () => {
-    const { data } = await supabase.from('kategori_bencana').select('*').order('susunan').order('label')
+    const { data, error } = await supabase.from('kategori_bencana').select('*').order('susunan').order('label')
+    if (error) return
     setKategori((data as KategoriBencana[]) ?? [])
   }, [])
 
   useEffect(() => {
     muat()
-    const channel = supabase
-      .channel('kategori-bencana')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'kategori_bencana' }, () => muat())
-      .subscribe()
-    return () => {
-      supabase.removeChannel(channel)
-    }
   }, [muat])
+  useRealtime('kategori-bencana', ['kategori_bencana'], muat)
 
   return kategori
 }
 
+// "FENOMENA AIR PASANG" -> "Fenomena Air Pasang". Only a name typed entirely in
+// capitals is changed; normal typing ("Tumpahan minyak", "Banjir PPS") is kept as is.
+export function kemaskanLabel(label: string) {
+  const t = label.trim().replace(/\s+/g, ' ')
+  if (!/[A-Z]/.test(t) || t !== t.toUpperCase()) return t
+  return t.toLowerCase().replace(/(^|\s)(\p{L})/gu, (_, ruang: string, huruf: string) => ruang + huruf.toUpperCase())
+}
+
 export async function tambahKategori(label: string, warna: string, ikon: string, susunan: number) {
-  const key = label
-    .trim()
+  const labelKemas = kemaskanLabel(label)
+  const key = labelKemas
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_|_$/g, '')
-  const { error } = await supabase.from('kategori_bencana').insert({ key, label: label.trim(), warna, ikon, susunan })
+  const { error } = await supabase.from('kategori_bencana').insert({ key, label: labelKemas, warna, ikon, susunan })
   return { key, error }
 }
 
@@ -187,32 +203,56 @@ export async function kemaskiniKategori(key: string, label: string, warna: strin
   return { error }
 }
 
+// How many map points (active or finished) use each category, by key
+export async function kiraPenggunaanKategori(): Promise<Record<string, number>> {
+  const data = await ambilSemua<{ kategori: string }>(() =>
+    supabase.from('titik_bencana').select('kategori').order('id'),
+  )
+  const kiraan: Record<string, number> = {}
+  for (const t of data) kiraan[t.kategori] = (kiraan[t.kategori] ?? 0) + 1
+  return kiraan
+}
+
+// Delete a category, only if no map point uses it (checked again right before
+// deleting, in case a point was added since the list was shown)
+export async function padamKategori(key: string): Promise<{ error: { code: string; message: string } | null }> {
+  const { count, error: ralatKira } = await supabase
+    .from('titik_bencana')
+    .select('id', { count: 'exact', head: true })
+    .eq('kategori', key)
+  if (ralatKira) return { error: ralatKira }
+  if (count) return { error: { code: 'DIGUNAKAN', message: `${count} titik` } }
+
+  const { data, error } = await supabase.from('kategori_bencana').delete().eq('key', key).select('key')
+  if (error) return { error }
+  // RLS refuses silently (0 rows deleted): report it as a permission error
+  if (!data || data.length === 0) return { error: { code: '42501', message: 'Tiada kebenaran' } }
+  return { error: null }
+}
+
 export function useTitikAktif() {
   const [titik, setTitik] = useState<TitikBencana[]>([])
   const [loading, setLoading] = useState(true)
+  const [ralat, setRalat] = useState(false)
 
   const muat = useCallback(async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('titik_bencana')
       .select('*')
       .eq('status', 'aktif')
       .order('tarikh_mula', { ascending: false })
-    setTitik((data as TitikBencana[]) ?? [])
     setLoading(false)
+    setRalat(!!error)
+    if (error) return // keep the points already on the map
+    setTitik((data as TitikBencana[]) ?? [])
   }, [])
 
   useEffect(() => {
     muat()
-    const channel = supabase
-      .channel('titik-bencana-aktif')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'titik_bencana' }, () => muat())
-      .subscribe()
-    return () => {
-      supabase.removeChannel(channel)
-    }
   }, [muat])
+  useRealtime('titik-bencana-aktif', ['titik_bencana'], muat)
 
-  return { titik, loading }
+  return { titik, loading, ralat }
 }
 
 export function formatTarikh(iso: string | null) {
@@ -252,22 +292,16 @@ export function useRingkasanBencana() {
   const [ringkasan, setRingkasan] = useState<RingkasanBencanaNegeri[]>([])
 
   const muat = useCallback(async () => {
-    const { data } = await supabase.from('ringkasan_bencana_negeri').select('*')
+    const { data, error } = await supabase.from('ringkasan_bencana_negeri').select('*')
+    if (error) return
     setRingkasan((data as RingkasanBencanaNegeri[]) ?? [])
   }, [])
 
   useEffect(() => {
     muat()
-    // A Laporan Semasa changes the PPS and adds a report: both refresh the figures
-    const channel = supabase
-      .channel('ringkasan-bencana-negeri')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pps_pusat' }, () => muat())
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'laporan_bencana' }, () => muat())
-      .subscribe()
-    return () => {
-      supabase.removeChannel(channel)
-    }
   }, [muat])
+  // A Laporan Semasa changes the PPS and adds a report: both refresh the figures
+  useRealtime('ringkasan-bencana-negeri', ['pps_pusat', { jadual: 'laporan_bencana', peristiwa: 'INSERT' }], muat)
 
   return ringkasan
 }

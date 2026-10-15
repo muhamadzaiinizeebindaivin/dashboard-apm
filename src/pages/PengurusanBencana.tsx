@@ -14,6 +14,9 @@ import {
   MapPinOff,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { useRealtime } from '../lib/realtime'
+import { ambilSemua } from '../lib/ambilSemua'
+import { pastikan } from '../lib/pastikan'
 import { TREND_LABEL } from '../lib/laporanBencana'
 import { formatTarikh } from '../lib/titikBencana'
 import { HAD_TIADA_KEMASKINI_JAM } from '../lib/ppsPusat'
@@ -208,32 +211,47 @@ export function PengurusanBencana() {
   }, [])
 
   const muat = useCallback(async () => {
-    const [{ data: l }, { data: p }, { data: t }] = await Promise.all([
-      supabase
-        .from('laporan_bencana')
-        .select('nama_bencana, jenis_bencana, negeri, jenis_laporan, trend, created_at')
-        .order('created_at', { ascending: false }),
-      supabase.from('pps_pusat').select('nama_bencana, negeri, status, jumlah_mangsa, dibuka_pada, dilapor_pada'),
-      supabase.from('titik_bencana').select('nama_bencana').eq('status', 'aktif').not('nama_bencana', 'is', null),
-    ])
-    setLaporan((l as BarisLaporan[]) ?? [])
-    setPps((p as BarisPps[]) ?? [])
-    setNamaBertitik(new Set(((t as { nama_bencana: string }[]) ?? []).map((x) => x.nama_bencana)))
-    setLoading(false)
+    try {
+      const [l, p, t] = await Promise.all([
+        ambilSemua<BarisLaporan>(() =>
+          supabase
+            .from('laporan_bencana')
+            .select('nama_bencana, jenis_bencana, negeri, jenis_laporan, trend, created_at')
+            .order('created_at', { ascending: false })
+            .order('id', { ascending: false }),
+        ),
+        ambilSemua<BarisPps>(() =>
+          supabase
+            .from('pps_pusat')
+            .select('nama_bencana, negeri, status, jumlah_mangsa, dibuka_pada, dilapor_pada')
+            .order('id'),
+        ),
+        supabase
+          .from('titik_bencana')
+          .select('nama_bencana')
+          .eq('status', 'aktif')
+          .not('nama_bencana', 'is', null)
+          .then(pastikan),
+      ])
+      setLaporan(l)
+      setPps(p)
+      setNamaBertitik(new Set(((t as { nama_bencana: string }[]) ?? []).map((x) => x.nama_bencana)))
+    } catch {
+      // All three are combined into one list: on any failure keep the last complete one
+      setToast((x) =>
+        x?.type === 'error'
+          ? x
+          : { type: 'error', message: 'Gagal memuatkan senarai bencana. Semak sambungan internet anda.' },
+      )
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {
     muat()
-    const channel = supabase
-      .channel('pengurusan-bencana')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'laporan_bencana' }, () => muat())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pps_pusat' }, () => muat())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'titik_bencana' }, () => muat())
-      .subscribe()
-    return () => {
-      supabase.removeChannel(channel)
-    }
   }, [muat])
+  useRealtime('pengurusan-bencana', ['laporan_bencana', 'pps_pusat', 'titik_bencana'], muat)
 
   // One entry per disaster name (same grouping as the daily report; names are
   // stored in one canonical form, so "Banjir Kelantan" variants are one entry)

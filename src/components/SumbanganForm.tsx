@@ -2,25 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Plus, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-
-const NEGERI_LIST = [
-  'Johor',
-  'Kedah',
-  'Kelantan',
-  'Melaka',
-  'Negeri Sembilan',
-  'Pahang',
-  'Pulau Pinang',
-  'Perak',
-  'Perlis',
-  'Sabah',
-  'Sarawak',
-  'Selangor',
-  'Terengganu',
-  'Kuala Lumpur',
-  'Putrajaya',
-  'Labuan',
-]
+import { NEGERI_LIST } from '../lib/negeriVisual'
 
 const JENIS_KUMPULAN = ['NGO', 'CDA', 'PERSATUAN', 'KELAB', 'PERSEKUTUAN']
 const JENIS_SUMBANGAN = ['BAHAN MENTAH', 'PERKHIDMATAN'] as const

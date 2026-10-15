@@ -51,7 +51,11 @@ function labelPenyedia(teks: string): { kunci: string | null; sisa: string } | n
   return null
 }
 
-export async function bacaLaporanAwal(fail: File): Promise<HasilBacaan | { ralat: string }> {
+// `jenisDikenali`: current category names, so any of them is recognised in the file
+export async function bacaLaporanAwal(
+  fail: File,
+  jenisDikenali: string[] = [],
+): Promise<HasilBacaan | { ralat: string }> {
   if (!/\.docx$/i.test(fail.name)) {
     return { ralat: 'Sila muat naik fail Word (.docx). Fail .doc lama perlu disimpan semula sebagai .docx.' }
   }
@@ -148,7 +152,7 @@ export async function bacaLaporanAwal(fail: File): Promise<HasilBacaan | { ralat
 
   if (nilai.jenis_bencana) {
     const asal = nilai.jenis_bencana
-    const jenis = normalJenis(asal)
+    const jenis = normalJenis(asal, jenisDikenali)
     if (!jenis) {
       amaran.jenis_bencana = `Dalam fail: "${asal}". Sila pilih jenis bencana daripada senarai.`
       nilai.jenis_bencana = ''

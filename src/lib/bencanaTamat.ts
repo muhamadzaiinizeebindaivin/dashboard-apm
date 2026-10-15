@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabase'
+import { useRealtime } from './realtime'
 
 // A disaster with no new report for this long is ended automatically (pg_cron job)
 export const HAD_TAMAT_AUTO_JAM = 24
@@ -16,20 +17,15 @@ export function useBencanaTamat() {
   const [senarai, setSenarai] = useState<BencanaTamat[]>([])
 
   const muat = useCallback(async () => {
-    const { data } = await supabase.from('bencana_tamat').select('*')
+    const { data, error } = await supabase.from('bencana_tamat').select('*')
+    if (error) return // keep the last list: a TAMAT badge must not vanish on a network blip
     setSenarai((data as BencanaTamat[]) ?? [])
   }, [])
 
   useEffect(() => {
     muat()
-    const channel = supabase
-      .channel(`bencana-tamat-${Math.random().toString(36).slice(2)}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bencana_tamat' }, () => muat())
-      .subscribe()
-    return () => {
-      supabase.removeChannel(channel)
-    }
   }, [muat])
+  useRealtime('bencana-tamat', ['bencana_tamat'], muat)
 
   return senarai
 }

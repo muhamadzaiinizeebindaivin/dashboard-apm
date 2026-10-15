@@ -4,6 +4,7 @@ import { X, Loader2, MapPin, MapPinned } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { PilihLokasiModal } from './PilihLokasiModal'
 import type { PpsPusat } from '../lib/ppsPusat'
+import { hurufBesar } from '../lib/normalisasi'
 
 const inputClass =
   'w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 outline-none focus:border-emerald-600'
@@ -30,7 +31,7 @@ export function EditPpsModal({ pps, onClose, onSaved }: EditPpsModalProps) {
   const [menyimpan, setMenyimpan] = useState(false)
   const [ralat, setRalat] = useState('')
 
-  const namaBerubah = nama.trim() !== pps.nama || daerah.trim() !== (pps.daerah ?? '')
+  const namaBerubah = hurufBesar(nama) !== hurufBesar(pps.nama) || hurufBesar(daerah) !== hurufBesar(pps.daerah ?? '')
 
   async function simpan() {
     setRalat('')
@@ -46,15 +47,15 @@ export function EditPpsModal({ pps, onClose, onSaved }: EditPpsModalProps) {
     setMenyimpan(true)
     const { error } = await supabase.rpc('kemaskini_pps', {
       p_id: pps.id,
-      p_nama: nama.trim().replace(/\s+/g, ' '),
-      p_daerah: daerah.trim(),
+      p_nama: hurufBesar(nama),
+      p_daerah: hurufBesar(daerah),
       p_mangsa: Number(mangsa),
       p_keluarga: Number(keluarga),
       p_latitude: lokasi?.[0] ?? null,
       p_longitude: lokasi?.[1] ?? null,
-      p_mukim: mukim.trim(),
-      p_pengurus_nama: pengurusNama.trim(),
-      p_pengurus_jawatan: pengurusJawatan.trim(),
+      p_mukim: hurufBesar(mukim),
+      p_pengurus_nama: hurufBesar(pengurusNama),
+      p_pengurus_jawatan: hurufBesar(pengurusJawatan),
       p_pengurus_telefon: pengurusTelefon.trim(),
     })
     setMenyimpan(false)
@@ -98,15 +99,15 @@ export function EditPpsModal({ pps, onClose, onSaved }: EditPpsModalProps) {
               <label className="mb-1 block text-sm font-medium text-neutral-700">
                 Nama PPS <span className="text-red-500">*</span>
               </label>
-              <input value={nama} onChange={(e) => setNama(e.target.value)} className={inputClass} />
+              <input value={nama} onChange={(e) => setNama(e.target.value)} className={`${inputClass} uppercase`} />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-neutral-700">Daerah</label>
-              <input value={daerah} onChange={(e) => setDaerah(e.target.value)} className={inputClass} />
+              <input value={daerah} onChange={(e) => setDaerah(e.target.value)} className={`${inputClass} uppercase`} />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-neutral-700">Mukim</label>
-              <input value={mukim} onChange={(e) => setMukim(e.target.value)} className={inputClass} />
+              <input value={mukim} onChange={(e) => setMukim(e.target.value)} className={`${inputClass} uppercase`} />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-neutral-700">
@@ -141,14 +142,14 @@ export function EditPpsModal({ pps, onClose, onSaved }: EditPpsModalProps) {
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="sm:col-span-2">
                 <label className="mb-1 block text-sm font-medium text-neutral-700">Nama</label>
-                <input value={pengurusNama} onChange={(e) => setPengurusNama(e.target.value)} className={inputClass} />
+                <input value={pengurusNama} onChange={(e) => setPengurusNama(e.target.value)} className={`${inputClass} uppercase`} />
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-neutral-700">Jawatan</label>
                 <input
                   value={pengurusJawatan}
                   onChange={(e) => setPengurusJawatan(e.target.value)}
-                  className={inputClass}
+                  className={`${inputClass} uppercase`}
                 />
               </div>
               <div>

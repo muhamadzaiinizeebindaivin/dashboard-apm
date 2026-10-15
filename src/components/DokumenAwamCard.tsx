@@ -54,7 +54,8 @@ export function DokumenAwamCard() {
   })
 
   async function muatSemula() {
-    const { data } = await supabase.from('dokumen_awam').select('jenis, file_name, file_path')
+    const { data, error } = await supabase.from('dokumen_awam').select('jenis, file_name, file_path')
+    if (error) return // public homepage card: keep what is shown, no message
     const next: Record<Jenis, DokumenRow | null> = { ...KOSONG }
     for (const row of (data as DokumenRow[]) ?? []) {
       if (row.jenis in next) next[row.jenis] = row

@@ -1,44 +1,13 @@
 import { Fragment } from 'react'
 import type { ReactNode } from 'react'
-import { JENIS_BENCANA_SEMASA } from '../lib/laporanBencana'
+import { susunJenis, warnaJenis } from '../lib/jenisBencana'
 import type { ItemLaporanNasional, KorbanNegeri, PpsDitutup } from '../lib/laporanNasional'
 import type { TitikGraf } from '../lib/laporanNasionalGraf'
 import petaMalaysia from '../assets/peta-malaysia.png'
+import { NEGERI_NORM } from '../lib/negeriVisual'
 
-// Same normalized (0–1) label-point positions used by the PDF map, taken
-// from the source SVG's own label_points (viewBox 0 0 1000 332).
-const NEGERI_NORM: Record<string, { x: number; y: number }> = {
-  Sabah: { x: 0.8398, y: 0.3364 },
-  Perlis: { x: 0.0734, y: 0.1663 },
-  Kedah: { x: 0.0937, y: 0.2437 },
-  Kelantan: { x: 0.1565, y: 0.357 },
-  Perak: { x: 0.1086, y: 0.3874 },
-  Sarawak: { x: 0.6986, y: 0.7226 },
-  'Pulau Pinang': { x: 0.0831, y: 0.3195 },
-  Selangor: { x: 0.1315, y: 0.597 },
-  'Negeri Sembilan': { x: 0.1646, y: 0.6809 },
-  Melaka: { x: 0.1703, y: 0.7506 },
-  Johor: { x: 0.2192, y: 0.7898 },
-  Pahang: { x: 0.1746, y: 0.5527 },
-  Terengganu: { x: 0.1967, y: 0.3675 },
-  Labuan: { x: 0.7666, y: 0.331 },
-  'Kuala Lumpur': { x: 0.1403, y: 0.6352 },
-  Putrajaya: { x: 0.1406, y: 0.665 },
-}
-
-const WARNA_HEX: Record<string, string> = {
-  Ribut: '#3b8ed6',
-  Banjir: '#2563eb',
-  Tsunami: '#14828c',
-  Kebakaran: '#dc2626',
-  'Tanah Runtuh': '#785428',
-  Pencemaran: '#ca8a04',
-  'Bangunan Runtuh': '#6b7280',
-}
-
-function warnaHex(jenis: string) {
-  return WARNA_HEX[jenis] ?? '#6b7280'
-}
+// Colour of each disaster type = its category's colour (Urus Kategori)
+const warnaHex = warnaJenis
 
 function kiraPps(pps: string | null) {
   return pps ? pps.split('\n').filter((s) => s.trim()).length : 0
@@ -421,16 +390,30 @@ function PetaLaporan({ items, negeriAktif }: { items: ItemLaporanNasional[]; neg
     )
   }
 
+  // Legend: only the types on this map, 7 per row
+  const jenisPeta = susunJenis(items.map((i) => i.jenisBencana))
+  const barisLegend = Math.max(1, Math.ceil(jenisPeta.length / 7))
   const legendY = Math.max(petaY + petaTinggi, yLuarKiri, yTengah, yLuarKanan) + 6
-  const tinggiSvg = legendY + 12
+  const tinggiSvg = legendY + 10 * barisLegend + 2
 
   return (
     <svg viewBox={`0 0 ${lebar} ${tinggiSvg}`} className="h-auto w-full">
       <image href={petaMalaysia} x={petaX} y={petaY} width={petaLebar} height={petaTinggi} />
       {elemen}
-      <rect x={margin} y={legendY} width={lebar - margin * 2} height={10} rx={1} fill="#ebeef4" stroke="#b4b4b4" strokeWidth={0.3} />
-      {JENIS_BENCANA_SEMASA.map((jenis, i) => (
-        <g key={jenis} transform={`translate(${margin + 4 + i * 38}, 0)`}>
+      {jenisPeta.length > 0 && (
+        <rect
+          x={margin}
+          y={legendY}
+          width={lebar - margin * 2}
+          height={10 * barisLegend}
+          rx={1}
+          fill="#ebeef4"
+          stroke="#b4b4b4"
+          strokeWidth={0.3}
+        />
+      )}
+      {jenisPeta.map((jenis, i) => (
+        <g key={jenis} transform={`translate(${margin + 4 + (i % 7) * 38}, ${Math.floor(i / 7) * 10})`}>
           <IkonBencana jenis={jenis} cx={0} cy={legendY + 5} r={2.6} />
           <text x={4} y={legendY + 6} className="fill-neutral-700 text-[3px] font-semibold">
             {jenis}
@@ -475,11 +458,8 @@ export function LaporanNasionalPreview({
 
   const negeriAktif = [...new Set(aktif.map((i) => i.negeri).filter((n): n is string => !!n))]
 
-  const jenisAda = [...new Set(items.map((i) => i.jenisBencana))]
-  const jenisSet = [
-    ...JENIS_BENCANA_SEMASA.filter((j) => jenisAda.includes(j)),
-    ...jenisAda.filter((j) => !JENIS_BENCANA_SEMASA.includes(j)),
-  ]
+  // Same order as the category list (Urus Kategori)
+  const jenisSet = susunJenis(items.map((i) => i.jenisBencana))
 
   const tarikh = masaJana.toLocaleDateString('ms-MY', { day: '2-digit', month: 'long', year: 'numeric' })
   const masa = `${String(masaJana.getHours()).padStart(2, '0')}${String(masaJana.getMinutes()).padStart(2, '0')}H`
