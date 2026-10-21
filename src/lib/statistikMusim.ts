@@ -4,8 +4,12 @@ import { kunci } from './normalisasi'
 import { ambilSejarahPps, snapshotIkutBencana } from './laporanNasionalGraf'
 
 // Full statistics of one monsoon season (Statistik Musim page).
-// - Victims / PPS / KIR: replayed day by day with the same engine as the
-//   Laporan Nasional graphs (snapshotIkutBencana), so both always agree.
+// - Jumlah Mangsa / KIR / PPS (season totals): for each PPS, the highest figure it
+//   reached during the season, added up over all PPS. Adding up days instead would
+//   count a family staying 10 days ten times. (Estimate: people are not tracked
+//   individually, a family moving to another PPS is counted in both.)
+// - Daily graph: people in PPS at 23:59 each day, replayed with the same engine as
+//   the Laporan Nasional graphs (snapshotIkutBencana), so both always agree.
 // - Extra Excel sheets: each Laporan Semasa repeats the CUMULATIVE situation,
 //   so Korban / Kerosakan / Pertanian take the latest report in the season for
 //   each disaster + state (never a sum of reports). Mobilisasi takes the highest
@@ -21,13 +25,14 @@ export type StatistikMusimData = {
     bilBencana: number
     bilLaporan: number
     bilNegeri: number
-    puncakMangsa: Puncak
-    puncakPps: Puncak
-    puncakKeluarga: Puncak
+    jumlahMangsa: number
+    jumlahPps: number
+    jumlahKeluarga: number
+    puncakMangsa: Puncak // busiest day, only marked on the daily graph
   }
   harian: TitikHarian[]
-  ikutNegeri: { negeri: string; bilBencana: number; puncakMangsa: number; puncakPps: number; hariAktif: number }[]
-  ikutJenis: { jenis: string; bilBencana: number; puncakMangsa: number }[]
+  ikutNegeri: { negeri: string; bilBencana: number; jumlahMangsa: number; jumlahPps: number; hariAktif: number }[]
+  ikutJenis: { jenis: string; bilBencana: number; jumlahMangsa: number }[]
   bencana: {
     nama: string
     jenis: string
@@ -35,7 +40,7 @@ export type StatistikMusimData = {
     laporanPertama: string | null
     tamatPada: string | null
     tempohHari: number | null
-    puncakMangsa: number
+    jumlahMangsa: number
   }[]
   korban: {
     kematian: number
@@ -119,6 +124,16 @@ function kategoriKorban(k: string | null): 'kematian' | 'cedera' | 'hilang' | nu
   return null
 }
 
+// Last entry at or before t (entries sorted by time)
+function terakhirSebelum<T extends { masa: number }>(arr: T[] | undefined, t: number): T | undefined {
+  let hasil: T | undefined
+  for (const x of arr ?? []) {
+    if (x.masa > t) break
+    hasil = x
+  }
+  return hasil
+}
+
 function tambahKe<T>(peta: Map<string, T>, k: string, mula: () => T, ubah: (x: T) => void) {
   if (!peta.has(k)) peta.set(k, mula())
   ubah(peta.get(k)!)
@@ -156,9 +171,7 @@ export async function ambilStatistikMusim(tarikhMula: string, tarikhTamat: strin
 
   // ---------- Day-by-day replay ----------
   const harian: TitikHarian[] = []
-  const puncakIkutBencana = new Map<string, number>()
-  const negeriHarian = new Map<string, { puncakMangsa: number; puncakPps: number; hariAktif: number }>()
-  const jenisHarian = new Map<string, number>() // jenis -> peak victims
+  const hariAktifNegeri = new Map<string, number>() // days with victims in PPS
 
   if (!belumMula) {
     for (let d = new Date(mula); d.getTime() <= sehinggaMasa.getTime(); d.setDate(d.getDate() + 1)) {
@@ -169,45 +182,101 @@ export async function ambilStatistikMusim(tarikhMula: string, tarikhTamat: strin
       let mangsa = 0
       let keluarga = 0
       let pps = 0
-      const negeriHari = new Map<string, { mangsa: number; pps: number }>()
-      const jenisHari = new Map<string, number>()
+      const negeriAktifHariIni = new Set<string>()
 
       for (const [namaAsal, b] of snap) {
         const nama = namaAsal.trim()
         mangsa += b.mangsa
         keluarga += b.keluarga
         pps += b.pps
-        if (b.mangsa > 0 || b.pps > 0) {
-          if (!jenisBencana.has(nama)) jenisBencana.set(nama, b.jenis?.trim() || 'Lain-lain')
-          puncakIkutBencana.set(nama, Math.max(puncakIkutBencana.get(nama) ?? 0, b.mangsa))
-        }
-        const jenis = jenisBencana.get(nama) ?? (b.jenis?.trim() || 'Lain-lain')
-        jenisHari.set(jenis, (jenisHari.get(jenis) ?? 0) + b.mangsa)
+        if ((b.mangsa > 0 || b.pps > 0) && !jenisBencana.has(nama)) jenisBencana.set(nama, b.jenis?.trim() || 'Lain-lain')
         for (const [negeri, n] of b.ikutNegeri) {
           if (!negeri) continue
           if (n.mangsa > 0 || n.pps > 0) tambahKe(negeriBencana, nama, () => new Set<string>(), (s) => s.add(negeri))
-          tambahKe(negeriHari, negeri, () => ({ mangsa: 0, pps: 0 }), (x) => {
-            x.mangsa += n.mangsa
-            x.pps += n.pps
-          })
+          if (n.mangsa > 0) negeriAktifHariIni.add(negeri)
         }
       }
-
-      for (const [negeri, x] of negeriHari) {
-        tambahKe(negeriHarian, negeri, () => ({ puncakMangsa: 0, puncakPps: 0, hariAktif: 0 }), (s) => {
-          s.puncakMangsa = Math.max(s.puncakMangsa, x.mangsa)
-          s.puncakPps = Math.max(s.puncakPps, x.pps)
-          if (x.mangsa > 0) s.hariAktif += 1
-        })
-      }
-      for (const [jenis, m] of jenisHari) jenisHarian.set(jenis, Math.max(jenisHarian.get(jenis) ?? 0, m))
+      for (const n of negeriAktifHariIni) hariAktifNegeri.set(n, (hariAktifNegeri.get(n) ?? 0) + 1)
 
       harian.push({ tarikh: isoTarikh(d), label: `${d.getDate()} ${BULAN[d.getMonth()]}`, mangsa, keluarga, pps })
     }
   }
 
-  const puncak = (f: (t: TitikHarian) => number): Puncak =>
-    harian.reduce<Puncak>((p, t) => (f(t) > (p?.nilai ?? 0) ? { nilai: f(t), tarikh: t.tarikh } : p), null)
+  const puncakMangsa = harian.reduce<Puncak>(
+    (p, t) => (t.mangsa > (p?.nilai ?? 0) ? { nilai: t.mangsa, tarikh: t.tarikh } : p),
+    null,
+  )
+  const tamatIkutNama = new Map([...sejarah.tamat].map(([n, t]) => [n.trim(), t]))
+
+  // ---------- Season totals: highest figure each PPS reached during the season ----------
+  const mulaMs = mula.getTime()
+  const hinggaMs = sehinggaMasa.getTime()
+  const ikutPps = new Map<string, { nama: string; negeri: string; mangsa: number; keluarga: number; bilPps: number }>()
+
+  if (!belumMula) {
+    const dp = sejarah.data
+    // New format (pps_pusat): every report / manual edit of the PPS within the season
+    for (const [id, kiraan] of dp.kiraan) {
+      const p = dp.pusat.get(id)
+      if (!p) continue
+      const nama = p.nama_bencana.trim()
+      const had = Math.min(hinggaMs, tamatIkutNama.get(nama) ?? Infinity) // nothing after the disaster ended
+      if (had < mulaMs) continue
+      const dikira = kiraan.filter((k) => k.masa >= mulaMs && k.masa <= had)
+      // Already open when the season started: the people there at that moment count too
+      const awal = terakhirSebelum(kiraan, mulaMs)
+      if (awal && terakhirSebelum(dp.log.get(id), mulaMs)?.ke !== 'ditutup') dikira.push(awal)
+      if (dikira.length === 0) continue
+      ikutPps.set(id, {
+        nama,
+        negeri: p.negeri,
+        mangsa: Math.max(...dikira.map((k) => k.mangsa)),
+        keluarga: Math.max(...dikira.map((k) => k.keluarga)),
+        bilPps: 1,
+      })
+    }
+
+    // Legacy disasters (before per-PPS tracking): one row per state + PPS list of each report
+    const namaLaporan = new Map(
+      laporanMusim.filter((r) => r.jenis_laporan === 'semasa' && r.nama_bencana).map((r) => [r.id, r.nama_bencana!.trim()]),
+    )
+    for (const r of sejarah.pps) {
+      const nama = namaLaporan.get(r.laporan_id)
+      if (!nama || dp.ppsIkutBencana.has(nama)) continue // new-format disasters are counted above
+      const senaraiPps = (r.pps ?? '').split('\n').filter((x) => x.trim())
+      tambahKe(
+        ikutPps,
+        `L|${nama}|${r.negeri ?? ''}|${kunci(r.pps ?? '')}`,
+        () => ({ nama, negeri: r.negeri ?? 'Tidak dinyatakan', mangsa: 0, keluarga: 0, bilPps: 0 }),
+        (x) => {
+          x.mangsa = Math.max(x.mangsa, r.jumlah_mangsa ?? 0)
+          x.keluarga = Math.max(x.keluarga, r.jumlah_keluarga ?? 0)
+          x.bilPps = Math.max(x.bilPps, senaraiPps.length)
+        },
+      )
+    }
+  }
+
+  // Disasters / states only seen through their PPS are part of the season too
+  for (const x of ikutPps.values()) {
+    if (!jenisBencana.has(x.nama)) jenisBencana.set(x.nama, 'Lain-lain')
+    if (x.negeri) tambahKe(negeriBencana, x.nama, () => new Set<string>(), (s) => s.add(x.negeri))
+  }
+  const jumlahIkut = (kunciOf: (x: { nama: string; negeri: string }) => string) => {
+    const peta = new Map<string, { mangsa: number; keluarga: number; pps: number }>()
+    for (const x of ikutPps.values()) {
+      tambahKe(peta, kunciOf(x), () => ({ mangsa: 0, keluarga: 0, pps: 0 }), (j) => {
+        j.mangsa += x.mangsa
+        j.keluarga += x.keluarga
+        j.pps += x.bilPps
+      })
+    }
+    return peta
+  }
+  const jumlahBencana = jumlahIkut((x) => x.nama)
+  const jumlahNegeri = jumlahIkut((x) => x.negeri)
+  const jumlahJenis = jumlahIkut((x) => jenisBencana.get(x.nama) ?? 'Lain-lain')
+  const semuaJumlah = [...ikutPps.values()]
 
   // ---------- Disaster list ----------
   const namaBencana = [...jenisBencana.keys()]
@@ -226,8 +295,6 @@ export async function ambilStatistikMusim(tarikhMula: string, tarikhTamat: strin
       if (!pertama.has(nama)) pertama.set(nama, r.created_at)
     }
   }
-  const tamatIkutNama = new Map([...sejarah.tamat].map(([n, t]) => [n.trim(), t]))
-
   const bencana = namaBencana
     .map((nama) => {
       const mulaB = pertama.get(nama) ?? null
@@ -240,31 +307,31 @@ export async function ambilStatistikMusim(tarikhMula: string, tarikhTamat: strin
         laporanPertama: mulaB,
         tamatPada: tamatMs !== undefined ? new Date(tamatMs).toISOString() : null,
         tempohHari: mulaB ? Math.max(1, Math.ceil((hujungMs - new Date(mulaB).getTime()) / 86_400_000)) : null,
-        puncakMangsa: puncakIkutBencana.get(nama) ?? 0,
+        jumlahMangsa: jumlahBencana.get(nama)?.mangsa ?? 0,
       }
     })
-    .sort((a, b) => b.puncakMangsa - a.puncakMangsa || a.nama.localeCompare(b.nama))
+    .sort((a, b) => b.jumlahMangsa - a.jumlahMangsa || a.nama.localeCompare(b.nama))
 
   // ---------- By state / by type ----------
   const semuaNegeri = new Set<string>()
   for (const s of negeriBencana.values()) for (const n of s) semuaNegeri.add(n)
-  for (const n of negeriHarian.keys()) semuaNegeri.add(n)
+  for (const n of hariAktifNegeri.keys()) semuaNegeri.add(n)
 
   const ikutNegeri = [...semuaNegeri]
     .map((negeri) => ({
       negeri,
       bilBencana: [...negeriBencana.values()].filter((s) => s.has(negeri)).length,
-      puncakMangsa: negeriHarian.get(negeri)?.puncakMangsa ?? 0,
-      puncakPps: negeriHarian.get(negeri)?.puncakPps ?? 0,
-      hariAktif: negeriHarian.get(negeri)?.hariAktif ?? 0,
+      jumlahMangsa: jumlahNegeri.get(negeri)?.mangsa ?? 0,
+      jumlahPps: jumlahNegeri.get(negeri)?.pps ?? 0,
+      hariAktif: hariAktifNegeri.get(negeri) ?? 0,
     }))
-    .sort((a, b) => b.puncakMangsa - a.puncakMangsa || a.negeri.localeCompare(b.negeri))
+    .sort((a, b) => b.jumlahMangsa - a.jumlahMangsa || a.negeri.localeCompare(b.negeri))
 
   const bilIkutJenis = new Map<string, number>()
   for (const j of jenisBencana.values()) bilIkutJenis.set(j, (bilIkutJenis.get(j) ?? 0) + 1)
   const ikutJenis = [...bilIkutJenis]
-    .map(([jenis, bilBencana]) => ({ jenis, bilBencana, puncakMangsa: jenisHarian.get(jenis) ?? 0 }))
-    .sort((a, b) => b.puncakMangsa - a.puncakMangsa || b.bilBencana - a.bilBencana)
+    .map(([jenis, bilBencana]) => ({ jenis, bilBencana, jumlahMangsa: jumlahJenis.get(jenis)?.mangsa ?? 0 }))
+    .sort((a, b) => b.jumlahMangsa - a.jumlahMangsa || b.bilBencana - a.bilBencana)
 
   // ---------- Extra sheets ----------
   const semasa = laporanMusim.filter((r) => r.jenis_laporan === 'semasa' && r.nama_bencana)
@@ -415,9 +482,10 @@ export async function ambilStatistikMusim(tarikhMula: string, tarikhTamat: strin
       bilBencana: bencana.length,
       bilLaporan: laporanMusim.length,
       bilNegeri: semuaNegeri.size,
-      puncakMangsa: puncak((t) => t.mangsa),
-      puncakPps: puncak((t) => t.pps),
-      puncakKeluarga: puncak((t) => t.keluarga),
+      jumlahMangsa: semuaJumlah.reduce((n, x) => n + x.mangsa, 0),
+      jumlahPps: semuaJumlah.reduce((n, x) => n + x.bilPps, 0),
+      jumlahKeluarga: semuaJumlah.reduce((n, x) => n + x.keluarga, 0),
+      puncakMangsa,
     },
     harian,
     ikutNegeri,

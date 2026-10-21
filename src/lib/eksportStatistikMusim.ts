@@ -98,9 +98,9 @@ export async function janaPdfStatistikMusim(musim: Musim, d: StatistikMusimData)
     ['BENCANA', nombor(r.bilBencana), ''],
     ['LAPORAN', nombor(r.bilLaporan), ''],
     ['NEGERI TERJEJAS', nombor(r.bilNegeri), ''],
-    ['PUNCAK MANGSA', nombor(r.puncakMangsa?.nilai ?? 0), r.puncakMangsa ? tarikh(r.puncakMangsa.tarikh) : ''],
-    ['PUNCAK PPS', nombor(r.puncakPps?.nilai ?? 0), r.puncakPps ? tarikh(r.puncakPps.tarikh) : ''],
-    ['PUNCAK KIR', nombor(r.puncakKeluarga?.nilai ?? 0), r.puncakKeluarga ? tarikh(r.puncakKeluarga.tarikh) : ''],
+    ['JUMLAH MANGSA', nombor(r.jumlahMangsa), ''],
+    ['JUMLAH PPS', nombor(r.jumlahPps), ''],
+    ['JUMLAH KIR', nombor(r.jumlahKeluarga), ''],
   ]
   const jarak = 3
   const lebarKotak = (lebar - margin * 2 - jarak * (kotak.length - 1)) / kotak.length
@@ -159,7 +159,7 @@ export async function janaPdfStatistikMusim(musim: Musim, d: StatistikMusimData)
       doc.circle(px(iPuncak), py(titik[iPuncak].mangsa), 1.2, 'F')
       doc.setTextColor(194, 65, 12)
       doc.setFont('helvetica', 'bold')
-      doc.text(`Puncak ${nombor(titik[iPuncak].mangsa)}`, px(iPuncak), Math.max(gy + 3, py(titik[iPuncak].mangsa) - 3), {
+      doc.text(`Tertinggi ${nombor(titik[iPuncak].mangsa)}`, px(iPuncak), Math.max(gy + 3, py(titik[iPuncak].mangsa) - 3), {
         align: 'center',
       })
     }
@@ -218,19 +218,19 @@ export async function janaPdfStatistikMusim(musim: Musim, d: StatistikMusimData)
 
   bahagian(
     'MENGIKUT NEGERI',
-    ['Negeri', 'Bencana', 'Puncak Mangsa', 'Puncak PPS', 'Hari Aktif'],
-    d.ikutNegeri.map((n) => [n.negeri, n.bilBencana, n.puncakMangsa, n.puncakPps, n.hariAktif]),
+    ['Negeri', 'Bencana', 'Jumlah Mangsa', 'Jumlah PPS', 'Hari Aktif'],
+    d.ikutNegeri.map((n) => [n.negeri, n.bilBencana, n.jumlahMangsa, n.jumlahPps, n.hariAktif]),
     'Tiada negeri terjejas.',
   )
   bahagian(
     'MENGIKUT JENIS BENCANA',
-    ['Jenis', 'Bencana', 'Puncak Mangsa'],
-    d.ikutJenis.map((j) => [j.jenis, j.bilBencana, j.puncakMangsa]),
+    ['Jenis', 'Bencana', 'Jumlah Mangsa'],
+    d.ikutJenis.map((j) => [j.jenis, j.bilBencana, j.jumlahMangsa]),
     'Tiada bencana dalam musim ini.',
   )
   bahagian(
     'SENARAI BENCANA',
-    ['Bencana', 'Jenis', 'Negeri', 'Laporan Pertama', 'Tamat', 'Tempoh (hari)', 'Puncak Mangsa'],
+    ['Bencana', 'Jenis', 'Negeri', 'Laporan Pertama', 'Tamat', 'Tempoh (hari)', 'Jumlah Mangsa'],
     d.bencana.map((b) => [
       b.nama,
       b.jenis,
@@ -238,7 +238,7 @@ export async function janaPdfStatistikMusim(musim: Musim, d: StatistikMusimData)
       b.laporanPertama ? tarikh(b.laporanPertama) : '—',
       b.tamatPada ? tarikh(b.tamatPada) : 'Masih aktif',
       b.tempohHari ?? '—',
-      b.puncakMangsa,
+      b.jumlahMangsa,
     ]),
     'Tiada bencana dalam musim ini.',
   )
@@ -353,9 +353,8 @@ export async function janaExcelStatistikMusim(musim: Musim, d: StatistikMusimDat
   // Ringkasan: label / value
   const ws = wb.addWorksheet('Ringkasan')
   ws.columns = [
-    { header: 'Perkara', width: 30 },
+    { header: 'Perkara', width: 34 },
     { header: 'Nilai', width: 22 },
-    { header: 'Tarikh', width: 14 },
   ]
   const kepala = ws.getRow(1)
   kepala.font = { bold: true, color: { argb: 'FFFFFFFF' } }
@@ -363,27 +362,27 @@ export async function janaExcelStatistikMusim(musim: Musim, d: StatistikMusimDat
     c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0B2A5C' } }
   })
   const ringkasan: Sel[][] = [
-    ['Musim', musim.nama, null],
-    ['Jenis', LABEL_JENIS[musim.jenis], null],
-    ['Tarikh Mula', tarikhExcel(musim.tarikh_mula), null],
-    ['Tarikh Tamat', tarikhExcel(musim.tarikh_tamat), null],
-    ['Dikira Sehingga', tarikhExcel(d.sehingga), null],
-    ['Bencana', r.bilBencana, null],
-    ['Laporan', r.bilLaporan, null],
-    ['Negeri Terjejas', r.bilNegeri, null],
-    ['Puncak Mangsa', r.puncakMangsa?.nilai ?? 0, tarikhExcel(r.puncakMangsa?.tarikh ?? null)],
-    ['Puncak PPS', r.puncakPps?.nilai ?? 0, tarikhExcel(r.puncakPps?.tarikh ?? null)],
-    ['Puncak KIR', r.puncakKeluarga?.nilai ?? 0, tarikhExcel(r.puncakKeluarga?.tarikh ?? null)],
-    ['Kematian', d.korban.kematian, null],
-    ['Cedera', d.korban.cedera, null],
-    ['Hilang', d.korban.hilang, null],
-    ['Kekuatan Mobilisasi Maksimum', d.mobilisasi.kekuatan, null],
-    ['Jalan Ditutup', d.jalan.jumlah, null],
+    ['Musim', musim.nama],
+    ['Jenis', LABEL_JENIS[musim.jenis]],
+    ['Tarikh Mula', tarikhExcel(musim.tarikh_mula)],
+    ['Tarikh Tamat', tarikhExcel(musim.tarikh_tamat)],
+    ['Dikira Sehingga', tarikhExcel(d.sehingga)],
+    ['Bencana', r.bilBencana],
+    ['Laporan', r.bilLaporan],
+    ['Negeri Terjejas', r.bilNegeri],
+    ['Jumlah Mangsa', r.jumlahMangsa],
+    ['Jumlah PPS', r.jumlahPps],
+    ['Jumlah KIR', r.jumlahKeluarga],
+    ['Kematian', d.korban.kematian],
+    ['Cedera', d.korban.cedera],
+    ['Hilang', d.korban.hilang],
+    ['Kekuatan Mobilisasi Maksimum', d.mobilisasi.kekuatan],
+    ['Jalan Ditutup', d.jalan.jumlah],
   ]
   for (const b of ringkasan) {
     const row = ws.addRow(b)
     row.getCell(1).font = { bold: true }
-    for (const i of [2, 3]) if (row.getCell(i).value instanceof Date) row.getCell(i).numFmt = 'dd/mm/yyyy'
+    if (row.getCell(2).value instanceof Date) row.getCell(2).numFmt = 'dd/mm/yyyy'
   }
   ws.getColumn(2).alignment = { horizontal: 'left' }
 
@@ -404,11 +403,11 @@ export async function janaExcelStatistikMusim(musim: Musim, d: StatistikMusimDat
     [
       { tajuk: 'Negeri', lebar: 22 },
       { tajuk: 'Bencana', lebar: 10, jenis: 'nombor' },
-      { tajuk: 'Puncak Mangsa', lebar: 15, jenis: 'nombor' },
-      { tajuk: 'Puncak PPS', lebar: 12, jenis: 'nombor' },
+      { tajuk: 'Jumlah Mangsa', lebar: 15, jenis: 'nombor' },
+      { tajuk: 'Jumlah PPS', lebar: 12, jenis: 'nombor' },
       { tajuk: 'Hari Aktif', lebar: 11, jenis: 'nombor' },
     ],
-    d.ikutNegeri.map((n) => [n.negeri, n.bilBencana, n.puncakMangsa, n.puncakPps, n.hariAktif]),
+    d.ikutNegeri.map((n) => [n.negeri, n.bilBencana, n.jumlahMangsa, n.jumlahPps, n.hariAktif]),
   )
   helaian(
     wb,
@@ -416,9 +415,9 @@ export async function janaExcelStatistikMusim(musim: Musim, d: StatistikMusimDat
     [
       { tajuk: 'Jenis Bencana', lebar: 22 },
       { tajuk: 'Bencana', lebar: 10, jenis: 'nombor' },
-      { tajuk: 'Puncak Mangsa', lebar: 15, jenis: 'nombor' },
+      { tajuk: 'Jumlah Mangsa', lebar: 15, jenis: 'nombor' },
     ],
-    d.ikutJenis.map((j) => [j.jenis, j.bilBencana, j.puncakMangsa]),
+    d.ikutJenis.map((j) => [j.jenis, j.bilBencana, j.jumlahMangsa]),
   )
   helaian(
     wb,
@@ -430,7 +429,7 @@ export async function janaExcelStatistikMusim(musim: Musim, d: StatistikMusimDat
       { tajuk: 'Laporan Pertama', lebar: 16, jenis: 'tarikh' },
       { tajuk: 'Tamat', lebar: 14, jenis: 'tarikh' },
       { tajuk: 'Tempoh (hari)', lebar: 13, jenis: 'nombor' },
-      { tajuk: 'Puncak Mangsa', lebar: 15, jenis: 'nombor' },
+      { tajuk: 'Jumlah Mangsa', lebar: 15, jenis: 'nombor' },
     ],
     d.bencana.map((b) => [
       b.nama,
@@ -439,7 +438,7 @@ export async function janaExcelStatistikMusim(musim: Musim, d: StatistikMusimDat
       tarikhExcel(b.laporanPertama),
       b.tamatPada ? tarikhExcel(b.tamatPada) : 'Masih aktif',
       b.tempohHari,
-      b.puncakMangsa,
+      b.jumlahMangsa,
     ]),
   )
   helaian(

@@ -158,7 +158,7 @@ function GrafHarian({ titik, puncak }: { titik: TitikHarian[]; puncak: Puncak })
               fontWeight="700"
               fill="#c2410c"
             >
-              Puncak {nombor(titik[iPuncak].mangsa)}
+              Tertinggi {nombor(titik[iPuncak].mangsa)}
             </text>
           </g>
         )}
@@ -233,7 +233,7 @@ export function PaparanStatistikMusim({ musim, senarai, onTukar, onKembali }: Pr
     }
   }, [musim.id, musim.tarikh_mula, musim.tarikh_tamat, muatSemula])
 
-  const pk = (p: Puncak) => (p ? `pada ${tarikhPendek(p.tarikh)}` : undefined)
+
 
   return (
     <div>
@@ -324,43 +324,31 @@ export function PaparanStatistikMusim({ musim, senarai, onTukar, onKembali }: Pr
             <KadAngka ikon={AlertTriangle} label="Bencana" nilai={nombor(data.ringkasan.bilBencana)} />
             <KadAngka ikon={FileText} label="Laporan" nilai={nombor(data.ringkasan.bilLaporan)} />
             <KadAngka ikon={MapPinned} label="Negeri" nilai={nombor(data.ringkasan.bilNegeri)} kecil="terjejas" />
-            <KadAngka
-              ikon={Users}
-              label="Puncak Mangsa"
-              nilai={nombor(data.ringkasan.puncakMangsa?.nilai ?? 0)}
-              kecil={pk(data.ringkasan.puncakMangsa)}
-            />
-            <KadAngka
-              ikon={Tent}
-              label="Puncak PPS"
-              nilai={nombor(data.ringkasan.puncakPps?.nilai ?? 0)}
-              kecil={pk(data.ringkasan.puncakPps)}
-            />
-            <KadAngka
-              ikon={Home}
-              label="Puncak KIR"
-              nilai={nombor(data.ringkasan.puncakKeluarga?.nilai ?? 0)}
-              kecil={pk(data.ringkasan.puncakKeluarga)}
-            />
+            <KadAngka ikon={Users} label="Jumlah Mangsa" nilai={nombor(data.ringkasan.jumlahMangsa)} />
+            <KadAngka ikon={Tent} label="Jumlah PPS" nilai={nombor(data.ringkasan.jumlahPps)} />
+            <KadAngka ikon={Home} label="Jumlah KIR" nilai={nombor(data.ringkasan.jumlahKeluarga)} />
           </div>
 
           <Bahagian tajuk="Mangsa di PPS (harian)" ikon={Users}>
             <GrafHarian titik={data.harian} puncak={data.ringkasan.puncakMangsa} />
-            <p className="mt-2 text-xs text-neutral-400">Jumlah mangsa di PPS pada akhir setiap hari (23:59).</p>
+            <p className="mt-2 text-xs text-neutral-400">
+              Bilangan mangsa di PPS pada akhir setiap hari (23:59). Jumlah musim dikira daripada bilangan tertinggi
+              setiap PPS sepanjang musim, supaya mangsa yang tinggal beberapa hari tidak dikira berulang kali.
+            </p>
           </Bahagian>
 
           <div className="grid gap-x-6 lg:grid-cols-2">
             <Bahagian tajuk="Mengikut Negeri" ikon={MapPinned}>
               <Jadual
-                kepala={['Negeri', 'Bencana', 'Puncak Mangsa', 'Puncak PPS', 'Hari Aktif']}
-                baris={data.ikutNegeri.map((n) => [n.negeri, n.bilBencana, n.puncakMangsa, n.puncakPps, n.hariAktif])}
+                kepala={['Negeri', 'Bencana', 'Jumlah Mangsa', 'Jumlah PPS', 'Hari Aktif']}
+                baris={data.ikutNegeri.map((n) => [n.negeri, n.bilBencana, n.jumlahMangsa, n.jumlahPps, n.hariAktif])}
                 kosong="Tiada negeri terjejas."
               />
             </Bahagian>
             <Bahagian tajuk="Mengikut Jenis Bencana" ikon={AlertTriangle}>
               <Jadual
-                kepala={['Jenis', 'Bencana', 'Puncak Mangsa']}
-                baris={data.ikutJenis.map((j) => [j.jenis, j.bilBencana, j.puncakMangsa])}
+                kepala={['Jenis', 'Bencana', 'Jumlah Mangsa']}
+                baris={data.ikutJenis.map((j) => [j.jenis, j.bilBencana, j.jumlahMangsa])}
                 kosong="Tiada bencana dalam musim ini."
               />
             </Bahagian>
@@ -368,7 +356,7 @@ export function PaparanStatistikMusim({ musim, senarai, onTukar, onKembali }: Pr
 
           <Bahagian tajuk="Senarai Bencana" ikon={FileText}>
             <Jadual
-              kepala={['Bencana', 'Jenis', 'Negeri', 'Laporan Pertama', 'Tamat', 'Tempoh (hari)', 'Puncak Mangsa']}
+              kepala={['Bencana', 'Jenis', 'Negeri', 'Laporan Pertama', 'Tamat', 'Tempoh (hari)', 'Jumlah Mangsa']}
               kananDari={5}
               baris={data.bencana.map((b) => [
                 b.nama,
@@ -377,7 +365,7 @@ export function PaparanStatistikMusim({ musim, senarai, onTukar, onKembali }: Pr
                 b.laporanPertama ? tarikhPendek(b.laporanPertama) : '—',
                 b.tamatPada ? tarikhPendek(b.tamatPada) : 'Masih aktif',
                 b.tempohHari ?? '—',
-                b.puncakMangsa,
+                b.jumlahMangsa,
               ])}
               kosong="Tiada bencana dalam musim ini."
             />
