@@ -207,7 +207,7 @@ export function SenaraiParas() {
             <Skeleton className="h-full rounded-2xl" />
           </Memuat>
         ) : (
-          <div className="relative h-full">
+          <div className="relative isolate h-full">
             <ParasMap points={negeriAktif} className="h-full" />
 
             {negeriAktif.length === 0 && (

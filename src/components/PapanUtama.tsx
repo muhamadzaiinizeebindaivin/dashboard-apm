@@ -362,7 +362,8 @@ export function PapanUtama() {
   return (
     <div className="space-y-4">
       {/* Map with floating figures */}
-      <div className="relative h-[420px] overflow-hidden rounded-3xl border border-white/70 shadow-[0_20px_60px_rgba(11,42,92,0.15)] sm:h-[480px] lg:h-[560px]">
+      {/* `isolate` keeps Leaflet's z-indexes inside this box, so the mobile menu and modals stay above the map */}
+      <div className="relative isolate h-[420px] overflow-hidden rounded-3xl border border-white/70 shadow-[0_20px_60px_rgba(11,42,92,0.15)] sm:h-[480px] lg:h-[560px]">
         <PetaBencana
           titik={titik}
           terkini={terkini}
