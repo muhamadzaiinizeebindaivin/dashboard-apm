@@ -45,7 +45,8 @@ export type DataEksport = {
   lampiran: DataLampiran
 }
 
-export type TapisEksport = { negeri?: string; zon?: string; jenis?: string }
+// `nama`: only these disasters (date filter of the Laporan Nasional)
+export type TapisEksport = { negeri?: string; zon?: string; jenis?: string; nama?: string[] }
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
@@ -395,7 +396,7 @@ export function namaFailEksport(d: DataEksport) {
   return `${asas.toUpperCase().replace(/[\\/:*?"<>|]+/g, '-')}.xlsx`
 }
 
-// ---------- Data: active disasters, grouped by type, with the page filters ----------
+// ---------- Data: active disasters, one workbook per state + type, with the page filters ----------
 type BarisLaporan = {
   id: string
   nama_bencana: string | null
@@ -433,54 +434,86 @@ export async function ambilDataEksport(tapis: TapisEksport): Promise<DataEksport
     jenisIkutBencana.set(nama, r.jenis_bencana?.trim() || 'Lain-lain')
   }
 
+  // Active disasters kept by the type filter, then their PPS / reports kept by the state filters
+  const bencanaAktif = new Set(
+    [...jenisIkutBencana]
+      .filter(([n, j]) => (!tapis.jenis || j === tapis.jenis) && (!tapis.nama || tapis.nama.includes(n)))
+      .map(([n]) => n),
+  )
+  const ppsAktif = semuaPps.filter((p) => bencanaAktif.has(p.nama_bencana) && lulusNegeri(p.negeri))
+  const laporanAktif = laporan.filter(
+    (r) => !!r.nama_bencana && bencanaAktif.has(r.nama_bencana) && lulusNegeri(r.negeri),
+  )
+
+  // One workbook per state + disaster type (the NDCC template holds a single type),
+  // sorted by state, then type
+  const kumpulan = new Map<string, { negeri: string; jenis: string }>()
+  const tambah = (negeri: string, nama: string) => {
+    const jenis = jenisIkutBencana.get(nama)!
+    kumpulan.set(`${negeri}|${jenis}`, { negeri, jenis })
+  }
+  for (const p of ppsAktif) tambah(p.negeri, p.nama_bencana)
+  for (const r of laporanAktif) tambah(r.negeri!, r.nama_bencana!)
+  const senaraiKumpulan = [...kumpulan.values()].sort(
+    (a, b) => a.negeri.localeCompare(b.negeri) || a.jenis.localeCompare(b.jenis),
+  )
+
+  // Extra sheets fetched once for every state, then split per workbook
+  const lampiranSemua = await ambilLampiranTerkini(laporanAktif.filter((r) => r.jenis_laporan === 'semasa'))
+
   const masa = new Date()
   const keluaran: DataEksport[] = []
-  const senaraiJenis = [...new Set(jenisIkutBencana.values())]
-    .filter((j) => !tapis.jenis || j === tapis.jenis)
-    .sort()
 
-  for (const jenis of senaraiJenis) {
-    const bencana = [...jenisIkutBencana].filter(([, j]) => j === jenis).map(([n]) => n)
-    const pps = semuaPps.filter((p) => bencana.includes(p.nama_bencana) && lulusNegeri(p.negeri))
-    const laporanSemasa = laporan.filter(
-      (r) => r.jenis_laporan === 'semasa' && r.nama_bencana && bencana.includes(r.nama_bencana) && lulusNegeri(r.negeri),
-    )
-    const laporanDitapis = laporan.filter(
-      (r) => r.nama_bencana && bencana.includes(r.nama_bencana) && lulusNegeri(r.negeri),
-    )
-    if (pps.length === 0 && laporanDitapis.length === 0) continue
+  for (const { negeri, jenis } of senaraiKumpulan) {
+    const padan = (nama: string | null, n: string | null) => n === negeri && !!nama && jenisIkutBencana.get(nama) === jenis
+    const pps = ppsAktif.filter((p) => padan(p.nama_bencana, p.negeri))
+    const laporanDitapis = laporanAktif.filter((r) => padan(r.nama_bencana, r.negeri))
+    const laporanSemasa = laporanDitapis.filter((r) => r.jenis_laporan === 'semasa')
 
     const namaAda = [...new Set([...pps.map((p) => p.nama_bencana), ...laporanDitapis.map((r) => r.nama_bencana!)])]
-    const negeri = [
-      ...new Set([...pps.map((p) => p.negeri), ...laporanDitapis.map((r) => r.negeri!).filter(Boolean)]),
-    ].sort()
 
-    // Latest "Hal-hal lain" per disaster + state
+    // Latest "Hal-hal lain" per disaster (one state per workbook now)
     const halLain: string[] = []
     const dilihat = new Set<string>()
     for (const r of laporanSemasa) {
-      const k = `${r.nama_bencana}|${r.negeri}`
-      if (dilihat.has(k) || !r.hal_lain?.trim()) continue
-      dilihat.add(k)
-      halLain.push(namaAda.length > 1 || negeri.length > 1 ? `${r.negeri} (${r.nama_bencana}): ${r.hal_lain.trim()}` : r.hal_lain.trim())
+      if (dilihat.has(r.nama_bencana!) || !r.hal_lain?.trim()) continue
+      dilihat.add(r.nama_bencana!)
+      halLain.push(namaAda.length > 1 ? `${r.nama_bencana}: ${r.hal_lain.trim()}` : r.hal_lain.trim())
     }
 
     keluaran.push({
       jenis,
-      label: tapis.negeri ?? (tapis.zon ? `ZON ${tapis.zon}` : negeri.length === 1 ? negeri[0] : 'NASIONAL'),
+      label: negeri,
       namaBencana: namaAda,
-      negeri,
+      negeri: [negeri],
       masa,
       pps,
       halLain,
-      lampiran: await ambilLampiranTerkini(laporanSemasa),
+      lampiran: pecahLampiran(lampiranSemua, new Set(laporanSemasa.map((r) => r.id))),
     })
   }
   return keluaran
 }
 
+// Extra-sheet rows still carrying the report they came from, to split them per workbook
+type Ada = { laporan_id: string }
+type LampiranBerId = { [K in keyof DataLampiran]: (DataLampiran[K][number] & Ada)[] }
+
+function pecahLampiran(l: LampiranBerId, ids: Set<string>): DataLampiran {
+  const ambil = <T extends Ada>(rows: T[]) => rows.filter((x) => ids.has(x.laporan_id))
+  return {
+    mobilisasi: ambil(l.mobilisasi),
+    korban: ambil(l.korban),
+    korbanButiran: ambil(l.korbanButiran),
+    kerosakanKerajaan: ambil(l.kerosakanKerajaan),
+    kerosakanSwasta: ambil(l.kerosakanSwasta),
+    pertanian: ambil(l.pertanian),
+    jalanDitutup: ambil(l.jalanDitutup),
+  }
+}
+
 // Other sheets: for each disaster + state, the latest report that carried that sheet
-async function ambilLampiranTerkini(laporanSemasa: BarisLaporan[]): Promise<DataLampiran> {
+async function ambilLampiranTerkini(laporanSemasa: BarisLaporan[]): Promise<LampiranBerId> {
   // At most the 10 latest reports per disaster + state are searched
   const calon: BarisLaporan[] = []
   const bil = new Map<string, number>()
@@ -491,12 +524,11 @@ async function ambilLampiranTerkini(laporanSemasa: BarisLaporan[]): Promise<Data
     bil.set(k, n + 1)
   }
   const ids = calon.map((r) => r.id)
-  const kosong: DataLampiran = {
+  const kosong: LampiranBerId = {
     mobilisasi: [], korban: [], korbanButiran: [], kerosakanKerajaan: [], kerosakanSwasta: [], pertanian: [], jalanDitutup: [],
   }
   if (ids.length === 0) return kosong
 
-  type Ada = { laporan_id: string }
   const ambil = <T>(jadualDb: string) =>
     dalamKepingan<T & Ada>(ids, (x) => supabase.from(jadualDb).select('*').in('laporan_id', x).order('id'))
   const [mob, kor, but, ker, per, jal] = await Promise.all([
@@ -548,6 +580,8 @@ function muatTurun(data: Blob, nama: string) {
 
 const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
+const namaSelamat = (s: string) => s.toUpperCase().replace(/[\\/:*?"<>|]+/g, '-')
+
 export async function janaExcelNasional(tapis: TapisEksport): Promise<number> {
   const senarai = await ambilDataEksport(tapis)
   if (senarai.length === 0) return 0
@@ -560,19 +594,25 @@ export async function janaExcelNasional(tapis: TapisEksport): Promise<number> {
   const XL = modul.default ?? modul
   const templat = await jawapan.arrayBuffer()
 
-  const fail = await Promise.all(senarai.map(async (d) => ({ nama: namaFailEksport(d), data: await binaExcel(XL, templat, d) })))
+  const fail = await Promise.all(
+    senarai.map(async (d) => ({ negeri: d.label, nama: namaFailEksport(d), data: await binaExcel(XL, templat, d) })),
+  )
 
   if (fail.length === 1) {
     muatTurun(new Blob([fail[0].data], { type: MIME_XLSX }), fail[0].nama)
   } else {
-    // Several types: one .zip with one Excel per type
+    // Several files: one .zip, one folder per state ("JOHOR/JOHOR (BANJIR) 2200H.xlsx")
     const { default: JSZip } = await import('jszip')
     const zip = new JSZip()
-    for (const f of fail) zip.file(f.nama, f.data)
+    for (const f of fail) zip.folder(namaSelamat(f.negeri))!.file(f.nama, f.data)
+
+    // Zip named after the filters, not after the first state in it
+    const label = tapis.negeri ?? (tapis.zon ? `ZON ${tapis.zon}` : 'NASIONAL')
+    const jenis = tapis.jenis ? ` (${tapis.jenis})` : ''
     const m = senarai[0].masa
     muatTurun(
       await zip.generateAsync({ type: 'blob' }),
-      `LAPORAN SITUASI BENCANA ${senarai[0].label} ${pad(m.getHours())}${pad(m.getMinutes())}H`.toUpperCase() + '.zip',
+      namaSelamat(`LAPORAN SITUASI BENCANA ${label}${jenis} ${pad(m.getHours())}${pad(m.getMinutes())}H`) + '.zip',
     )
   }
   return fail.length

@@ -57,16 +57,19 @@ export async function janaRekodParas(
   doc.text('REKOD PARAS', lebar / 2, 37, { align: 'center' })
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
-  doc.text('Pasukan Respon Sokongan Bencana — Angkatan Pertahanan Awam Malaysia', lebar / 2, 43, { align: 'center' })
-  doc.text(`Dijana pada: ${formatMasa(sekarang.toISOString())}  ·  ${rows.length} rekod`, lebar / 2, 48, {
+  doc.text('Pusat Kawalan Operasi Pusat', lebar / 2, 43, { align: 'center' })
+  doc.setFontSize(8)
+  doc.text('Bahagian Pengurusan Bencana Operasi', lebar / 2, 48, { align: 'center' })
+  doc.setFontSize(9)
+  doc.text(`Dijana pada: ${formatMasa(sekarang.toISOString())}  ·  ${rows.length} rekod`, lebar / 2, 53, {
     align: 'center',
   })
 
   const tapisan = ringkasanTapisan(tapis)
-  if (tapisan) doc.text(tapisan, lebar / 2, 53, { align: 'center' })
+  if (tapisan) doc.text(tapisan, lebar / 2, 58, { align: 'center' })
 
   autoTable(doc, {
-    startY: tapisan ? 59 : 55,
+    startY: tapisan ? 64 : 60,
     head: [['#', 'Nama', 'Pangkat', 'No. Tel', 'Negeri', 'Mula', 'Tamat', 'Tempoh', 'Status', 'Sejarah Keadaan']],
     body: rows.map((r, i) => [
       String(i + 1),

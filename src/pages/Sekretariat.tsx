@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
-import { FileText, FileClock, FileDown, FileSpreadsheet, Home, ChevronRight, Tent, Flag, Inbox } from 'lucide-react'
+import { FileText, FileClock, FileDown, FileSpreadsheet, Home, ChevronRight, Tent, Flag, Inbox, CheckCircle2, CalendarRange } from 'lucide-react'
 import { janaExcelNasional } from '../lib/eksportExcel'
 import { supabase } from '../lib/supabase'
 import { useRealtime } from '../lib/realtime'
 import { Toast } from '../components/Toast'
 import type { ToastState } from '../components/Toast'
 import { DashboardCard } from '../components/DashboardCard'
+import { Memuat, Skeleton } from '../components/Memuatkan'
 import { LaporanNasionalPreview } from '../components/LaporanNasionalPreview'
 import { useAuth } from '../hooks/useAuth'
 import { ambilKorbanSemasa, ambilLaporanNasional, ambilPpsDitutup24Jam } from '../lib/laporanNasional'
@@ -20,6 +21,50 @@ import { NEGERI_LIST } from '../lib/negeriVisual'
 import { HAD_TIADA_KEMASKINI_JAM } from '../lib/ppsPusat'
 
 const ZON_LIST = ['Utara', 'Tengah', 'Selatan', 'Timur', 'Borneo']
+
+// Placeholder with the same layout as the Laporan Bencana Nasional card (title + 3 buttons,
+// filters, figures, graph, table), so nothing jumps when the real card arrives
+function RangkaLaporanNasional() {
+  return (
+    <Memuat label="Memuatkan Laporan Bencana Nasional" className="mt-6">
+      <DashboardCard>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 pb-4">
+          <h2 className="text-base font-semibold text-neutral-900">Laporan Bencana Nasional</h2>
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-8 w-36 rounded-lg" />
+            <Skeleton className="h-8 w-28 rounded-lg" />
+            <Skeleton className="h-8 w-16 rounded-lg" />
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100 py-3">
+          <Skeleton className="h-9 w-36 rounded-lg" />
+          <Skeleton className="h-9 w-44 rounded-lg" />
+          <Skeleton className="h-9 w-32 rounded-lg" />
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-20 rounded-xl" />
+          ))}
+        </div>
+        <Skeleton className="mt-4 h-56 rounded-xl" />
+        <div className="mt-4 space-y-2">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-8" />
+          ))}
+        </div>
+      </DashboardCard>
+    </Memuat>
+  )
+}
+
+// "14:05" today, "20/10 14:05" on another day
+function masaMuatTurun(iso: string) {
+  const t = new Date(iso)
+  const jam = t.toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit', hour12: false })
+  return t.toDateString() === new Date().toDateString()
+    ? jam
+    : `${t.toLocaleDateString('ms-MY', { day: '2-digit', month: '2-digit' })} ${jam}`
+}
 
 const PILIHAN = [
   {
@@ -46,6 +91,12 @@ const PILIHAN = [
     desc: 'Senarai bencana aktif dan tamatkan bencana yang telah selesai.',
     icon: Flag,
   },
+  {
+    to: 'statistik',
+    label: 'Statistik Musim',
+    desc: 'Tetapkan tarikh Monsun Timur Laut / Barat Daya dan lihat statistik penuh setiap musim.',
+    icon: CalendarRange,
+  },
 ]
 
 export function Sekretariat() {
@@ -55,7 +106,8 @@ export function Sekretariat() {
   const senaraiJenis = useJenisBencana()
   const onLanding = location.pathname === '/sekretariat'
   const [toast, setToast] = useState<ToastState>(null)
-  const [, setMenjanaLaporan] = useState(false)
+  // true from the start: the report is fetched as soon as the page opens
+  const [menjanaLaporan, setMenjanaLaporan] = useState(true)
   const [menMuatTurun, setMenMuatTurun] = useState(false)
   const [menjanaExcel, setMenjanaExcel] = useState(false)
   // No active report yet: calm empty state instead of an error toast
@@ -64,6 +116,9 @@ export function Sekretariat() {
   const [tapisNegeri, setTapisNegeri] = useState('')
   const [tapisJenis, setTapisJenis] = useState('')
   const [tapisZon, setTapisZon] = useState('')
+  const [tapisStatus, setTapisStatus] = useState<'' | 'aktif' | 'tamat'>('')
+  const [tapisDari, setTapisDari] = useState('') // YYYY-MM-DD
+  const [tapisHingga, setTapisHingga] = useState('')
   const [previewData, setPreviewData] = useState<{
     items: ItemLaporanNasional[]
     ditutup: PpsDitutup[]
@@ -73,6 +128,11 @@ export function Sekretariat() {
   const [dataGraf, setDataGraf] = useState<{ duaJam: TitikGraf[]; harian: TitikGraf[] } | null>(null)
   const [bilCadangan, setBilCadangan] = useState(0)
   const [bilSenyap, setBilSenyap] = useState(0)
+  // Jana Excel status, shared by all staff: green = a report arrived after the last full download
+  const [muatTurunTerakhir, setMuatTurunTerakhir] = useState<{ pada: string; laporanHingga: string | null } | null>(null)
+  const [laporanTerakhir, setLaporanTerakhir] = useState<string | null>(null)
+  // The card waits for this too, so the Jana Excel button never flashes green then gray
+  const [statusExcelSedia, setStatusExcelSedia] = useState(false)
 
   // Badges on the Pengurusan PPS card: PPS waiting for a closure decision,
   // and open PPS with no report for more than HAD_TIADA_KEMASKINI_JAM hours
@@ -99,6 +159,44 @@ export function Sekretariat() {
     return () => clearInterval(t)
   }, [onLanding, kiraBadge])
   useRealtime('pps-badge', ['pps_pusat'], kiraBadge, { aktif: onLanding })
+
+  const muatStatusExcel = useCallback(async () => {
+    const [log, lap] = await Promise.all([
+      supabase
+        .from('eksport_excel_log')
+        .select('dimuat_turun_pada, laporan_hingga')
+        .order('dimuat_turun_pada', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase.from('laporan_bencana').select('created_at').order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    ])
+    setStatusExcelSedia(true)
+    if (log.error || lap.error) return // keep the last state
+    setMuatTurunTerakhir(log.data ? { pada: log.data.dimuat_turun_pada, laporanHingga: log.data.laporan_hingga } : null)
+    setLaporanTerakhir(lap.data?.created_at ?? null)
+  }, [])
+
+  useEffect(() => {
+    if (onLanding) muatStatusExcel()
+  }, [onLanding, muatStatusExcel])
+  // Turns green again as soon as a new report arrives, and gray on every screen when someone downloads
+  useRealtime(
+    'status-excel',
+    ['eksport_excel_log', { jadual: 'laporan_bencana', peristiwa: 'INSERT' }],
+    muatStatusExcel,
+    { aktif: onLanding },
+  )
+
+  // Skeleton while the national report (PKOP only) or the Excel status is still loading
+  const tunjukRangka =
+    onLanding &&
+    !tiadaBencana &&
+    (previewData ? !statusExcelSedia : !profile || (profile.role === 'pkop' && menjanaLaporan))
+
+  const excelBaharu =
+    !muatTurunTerakhir ||
+    (!!laporanTerakhir &&
+      (!muatTurunTerakhir.laporanHingga || new Date(laporanTerakhir) > new Date(muatTurunTerakhir.laporanHingga)))
 
   // Load the national report's content automatically as soon as the page opens.
   useEffect(() => {
@@ -134,6 +232,9 @@ export function Sekretariat() {
       setTapisNegeri('')
       setTapisJenis('')
       setTapisZon('')
+      setTapisStatus('')
+      setTapisDari('')
+      setTapisHingga('')
     } catch {
       setToast({ type: 'error', message: 'Gagal menjana laporan. Sila cuba lagi.' })
     } finally {
@@ -169,12 +270,35 @@ export function Sekretariat() {
     }
   }, [previewData, tapisNegeri, tapisJenis, tapisZon])
 
+  // Status + date filters work per disaster: kept when it was happening at any
+  // time between Dari and Hingga (first report -> Tamat, or today if still active)
+  const infoBencana = new Map<string, { mula: number; tamat: string | null }>()
+  for (const i of previewData?.items ?? []) {
+    const k = i.namaBencana.trim()
+    const mula = i.mulaPada ? new Date(i.mulaPada).getTime() : -Infinity
+    const ada = infoBencana.get(k)
+    infoBencana.set(k, { mula: Math.min(ada?.mula ?? Infinity, mula), tamat: i.tamatPada ?? ada?.tamat ?? null })
+  }
+  const adaTapisBencana = !!(tapisStatus || tapisDari || tapisHingga)
+  const lulusBencana = (nama: string) => {
+    if (!adaTapisBencana) return true
+    const b = infoBencana.get(nama.trim())
+    if (!b) return false
+    if (tapisStatus === 'aktif' && b.tamat) return false
+    if (tapisStatus === 'tamat' && !b.tamat) return false
+    const akhir = b.tamat ? new Date(b.tamat).getTime() : Date.now()
+    if (tapisDari && akhir < new Date(`${tapisDari}T00:00:00`).getTime()) return false
+    if (tapisHingga && b.mula > new Date(`${tapisHingga}T23:59:59.999`).getTime()) return false
+    return true
+  }
+
   const itemsTertapis = previewData
     ? previewData.items.filter(
         (i) =>
           (!tapisNegeri || i.negeri === tapisNegeri) &&
           (!tapisJenis || i.jenisBencana === tapisJenis) &&
-          (!tapisZon || i.zon === tapisZon),
+          (!tapisZon || i.zon === tapisZon) &&
+          lulusBencana(i.namaBencana),
       )
     : []
 
@@ -186,7 +310,8 @@ export function Sekretariat() {
         (p) =>
           (!tapisNegeri || p.negeri === tapisNegeri) &&
           (!tapisZon || cariZon(p.negeri) === tapisZon) &&
-          (!tapisJenis || jenisIkutBencana.get(p.nama_bencana) === tapisJenis),
+          (!tapisJenis || jenisIkutBencana.get(p.nama_bencana) === tapisJenis) &&
+          lulusBencana(p.nama_bencana),
       )
     : []
 
@@ -196,23 +321,38 @@ export function Sekretariat() {
         (k) =>
           (!tapisNegeri || k.negeri === tapisNegeri) &&
           (!tapisZon || cariZon(k.negeri) === tapisZon) &&
-          (!tapisJenis || jenisIkutBencana.get(k.nama_bencana) === tapisJenis),
+          (!tapisJenis || jenisIkutBencana.get(k.nama_bencana) === tapisJenis) &&
+          lulusBencana(k.nama_bencana),
       )
     : []
 
-  // NDCC "Laporan Situasi Bencana" Excel: one file per disaster type, same filters as the preview
+  // NDCC "Laporan Situasi Bencana" Excel: one file per state + disaster type, same filters as the preview
   async function janaExcel() {
     setMenjanaExcel(true)
     try {
+      // Only a full download (no filter) counts as "downloaded" for the shared status
+      const tapisTarikh = !!(tapisDari || tapisHingga)
+      const penuh = !tapisNegeri && !tapisZon && !tapisJenis && !tapisTarikh
+      // Latest report included in this download, read (server time) before building the files
+      const { data: terkini } = penuh
+        ? await supabase.from('laporan_bencana').select('created_at').order('created_at', { ascending: false }).limit(1).maybeSingle()
+        : { data: null }
       const bil = await janaExcelNasional({
         negeri: tapisNegeri || undefined,
         zon: tapisZon || undefined,
         jenis: tapisJenis || undefined,
+        // Date filter: only the disasters it keeps
+        nama: tapisTarikh ? [...new Set(itemsTertapis.map((i) => i.namaBencana.trim()))] : undefined,
       })
+      if (bil > 0 && penuh) {
+        // If this fails the button just stays green: the file itself was downloaded
+        await supabase.from('eksport_excel_log').insert({ laporan_hingga: terkini?.created_at ?? null })
+        muatStatusExcel()
+      }
       setToast(
         bil === 0
           ? { type: 'error', message: 'Tiada bencana aktif untuk tapisan ini.' }
-          : { type: 'success', message: bil === 1 ? 'Fail Excel dijana.' : `${bil} fail Excel dijana (satu bagi setiap jenis bencana).` },
+          : { type: 'success', message: bil === 1 ? 'Fail Excel dijana.' : `${bil} fail Excel dijana (satu folder bagi setiap negeri).` },
       )
     } catch {
       setToast({ type: 'error', message: 'Gagal menjana Excel. Sila cuba lagi.' })
@@ -310,7 +450,9 @@ export function Sekretariat() {
         </DashboardCard>
       )}
 
-      {onLanding && previewData && (
+      {tunjukRangka && <RangkaLaporanNasional />}
+
+      {onLanding && previewData && statusExcelSedia && (
         <DashboardCard className="mt-6">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 pb-4">
             <h2 className="text-base font-semibold text-neutral-900">Laporan Bencana Nasional</h2>
@@ -325,16 +467,29 @@ export function Sekretariat() {
               </button>
               <button
                 onClick={janaExcel}
-                disabled={menjanaExcel}
+                disabled={menjanaExcel || tapisStatus === 'tamat'}
                 title={
-                  tapisJenis
-                    ? `Laporan Situasi Bencana (${tapisJenis}) dalam format Excel NDCC`
-                    : 'Satu fail Excel bagi setiap jenis bencana (dalam satu fail .zip)'
+                  tapisStatus === 'tamat'
+                    ? 'Excel NDCC hanya untuk bencana aktif'
+                    : (excelBaharu
+                        ? 'Ada laporan baharu sejak muat turun terakhir. '
+                        : `Sudah dimuat turun ${masaMuatTurun(muatTurunTerakhir!.pada)}, tiada laporan baharu sejak itu. `) +
+                      (tapisNegeri
+                        ? `Laporan Situasi Bencana ${tapisNegeri} dalam format Excel NDCC`
+                        : 'Satu fail Excel bagi setiap negeri (dalam satu fail .zip, satu folder bagi setiap negeri)')
                 }
-                className="flex items-center gap-1.5 rounded-lg border border-emerald-700 bg-white px-3 py-1.5 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50 disabled:opacity-60"
+                className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-60 ${
+                  excelBaharu
+                    ? 'border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700'
+                    : 'border-neutral-200 bg-neutral-100 text-neutral-500 hover:bg-neutral-200'
+                }`}
               >
-                <FileSpreadsheet size={15} />
-                {menjanaExcel ? 'Menjana Excel...' : 'Jana Excel'}
+                {excelBaharu ? <FileSpreadsheet size={15} /> : <CheckCircle2 size={15} />}
+                {menjanaExcel
+                  ? 'Menjana Excel...'
+                  : excelBaharu
+                    ? 'Jana Excel'
+                    : `Dimuat turun ${masaMuatTurun(muatTurunTerakhir!.pada)}`}
               </button>
               <button
                 onClick={() => {
@@ -385,12 +540,45 @@ export function Sekretariat() {
                 </option>
               ))}
             </select>
-            {(tapisNegeri || tapisJenis || tapisZon) && (
+            <select
+              value={tapisStatus}
+              onChange={(e) => setTapisStatus(e.target.value as '' | 'aktif' | 'tamat')}
+              className="h-9 rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-700 outline-none focus:border-emerald-600"
+            >
+              <option value="">Semua Status</option>
+              <option value="aktif">Aktif</option>
+              <option value="tamat">Tamat</option>
+            </select>
+            <div className="flex items-center gap-1.5">
+              <input
+                type="date"
+                value={tapisDari}
+                max={tapisHingga || undefined}
+                onChange={(e) => setTapisDari(e.target.value)}
+                title="Dari tarikh"
+                aria-label="Dari tarikh"
+                className="h-9 rounded-lg border border-neutral-200 bg-white px-2 text-sm text-neutral-700 outline-none focus:border-emerald-600"
+              />
+              <span className="text-sm text-neutral-400">–</span>
+              <input
+                type="date"
+                value={tapisHingga}
+                min={tapisDari || undefined}
+                onChange={(e) => setTapisHingga(e.target.value)}
+                title="Hingga tarikh"
+                aria-label="Hingga tarikh"
+                className="h-9 rounded-lg border border-neutral-200 bg-white px-2 text-sm text-neutral-700 outline-none focus:border-emerald-600"
+              />
+            </div>
+            {(tapisNegeri || tapisJenis || tapisZon || tapisStatus || tapisDari || tapisHingga) && (
               <button
                 onClick={() => {
                   setTapisNegeri('')
                   setTapisJenis('')
                   setTapisZon('')
+                  setTapisStatus('')
+                  setTapisDari('')
+                  setTapisHingga('')
                 }}
                 className="text-sm font-medium text-neutral-500 hover:text-emerald-700"
               >

@@ -288,8 +288,8 @@ export async function bangunLaporanNasionalDoc(
   doc.text(`KEMASKINI SEHINGGA ${masa}`, lebar / 2, 97, { align: 'center' })
   doc.setFontSize(11)
   doc.text('Pusat Kawalan Operasi Pusat', lebar / 2, 116, { align: 'center' })
-  doc.setFontSize(8)
-  doc.text('Ibu Pejabat Pertahanan Awam', lebar / 2, 122, { align: 'center' })
+  doc.setFontSize(9)
+  doc.text('Bahagian Pengurusan Bencana Operasi', lebar / 2, 122, { align: 'center' })
 
   // --- Summary page: counters + map + legend ---
   doc.addPage()

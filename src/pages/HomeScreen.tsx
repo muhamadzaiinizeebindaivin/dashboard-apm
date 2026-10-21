@@ -39,8 +39,11 @@ function KandunganAwam() {
       </div>
 
       <h1 className="mt-2 text-2xl font-semibold text-neutral-900 sm:text-3xl">
-        Bahagian Pengurusan Bencana Operasi
+        Pusat Kawalan Operasi Pusat
       </h1>
+      <p className="mt-1 text-sm font-medium text-neutral-600 sm:text-base">
+        Bahagian Pengurusan Bencana Operasi
+      </p>
       <p className="mx-auto mt-2 max-w-sm text-sm text-neutral-500">
         Sistem pengurusan operasi bencana — NGO, Bencana, Sekretariat dan Logistik dalam
         satu portal.

@@ -86,7 +86,8 @@ function ikonTitik(k?: KategoriBencana, bil?: number): L.DivIcon {
     : ''
   const ikon = L.divIcon({
     className: '',
-    html: `<div style="position:relative;display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:9999px;background:${warna};border:2px solid #fff;box-shadow:0 2px 8px rgba(15,23,42,.35)">${svg}${htmlLencana}</div>`,
+    // Outer box: the ripple ring (category colour) pulses behind the solid round icon
+    html: `<div style="position:relative;width:32px;height:32px"><span class="titik-denyut" style="background:${warna}"></span><div style="position:relative;display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:9999px;background:${warna};border:2px solid #fff;box-shadow:0 2px 8px rgba(15,23,42,.35)">${svg}${htmlLencana}</div></div>`,
     iconSize: [32, 32],
     iconAnchor: [16, 16],
     popupAnchor: [0, -16],

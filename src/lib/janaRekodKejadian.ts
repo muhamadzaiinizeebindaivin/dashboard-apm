@@ -76,10 +76,13 @@ export async function janaRekodKejadian(
   doc.text(`REKOD KEJADIAN - ${label.toUpperCase()}`, lebar / 2, 37, { align: 'center' })
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
-  doc.text('Angkatan Pertahanan Awam Malaysia', lebar / 2, 43, { align: 'center' })
-  doc.text(`Dijana pada: ${tarikh}, ${masa}`, lebar / 2, 48, { align: 'center' })
+  doc.text('Pusat Kawalan Operasi Pusat', lebar / 2, 43, { align: 'center' })
+  doc.setFontSize(8)
+  doc.text('Bahagian Pengurusan Bencana Operasi', lebar / 2, 48, { align: 'center' })
+  doc.setFontSize(9)
+  doc.text(`Dijana pada: ${tarikh}, ${masa}`, lebar / 2, 53, { align: 'center' })
   if (tapisNegeri) {
-    doc.text(`Negeri: ${tapisNegeri}`, lebar / 2, 53, { align: 'center' })
+    doc.text(`Negeri: ${tapisNegeri}`, lebar / 2, 58, { align: 'center' })
   }
 
   const badan = rows.map((r, i) => {
@@ -101,7 +104,7 @@ export async function janaRekodKejadian(
   })
 
   autoTable(doc, {
-    startY: tapisNegeri ? 60 : 56,
+    startY: tapisNegeri ? 65 : 61,
     head: [['#', 'Tarikh', 'Jenis Bencana', 'Kawasan Terjejas', 'Jumlah Keluarga', 'Jumlah Mangsa', 'PPS', 'Status', 'Tarikh Pengesahan']],
     body: badan,
     theme: 'grid',

@@ -15,6 +15,7 @@ export type ItemLaporanNasional = {
   jumlahMangsa: number
   jumlahKeluarga: number
   tamatPada?: string | null // set when the disaster has been ended (Tamat)
+  mulaPada?: string | null // first Laporan Semasa of the disaster (date filter)
 }
 
 type BarisSemasa = {
@@ -275,6 +276,12 @@ export async function ambilLaporanNasional(): Promise<ItemLaporanNasional[]> {
     const k = `${i.negeri}|${kunciTeks(i.daerah)}`
     if (!ejaan.has(k)) ejaan.set(k, i.daerah)
     i.daerah = ejaan.get(k)!
+  }
+
+  // First report of each disaster (reports are newest-first in each group)
+  for (const i of items) {
+    const arr = kumpulan.get(i.namaBencana)
+    i.mulaPada = arr ? arr[arr.length - 1].created_at : null
   }
 
   return items

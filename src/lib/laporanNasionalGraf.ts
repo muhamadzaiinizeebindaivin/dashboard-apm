@@ -104,17 +104,20 @@ function terakhirSebelum<T extends { masa: number }>(arr: T[] | undefined, t: nu
   return hasil
 }
 
-// The state of the report "as of" a given moment, using the same rules as
-// the current snapshot (ambilLaporanNasional). `tapis` applies the same
+// Contribution of one disaster to the snapshot, split by state (PPS state)
+export type SumbanganBencana = {
+  jenis: string | null
+  mangsa: number
+  keluarga: number
+  pps: number
+  ikutNegeri: Map<string, { mangsa: number; keluarga: number; pps: number }> // '' = state unknown (legacy rows)
+}
+
+// The state of the report "as of" a given moment, per disaster, using the same
+// rules as the current snapshot (ambilLaporanNasional). `tapis` applies the same
 // Negeri/Jenis Bencana/Zon filter the on-page report and PDF use.
-function snapshotPadaMasa(
-  masa: Date,
-  barisAsc: BarisSemasa[],
-  pps: BarisPps[],
-  data: DataPusat,
-  tapis: TapisGraf,
-  tamat: Map<string, number>,
-): { mangsa: number; keluarga: number; pps: number; negeri: number } {
+export function snapshotIkutBencana(masa: Date, sejarah: SejarahPps, tapis: TapisGraf = {}): Map<string, SumbanganBencana> {
+  const { baris: barisAsc, pps, data, tamat } = sejarah
   const t = masa.getTime()
   const had = barisAsc.filter((b) => new Date(b.created_at).getTime() <= t)
 
@@ -125,10 +128,19 @@ function snapshotPadaMasa(
     kumpulan.get(nama)!.push(b)
   }
 
-  let mangsa = 0
-  let keluarga = 0
-  let ppsCount = 0
-  const negeriSet = new Set<string>()
+  const hasil = new Map<string, SumbanganBencana>()
+  const tambah = (nama: string, jenis: string | null, negeri: string, mangsa: number, keluarga: number, bilPps: number) => {
+    if (!hasil.has(nama)) hasil.set(nama, { jenis, mangsa: 0, keluarga: 0, pps: 0, ikutNegeri: new Map() })
+    const s = hasil.get(nama)!
+    s.mangsa += mangsa
+    s.keluarga += keluarga
+    s.pps += bilPps
+    const n = s.ikutNegeri.get(negeri) ?? { mangsa: 0, keluarga: 0, pps: 0 }
+    n.mangsa += mangsa
+    n.keluarga += keluarga
+    n.pps += bilPps
+    s.ikutNegeri.set(negeri, n)
+  }
 
   for (const [nama, arr] of kumpulan) {
     // Ended disasters stop counting from the moment they were ended
@@ -161,10 +173,7 @@ function snapshotPadaMasa(
         if (tapis.negeri && p.negeri !== tapis.negeri) continue
         if (tapis.zon && p.zon !== tapis.zon) continue
 
-        mangsa += k.mangsa
-        keluarga += k.keluarga
-        ppsCount += 1
-        negeriSet.add(p.negeri)
+        tambah(nama, terkini.jenis_bencana, p.negeri ?? '', k.mangsa, k.keluarga, 1)
       }
       continue
     }
@@ -177,20 +186,51 @@ function snapshotPadaMasa(
     for (const p of pps.filter((x) => x.laporan_id === sumber.id)) {
       if (tapis.negeri && p.negeri !== tapis.negeri) continue
       if (tapis.zon && p.zon !== tapis.zon) continue
-      mangsa += p.jumlah_mangsa ?? 0
-      keluarga += p.jumlah_keluarga ?? 0
-      ppsCount += p.pps ? p.pps.split('\n').filter((s) => s.trim()).length : 0
-      if (p.negeri) negeriSet.add(p.negeri)
+      tambah(
+        nama,
+        sumber.jenis_bencana,
+        p.negeri ?? '',
+        p.jumlah_mangsa ?? 0,
+        p.jumlah_keluarga ?? 0,
+        p.pps ? p.pps.split('\n').filter((s) => s.trim()).length : 0,
+      )
     }
   }
 
+  return hasil
+}
+
+// Totals of the snapshot above (graphs of the Laporan Nasional)
+function snapshotPadaMasa(
+  masa: Date,
+  sejarah: SejarahPps,
+  tapis: TapisGraf,
+): { mangsa: number; keluarga: number; pps: number; negeri: number } {
+  let mangsa = 0
+  let keluarga = 0
+  let ppsCount = 0
+  const negeriSet = new Set<string>()
+  for (const b of snapshotIkutBencana(masa, sejarah, tapis).values()) {
+    mangsa += b.mangsa
+    keluarga += b.keluarga
+    ppsCount += b.pps
+    for (const n of b.ikutNegeri.keys()) if (n) negeriSet.add(n)
+  }
   return { mangsa, keluarga, pps: ppsCount, negeri: negeriSet.size }
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
 const NAMA_BULAN = ['Jan', 'Feb', 'Mac', 'Apr', 'Mei', 'Jun', 'Jul', 'Ogo', 'Sep', 'Okt', 'Nov', 'Dis']
 
-export async function ambilDataGraf(tapis: TapisGraf = {}): Promise<{ duaJam: TitikGraf[]; harian: TitikGraf[] }> {
+// Everything needed to replay the PPS figures at any moment
+export type SejarahPps = {
+  baris: BarisSemasa[] // Laporan Semasa, oldest first
+  pps: BarisPps[]
+  data: DataPusat
+  tamat: Map<string, number> // disaster name -> time it was ended
+}
+
+export async function ambilSejarahPps(): Promise<SejarahPps> {
   // Whole history: loaded in batches, these tables grow past Supabase's 1000-row limit
   const [semasaData, ppsData, pusatData, itemData, logData, tamatData, suntinganData] = await Promise.all([
     ambilSemua<BarisSemasa>(() =>
@@ -237,6 +277,11 @@ export async function ambilDataGraf(tapis: TapisGraf = {}): Promise<{ duaJam: Ti
     (logData as BarisLog[]) ?? [],
     (suntinganData as BarisSuntingan[]) ?? [],
   )
+  return { baris, pps, data, tamat }
+}
+
+export async function ambilDataGraf(tapis: TapisGraf = {}): Promise<{ duaJam: TitikGraf[]; harian: TitikGraf[] }> {
+  const sejarah = await ambilSejarahPps()
 
   // Round "now" down to the last even hour, so labels read 1200H/1400H/...
   // instead of whatever odd minute the report happened to be generated at.
@@ -247,7 +292,7 @@ export async function ambilDataGraf(tapis: TapisGraf = {}): Promise<{ duaJam: Ti
   const duaJam: TitikGraf[] = []
   for (let i = 11; i >= 0; i--) {
     const masa = new Date(jamGenap.getTime() - i * 2 * 60 * 60 * 1000)
-    const s = snapshotPadaMasa(masa, baris, pps, data, tapis, tamat)
+    const s = snapshotPadaMasa(masa, sejarah, tapis)
     duaJam.push({ label: `${pad(masa.getHours())}${pad(masa.getMinutes())}H`, ...s })
   }
 
@@ -258,7 +303,7 @@ export async function ambilDataGraf(tapis: TapisGraf = {}): Promise<{ duaJam: Ti
       masa.setDate(masa.getDate() - i)
       masa.setHours(23, 59, 59, 999)
     }
-    const s = snapshotPadaMasa(masa, baris, pps, data, tapis, tamat)
+    const s = snapshotPadaMasa(masa, sejarah, tapis)
     harian.push({ label: `${masa.getDate()}-${NAMA_BULAN[masa.getMonth()]}`, ...s })
   }
 

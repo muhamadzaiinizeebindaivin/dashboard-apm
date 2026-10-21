@@ -3,15 +3,12 @@ import {
   Home,
   ChevronRight,
   ChevronDown,
-  Plus,
   ClipboardList,
   X,
   Tent,
   AlertTriangle,
-  MousePointerClick,
   Tags,
 } from 'lucide-react'
-import { PilihLokasiModal } from '../components/PilihLokasiModal'
 import { NEGERI_FLAG, NEGERI_LIST } from '../lib/negeriVisual'
 import { supabase } from '../lib/supabase'
 import { useRealtime } from '../lib/realtime'
@@ -27,7 +24,6 @@ import type { ToastState } from '../components/Toast'
 import { Memuat, Skeleton } from '../components/Memuatkan'
 import {
   borangDaripada,
-  borangKosong,
   denganDataTerkini,
   ikonKategori,
   keRekod,
@@ -64,8 +60,6 @@ export function Bencana() {
   const [lapisan, setLapisan] = useState<Lapisan>({ titik: true, pps: true, paras: true, jalan: true })
   const [jalan, setJalan] = useState<JalanPeta[]>([])
 
-  const [meletak, setMeletak] = useState(false)
-  const [pilihLokasi, setPilihLokasi] = useState(false)
   // Legend open by default on desktop, collapsed on phones (it covers the map)
   const [legendBuka, setLegendBuka] = useState(() => window.innerWidth >= 640)
   const [modal, setModal] = useState<BukaModal | null>(null)
@@ -152,11 +146,6 @@ export function Bencana() {
   const bilTitik = (n: string) => titik.filter((t) => t.negeri === n).length
   const bilPps = (n: string) => pps.filter((p) => p.negeri === n).length
 
-  function letakTitik(lat: number, lng: number) {
-    setMeletak(false)
-    setModal({ mod: 'tambah', koordinat: [lat, lng], awal: borangKosong(negeriFokus) })
-  }
-
   function tindakan(t: TitikBencana, jenis: TindakanTitik) {
     if (jenis === 'padam') {
       setHendakPadam(t)
@@ -178,28 +167,20 @@ export function Bencana() {
     const d = modal.mod === 'kemaskini' && modal.titik ? dataTerkiniTitik(modal.titik, ringkasan) : null
     const rekod = keRekod(d ? denganDataTerkini(borang, d) : borang)
 
+    // New disasters only come from Laporan Awal / Semasa: here a point is only edited or completed
     const { error } =
-      modal.mod === 'tambah'
-        ? await supabase
+      modal.mod === 'kemaskini'
+        ? await supabase.from('titik_bencana').update(rekod).eq('id', modal.titik!.id)
+        : await supabase
             .from('titik_bencana')
-            .insert({ ...rekod, latitude: modal.koordinat[0], longitude: modal.koordinat[1] })
-        : modal.mod === 'kemaskini'
-          ? await supabase.from('titik_bencana').update(rekod).eq('id', modal.titik!.id)
-          : await supabase
-              .from('titik_bencana')
-              .update({ ...rekod, status: 'selesai', tarikh_selesai: new Date().toISOString() })
-              .eq('id', modal.titik!.id)
+            .update({ ...rekod, status: 'selesai', tarikh_selesai: new Date().toISOString() })
+            .eq('id', modal.titik!.id)
 
     if (error) return mesejRalat(error.code)
 
     setToast({
       type: 'success',
-      message:
-        modal.mod === 'tambah'
-          ? 'Titik bencana ditambah.'
-          : modal.mod === 'kemaskini'
-            ? 'Titik bencana dikemaskini.'
-            : 'Titik bencana ditanda selesai.',
+      message: modal.mod === 'kemaskini' ? 'Titik bencana dikemaskini.' : 'Titik bencana ditanda selesai.',
     })
     setModal(null)
     return null
@@ -241,30 +222,6 @@ export function Bencana() {
           >
             <ClipboardList size={16} />
             Ringkasan Bencana
-          </button>
-          {/* Quick mode: click directly on the map */}
-          <button
-            onClick={() => setMeletak((m) => !m)}
-            className={`flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-medium shadow-sm backdrop-blur-md transition-colors ${
-              meletak
-                ? 'border-neutral-700 bg-neutral-700 text-white hover:bg-neutral-800'
-                : 'border-white/60 bg-white/60 text-neutral-700 hover:border-emerald-500 hover:text-emerald-700'
-            }`}
-          >
-            {meletak ? <X size={16} /> : <MousePointerClick size={16} />}
-            {meletak ? 'Batal' : 'Klik pada peta'}
-          </button>
-
-          {/* Main mode: search / coordinates / map */}
-          <button
-            onClick={() => {
-              setMeletak(false)
-              setPilihLokasi(true)
-            }}
-            className="flex items-center gap-1.5 rounded-full bg-emerald-700 px-4 py-2 text-sm font-medium text-white shadow-md transition-colors hover:bg-emerald-800"
-          >
-            <Plus size={16} />
-            Tambah Bencana
           </button>
         </div>
       </div>
@@ -336,18 +293,8 @@ export function Bencana() {
             jalan={jalanPapar}
             lapisan={lapisan}
             negeriFokus={negeriFokus}
-            meletak={meletak}
-            onLetak={letakTitik}
             onTindakan={tindakan}
           />
-        )}
-
-        {meletak && (
-          <div className="pointer-events-none absolute inset-x-0 top-3 z-[1000] flex justify-center">
-            <span className="rounded-full bg-neutral-900/85 px-4 py-2 text-sm font-medium text-white shadow-lg">
-              Klik pada peta untuk letak titik
-            </span>
-          </div>
         )}
 
         {/* Legend */}
@@ -474,18 +421,6 @@ export function Bencana() {
         loading={memadam}
         onConfirm={padam}
         onCancel={() => setHendakPadam(null)}
-      />
-
-      <PilihLokasiModal
-        open={pilihLokasi}
-        tajuk="Pilih Lokasi Bencana"
-        negeri={negeriFokus || undefined}
-        awal={null}
-        onClose={() => setPilihLokasi(false)}
-        onSimpan={(lat, lng) => {
-          setPilihLokasi(false)
-          letakTitik(lat, lng)
-        }}
       />
 
       <RingkasanBencanaPanel open={panelRingkasan} onClose={() => setPanelRingkasan(false)} kategori={kategori} />

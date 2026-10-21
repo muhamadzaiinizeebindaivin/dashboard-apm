@@ -40,16 +40,19 @@ export async function janaRingkasanBencana(
   doc.text('RINGKASAN BENCANA', lebar / 2, 37, { align: 'center' })
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
-  doc.text('Bahagian Pengurusan Bencana Operasi — Angkatan Pertahanan Awam Malaysia', lebar / 2, 43, { align: 'center' })
-  doc.text(`Dijana pada: ${formatTarikh(sekarang.toISOString())}  ·  ${rows.length} kejadian`, lebar / 2, 48, {
+  doc.text('Pusat Kawalan Operasi Pusat', lebar / 2, 43, { align: 'center' })
+  doc.setFontSize(8)
+  doc.text('Bahagian Pengurusan Bencana Operasi', lebar / 2, 48, { align: 'center' })
+  doc.setFontSize(9)
+  doc.text(`Dijana pada: ${formatTarikh(sekarang.toISOString())}  ·  ${rows.length} kejadian`, lebar / 2, 53, {
     align: 'center',
   })
-  if (ringkasanTapisan) doc.text(ringkasanTapisan, lebar / 2, 53, { align: 'center' })
+  if (ringkasanTapisan) doc.text(ringkasanTapisan, lebar / 2, 58, { align: 'center' })
 
   const jumlah = (f: (r: TitikBencana) => number | null) => rows.reduce((n, r) => n + (f(r) ?? 0), 0)
 
   autoTable(doc, {
-    startY: ringkasanTapisan ? 59 : 55,
+    startY: ringkasanTapisan ? 64 : 60,
     head: [['#', 'Kategori', 'Negeri', 'Daerah', 'Kawasan Terjejas', 'Tarikh Mula', 'Tarikh Tamat', 'KIR', 'Mangsa', 'Rumah', 'PPS']],
     body: rows.map((r, i) => [
       String(i + 1),
