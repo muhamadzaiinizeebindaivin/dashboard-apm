@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Clock, XCircle, RefreshCw, LogOut, Loader2 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Clock, XCircle, RefreshCw, LogOut, Loader2, UserPlus } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import apmLogo from '../assets/apm-logo.png'
 
@@ -8,6 +9,7 @@ import apmLogo from '../assets/apm-logo.png'
 export function StatusAkaun() {
   const { profile, signOut, muatSemulaProfil } = useAuth()
   const [menyemak, setMenyemak] = useState(false)
+  const navigate = useNavigate()
   const ditolak = profile?.status === 'ditolak'
   const tiadaProfil = !profile // account deleted, or its profile was never created
 
@@ -68,6 +70,18 @@ export function StatusAkaun() {
             >
               {menyemak ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
               Semak Status
+            </button>
+          )}
+          {ditolak && (
+            <button
+              onClick={async () => {
+                await signOut()
+                navigate('/daftar')
+              }}
+              className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800"
+            >
+              <UserPlus size={15} />
+              Daftar Semula
             </button>
           )}
           <button

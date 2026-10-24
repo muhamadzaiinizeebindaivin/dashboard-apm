@@ -53,31 +53,46 @@ export function Daftar() {
     }
 
     setLoading(true)
-    const { data, error } = await supabase.auth.signUp({
-      email: email.trim().toLowerCase(),
-      password,
-      options: {
-        // After clicking the verification e-mail: back to the site, already logged in
-        emailRedirectTo: `${window.location.origin}/`,
-        // Read by the database trigger that creates the profile
-        data: { full_name: nama.trim().toUpperCase(), jawatan_unit: jawatan.trim() },
-      },
-    })
+    const emel = email.trim().toLowerCase()
+    const daftar = () =>
+      supabase.auth.signUp({
+        email: emel,
+        password,
+        options: {
+          // After clicking the verification e-mail: back to the site, already logged in
+          emailRedirectTo: `${window.location.origin}/`,
+          // Read by the database trigger that creates the profile
+          data: { full_name: nama.trim().toUpperCase(), jawatan_unit: jawatan.trim() },
+        },
+      })
+
+    let { data, error } = await daftar()
+    // Supabase answers "success" without creating anything when the e-mail already has an account
+    let sudahWujud =
+      (!error && !!data.user && data.user.identities?.length === 0) ||
+      (!!error && /registered|exists/i.test(error.message))
+
+    if (sudahWujud) {
+      // A REJECTED request may register again: its old account is removed on the server
+      // (only accounts with status "ditolak" can be removed this way), then we retry once
+      const { data: dibuang } = await supabase.rpc('daftar_semula_ditolak', { p_email: emel })
+      if (dibuang === true) {
+        ;({ data, error } = await daftar())
+        sudahWujud = !error && !!data.user && data.user.identities?.length === 0
+      }
+    }
     setLoading(false)
 
+    if (sudahWujud) {
+      setRalat('E-mel ini sudah didaftarkan. Sila log masuk.')
+      return
+    }
     if (error) {
       setRalat(
         error.status === 429
           ? 'Terlalu banyak cubaan. Sila cuba lagi selepas beberapa minit.'
-          : /registered|exists/i.test(error.message)
-            ? 'E-mel ini sudah didaftarkan.'
-            : 'Pendaftaran gagal. Sila cuba lagi.',
+          : 'Pendaftaran gagal. Sila cuba lagi.',
       )
-      return
-    }
-    // Supabase answers "success" without creating anything when the e-mail already has an account
-    if (data.user && data.user.identities?.length === 0) {
-      setRalat('E-mel ini sudah didaftarkan. Sila log masuk.')
       return
     }
     setBerjaya(true)

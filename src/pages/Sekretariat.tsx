@@ -196,7 +196,7 @@ export function Sekretariat() {
   const tunjukRangka =
     onLanding &&
     !tiadaBencana &&
-    (previewData ? !statusExcelSedia : !profile || (profile.role === 'pkop' && menjanaLaporan))
+    (previewData ? !statusExcelSedia : !profile || (!!profile.role && menjanaLaporan))
 
   const excelBaharu =
     !muatTurunTerakhir ||
@@ -205,7 +205,8 @@ export function Sekretariat() {
 
   // Load the national report's content automatically as soon as the page opens.
   useEffect(() => {
-    if (onLanding && profile?.role === 'pkop') {
+    // PKOP and PKON (any approved staff role)
+    if (onLanding && profile?.role) {
       handleJanaLaporanNasional()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -216,7 +217,7 @@ export function Sekretariat() {
     'laporan-nasional-pertama',
     [{ jadual: 'laporan_bencana', peristiwa: 'INSERT' }],
     () => handleJanaLaporanNasional(),
-    { aktif: onLanding && tiadaBencana && profile?.role === 'pkop' },
+    { aktif: onLanding && tiadaBencana && !!profile?.role },
   )
 
   async function handleJanaLaporanNasional() {

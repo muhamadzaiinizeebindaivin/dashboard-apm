@@ -23,6 +23,7 @@ type ProfileRow = {
   role: UserRole | null
   status: StatusAkaun
   catatan_kelulusan: string | null
+  emel_disahkan_pada: string | null // null = verification link not clicked yet
   created_at: string
 }
 
@@ -159,7 +160,7 @@ export function Admin() {
   const muatSemula = useCallback(async () => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, full_name, email, jawatan_unit, role, status, catatan_kelulusan, created_at')
+      .select('id, full_name, email, jawatan_unit, role, status, catatan_kelulusan, emel_disahkan_pada, created_at')
       .order('created_at', { ascending: false })
     setLoading(false)
     if (error) {
@@ -249,7 +250,18 @@ export function Admin() {
             {permohonan.map((u) => (
               <div key={u.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
                 <div className="min-w-0">
-                  <p className="font-medium text-neutral-900">{u.full_name ?? '—'}</p>
+                  <p className="flex flex-wrap items-center gap-2 font-medium text-neutral-900">
+                    {u.full_name ?? '—'}
+                    {u.emel_disahkan_pada ? (
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800">
+                        E-mel disahkan
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-neutral-200 px-2 py-0.5 text-[11px] font-medium text-neutral-600">
+                        E-mel belum disahkan
+                      </span>
+                    )}
+                  </p>
                   <p className="break-all text-sm text-neutral-600">{u.email}</p>
                   <p className="text-xs text-neutral-500">
                     {u.jawatan_unit ?? 'Jawatan tidak dinyatakan'} · Didaftarkan {tarikhMasa(u.created_at)}
@@ -258,7 +270,10 @@ export function Admin() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => setKeputusan({ pengguna: u, jenis: 'lulus' })}
-                    className="flex items-center gap-1 rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-800"
+                    // An unverified account can't log in anyway: approve it once the e-mail is confirmed
+                    disabled={!u.emel_disahkan_pada}
+                    title={u.emel_disahkan_pada ? undefined : 'Pengguna perlu mengesahkan e-mel dahulu'}
+                    className="flex items-center gap-1 rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <Check size={15} />
                     Lulus
@@ -269,6 +284,14 @@ export function Admin() {
                   >
                     <X size={15} />
                     Tolak
+                  </button>
+                  <button
+                    onClick={() => setPendingDelete(u)}
+                    disabled={updatingId === u.id}
+                    title="Padam permohonan ini (cth. pendaftaran palsu atau e-mel tersalah)"
+                    className="rounded-lg border border-neutral-200 bg-white p-2 text-neutral-400 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-60"
+                  >
+                    <Trash2 size={15} />
                   </button>
                 </div>
               </div>
@@ -339,6 +362,18 @@ export function Admin() {
                     </span>
                   </td>
                   <td className="px-5 py-3 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                    {/* A rejected request can still be approved (e.g. rejected by mistake) */}
+                    {user.status === 'ditolak' && (
+                      <button
+                        onClick={() => setKeputusan({ pengguna: user, jenis: 'lulus' })}
+                        title="Luluskan permohonan yang ditolak"
+                        className="flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-50"
+                      >
+                        <Check size={14} />
+                        <span className="hidden lg:inline">Luluskan</span>
+                      </button>
+                    )}
                     {user.id !== profile?.id && (
                       <button
                         onClick={() => setPendingDelete(user)}
@@ -349,6 +384,7 @@ export function Admin() {
                         <Trash2 size={15} />
                       </button>
                     )}
+                    </div>
                   </td>
                 </tr>
               ))
