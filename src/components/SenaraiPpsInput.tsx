@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Plus, Trash2, MapPin, MapPinned, Loader2, X } from 'lucide-react'
+import { Plus, Trash2, MapPin, MapPinned, Loader2, X, Landmark } from 'lucide-react'
 import { PilihLokasiModal } from './PilihLokasiModal'
 import { ppsKosong } from '../lib/ppsPusat'
 import type { PpsInput } from '../lib/ppsPusat'
+import { useKawasan, parlimenNegeri, dunNegeri } from '../lib/kawasanPilihanRaya'
 
 const inputClass =
   'w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 outline-none focus:border-emerald-600'
@@ -13,13 +14,24 @@ type SenaraiPpsInputProps = {
   memuat?: boolean
   negeri?: string
   perluLokasi?: (r: PpsInput) => boolean // rows that still need a location are marked (Excel review step)
+  perluKawasan?: (r: PpsInput) => boolean // rows that still need a Parlimen / ADUN (Excel review step)
 }
 
-export function SenaraiPpsInput({ rows, onChange, memuat = false, negeri, perluLokasi }: SenaraiPpsInputProps) {
+export function SenaraiPpsInput({
+  rows,
+  onChange,
+  memuat = false,
+  negeri,
+  perluLokasi,
+  perluKawasan,
+}: SenaraiPpsInputProps) {
   const [mencariLokasi, setMencariLokasi] = useState<string | null>(null)
   const [petaUntuk, setPetaUntuk] = useState<string | null>(null) // kunci of the PPS being located
   const barisPeta = rows.find((r) => r.kunci === petaUntuk)
   const [ralatLokasi, setRalatLokasi] = useState<Record<string, string>>({})
+  // Parlimen / ADUN of new PPS (the state operator knows their area best)
+  const kawasan = useKawasan()
+  const senaraiParlimen = negeri ? parlimenNegeri(kawasan, negeri) : []
 
   function kemaskini(kunci: string, ubah: Partial<PpsInput>) {
     onChange(rows.map((r) => (r.kunci === kunci ? { ...r, ...ubah } : r)))
@@ -86,6 +98,11 @@ export function SenaraiPpsInput({ rows, onChange, memuat = false, negeri, perluL
                   Lokasi wajib
                 </span>
               )}
+              {perluKawasan?.(r) && (
+                <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">
+                  Parlimen/ADUN wajib
+                </span>
+              )}
             </span>
             {rows.length > 1 && (
               <button
@@ -139,6 +156,60 @@ export function SenaraiPpsInput({ rows, onChange, memuat = false, negeri, perluL
                 className={inputClass}
               />
             </div>
+
+            {senaraiParlimen.length > 0 &&
+              (r.kawasanSedia && r.parlimen ? (
+                <p className="flex items-center gap-1.5 text-xs text-neutral-600 sm:col-span-2">
+                  <Landmark size={13} className="shrink-0" />
+                  {r.parlimen}
+                  {r.dun && <span>· {r.dun}</span>}
+                </p>
+              ) : (
+                <>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-neutral-700">
+                      Parlimen {perluKawasan && <span className="text-red-500">*</span>}
+                    </label>
+                    <select
+                      value={r.parlimen ?? ''}
+                      onChange={(e) => kemaskini(r.kunci, { parlimen: e.target.value || null, dun: null })}
+                      className={inputClass}
+                    >
+                      <option value="">— Pilih Parlimen —</option>
+                      {senaraiParlimen.map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-neutral-700">
+                      ADUN {perluKawasan && <span className="text-red-500">*</span>}
+                    </label>
+                    {(() => {
+                      const senaraiDun = r.parlimen ? dunNegeri(kawasan, negeri!, r.parlimen) : []
+                      return (
+                        <select
+                          value={r.dun ?? ''}
+                          onChange={(e) => kemaskini(r.kunci, { dun: e.target.value || null })}
+                          disabled={!r.parlimen || senaraiDun.length === 0}
+                          className={`${inputClass} disabled:bg-neutral-50 disabled:text-neutral-400`}
+                        >
+                          <option value="">
+                            {r.parlimen && senaraiDun.length === 0 ? 'Tiada ADUN' : '— Pilih ADUN —'}
+                          </option>
+                          {senaraiDun.map((d) => (
+                            <option key={d} value={d}>
+                              {d}
+                            </option>
+                          ))}
+                        </select>
+                      )
+                    })()}
+                  </div>
+                </>
+              ))}
 
             <div className="sm:col-span-2">
               {r.latitude != null && r.longitude != null ? (

@@ -12,6 +12,7 @@ import { LaporanNasionalPreview } from '../components/LaporanNasionalPreview'
 import { useAuth } from '../hooks/useAuth'
 import { ambilKorbanSemasa, ambilLaporanNasional, ambilPpsDitutup24Jam } from '../lib/laporanNasional'
 import type { ItemLaporanNasional, KorbanNegeri, PpsDitutup } from '../lib/laporanNasional'
+import { useKawasan, parlimenNegeri, dunNegeri, parlimenBagiDun } from '../lib/kawasanPilihanRaya'
 import { ambilDataGraf } from '../lib/laporanNasionalGraf'
 import type { TitikGraf } from '../lib/laporanNasionalGraf'
 import { bangunLaporanNasionalDoc } from '../lib/janaLaporanNasional'
@@ -94,7 +95,7 @@ const PILIHAN = [
   {
     to: 'statistik',
     label: 'Statistik Musim',
-    desc: 'Tetapkan tarikh Monsun Timur Laut / Barat Daya dan lihat statistik penuh setiap musim.',
+    desc: 'Tetapkan tarikh setiap musim atau fenomena cuaca dan lihat statistik penuhnya.',
     icon: CalendarRange,
   },
 ]
@@ -119,6 +120,10 @@ export function Sekretariat() {
   const [tapisStatus, setTapisStatus] = useState<'' | 'aktif' | 'tamat'>('')
   const [tapisDari, setTapisDari] = useState('') // YYYY-MM-DD
   const [tapisHingga, setTapisHingga] = useState('')
+  // Constituency of a YB: only offered once a Negeri is chosen
+  const [tapisParlimen, setTapisParlimen] = useState('')
+  const [tapisDun, setTapisDun] = useState('')
+  const kawasan = useKawasan()
   const [previewData, setPreviewData] = useState<{
     items: ItemLaporanNasional[]
     ditutup: PpsDitutup[]
@@ -235,6 +240,8 @@ export function Sekretariat() {
       setTapisStatus('')
       setTapisDari('')
       setTapisHingga('')
+      setTapisParlimen('')
+      setTapisDun('')
     } catch {
       setToast({ type: 'error', message: 'Gagal menjana laporan. Sila cuba lagi.' })
     } finally {
@@ -292,14 +299,36 @@ export function Sekretariat() {
     return true
   }
 
+  // Parlimen / ADUN filter: works on each PPS, then every row (disaster + daerah)
+  // is rebuilt from only its PPS in that constituency
+  const adaTapisKawasan = !!(tapisParlimen || tapisDun)
+  const lulusKawasan = (p: { parlimen: string | null; dun: string | null }) =>
+    (!tapisParlimen || p.parlimen === tapisParlimen) && (!tapisDun || p.dun === tapisDun)
+  const potongIkutKawasan = (i: ItemLaporanNasional): ItemLaporanNasional[] => {
+    if (!adaTapisKawasan) return [i]
+    const pilih = (i.ppsButiran ?? []).filter(lulusKawasan)
+    if (pilih.length === 0) return []
+    return [
+      {
+        ...i,
+        ppsButiran: pilih,
+        pps: pilih.map((p) => p.nama).join('\n'),
+        jumlahMangsa: pilih.reduce((n, p) => n + p.jumlahMangsa, 0),
+        jumlahKeluarga: pilih.reduce((n, p) => n + p.jumlahKeluarga, 0),
+      },
+    ]
+  }
+
   const itemsTertapis = previewData
-    ? previewData.items.filter(
-        (i) =>
-          (!tapisNegeri || i.negeri === tapisNegeri) &&
-          (!tapisJenis || i.jenisBencana === tapisJenis) &&
-          (!tapisZon || i.zon === tapisZon) &&
-          lulusBencana(i.namaBencana),
-      )
+    ? previewData.items
+        .filter(
+          (i) =>
+            (!tapisNegeri || i.negeri === tapisNegeri) &&
+            (!tapisJenis || i.jenisBencana === tapisJenis) &&
+            (!tapisZon || i.zon === tapisZon) &&
+            lulusBencana(i.namaBencana),
+        )
+        .flatMap(potongIkutKawasan)
     : []
 
   // Closed PPS follow the same filters (jenis comes from their disaster,
@@ -311,7 +340,8 @@ export function Sekretariat() {
           (!tapisNegeri || p.negeri === tapisNegeri) &&
           (!tapisZon || cariZon(p.negeri) === tapisZon) &&
           (!tapisJenis || jenisIkutBencana.get(p.nama_bencana) === tapisJenis) &&
-          lulusBencana(p.nama_bencana),
+          lulusBencana(p.nama_bencana) &&
+          (!adaTapisKawasan || lulusKawasan(p)),
       )
     : []
 
@@ -332,7 +362,7 @@ export function Sekretariat() {
     try {
       // Only a full download (no filter) counts as "downloaded" for the shared status
       const tapisTarikh = !!(tapisDari || tapisHingga)
-      const penuh = !tapisNegeri && !tapisZon && !tapisJenis && !tapisTarikh
+      const penuh = !tapisNegeri && !tapisZon && !tapisJenis && !tapisTarikh && !adaTapisKawasan
       // Latest report included in this download, read (server time) before building the files
       const { data: terkini } = penuh
         ? await supabase.from('laporan_bencana').select('created_at').order('created_at', { ascending: false }).limit(1).maybeSingle()
@@ -343,6 +373,8 @@ export function Sekretariat() {
         jenis: tapisJenis || undefined,
         // Date filter: only the disasters it keeps
         nama: tapisTarikh ? [...new Set(itemsTertapis.map((i) => i.namaBencana.trim()))] : undefined,
+        parlimen: tapisParlimen || undefined,
+        dun: tapisDun || undefined,
       })
       if (bil > 0 && penuh) {
         // If this fails the button just stays green: the file itself was downloaded
@@ -374,6 +406,8 @@ export function Sekretariat() {
           zon: tapisZon || undefined,
         },
         korbanTertapis,
+        // Constituency named on the cover and in the file name
+        adaTapisKawasan ? [tapisNegeri, tapisParlimen, tapisDun].filter(Boolean) : [],
       )
       doc.save(namaFail)
     } catch {
@@ -506,7 +540,12 @@ export function Sekretariat() {
           <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100 py-3">
             <select
               value={tapisNegeri}
-              onChange={(e) => setTapisNegeri(e.target.value)}
+              onChange={(e) => {
+                setTapisNegeri(e.target.value)
+                // Another state: its constituencies change too
+                setTapisParlimen('')
+                setTapisDun('')
+              }}
               className="h-9 rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-700 outline-none focus:border-emerald-600"
             >
               <option value="">Semua Negeri</option>
@@ -516,6 +555,45 @@ export function Sekretariat() {
                 </option>
               ))}
             </select>
+            {tapisNegeri && (
+              <>
+                <select
+                  value={tapisParlimen}
+                  onChange={(e) => {
+                    setTapisParlimen(e.target.value)
+                    setTapisDun('')
+                  }}
+                  className="h-9 max-w-[14rem] rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-700 outline-none focus:border-emerald-600"
+                >
+                  <option value="">Semua Parlimen</option>
+                  {parlimenNegeri(kawasan, tapisNegeri).map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+                {/* KL, Putrajaya and Labuan have no ADUN */}
+                {dunNegeri(kawasan, tapisNegeri).length > 0 && (
+                  <select
+                    value={tapisDun}
+                    onChange={(e) => {
+                      const dun = e.target.value
+                      setTapisDun(dun)
+                      // ADUN chosen first: its Parlimen follows
+                      if (dun && !tapisParlimen) setTapisParlimen(parlimenBagiDun(kawasan, tapisNegeri, dun) ?? '')
+                    }}
+                    className="h-9 max-w-[14rem] rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-700 outline-none focus:border-emerald-600"
+                  >
+                    <option value="">Semua ADUN</option>
+                    {dunNegeri(kawasan, tapisNegeri, tapisParlimen || undefined).map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </>
+            )}
             <select
               value={tapisJenis}
               onChange={(e) => setTapisJenis(e.target.value)}
@@ -573,6 +651,8 @@ export function Sekretariat() {
             {(tapisNegeri || tapisJenis || tapisZon || tapisStatus || tapisDari || tapisHingga) && (
               <button
                 onClick={() => {
+                  setTapisParlimen('')
+                  setTapisDun('')
                   setTapisNegeri('')
                   setTapisJenis('')
                   setTapisZon('')
@@ -587,6 +667,11 @@ export function Sekretariat() {
             )}
             {menjanaGraf && <span className="text-xs text-neutral-400">Mengemas kini graf...</span>}
           </div>
+          {adaTapisKawasan && (
+            <p className="pt-2 text-xs text-neutral-500">
+              Hanya PPS yang telah ditetapkan Parlimen/ADUN dipaparkan. Bahagian Korban kekal mengikut negeri.
+            </p>
+          )}
 
           <div className="mt-4">
             <LaporanNasionalPreview

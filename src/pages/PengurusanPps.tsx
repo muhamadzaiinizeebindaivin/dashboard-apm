@@ -13,6 +13,7 @@ import {
   Phone,
   UserRound,
   BellOff,
+  Landmark,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useRealtime } from '../lib/realtime'
@@ -157,6 +158,23 @@ function KadPps({ pps, kini, onTindakan, onKemaskini }: KadPpsProps) {
         {adaLaporanBaru && <span>· Laporan terakhir {formatTarikhMasa(pps.dilapor_pada)}</span>}
         {ditutup && <span>· Ditutup {formatTarikhMasa(pps.ditutup_pada)}</span>}
       </p>
+
+      {/* Constituency (Parlimen / ADUN filter of the Laporan Nasional) */}
+      {pps.parlimen ? (
+        <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 text-xs text-neutral-600">
+          <Landmark size={12} className="shrink-0" />
+          {pps.parlimen}
+          {pps.dun && <span>· {pps.dun}</span>}
+        </p>
+      ) : (
+        <p
+          title="Tetapkan melalui butang Kemaskini, supaya PPS ini dikira dalam tapisan Parlimen/ADUN"
+          className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-neutral-200/80 px-2.5 py-0.5 text-xs font-medium text-neutral-600"
+        >
+          <Landmark size={11} />
+          Parlimen belum ditetapkan
+        </p>
+      )}
 
       {/* PPS manager (from the state's Excel report) */}
       {(pps.pengurus_nama || pps.pengurus_telefon) && (

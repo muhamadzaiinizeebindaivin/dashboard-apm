@@ -6,6 +6,9 @@ export type PpsInput = {
   latitude: number | null
   longitude: number | null
   sedia: boolean // prefilled from an already-open PPS
+  parlimen?: string | null
+  dun?: string | null
+  kawasanSedia?: boolean // constituency already known in pps_pusat: not asked again
 }
 
 export type PpsSediaAda = {
@@ -27,6 +30,8 @@ export function ppsKosong(): PpsInput {
     latitude: null,
     longitude: null,
     sedia: false,
+    parlimen: null,
+    dun: null,
   }
 }
 
@@ -78,6 +83,8 @@ export type PpsPusat = {
   pengurus_nama: string | null
   pengurus_jawatan: string | null
   pengurus_telefon: string | null
+  parlimen: string | null
+  dun: string | null
 }
 
 export const STATUS_PPS: Record<StatusPps, { label: string; className: string }> = {

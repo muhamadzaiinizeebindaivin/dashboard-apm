@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { PilihLokasiModal } from './PilihLokasiModal'
 import type { PpsPusat } from '../lib/ppsPusat'
 import { hurufBesar } from '../lib/normalisasi'
+import { useKawasan, parlimenNegeri, dunNegeri } from '../lib/kawasanPilihanRaya'
 
 const inputClass =
   'w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 outline-none focus:border-emerald-600'
@@ -28,6 +29,10 @@ export function EditPpsModal({ pps, onClose, onSaved }: EditPpsModalProps) {
     pps.latitude != null && pps.longitude != null ? [pps.latitude, pps.longitude] : null,
   )
   const [petaBuka, setPetaBuka] = useState(false)
+  const kawasan = useKawasan()
+  const [parlimen, setParlimen] = useState(pps.parlimen ?? '')
+  const [dun, setDun] = useState(pps.dun ?? '')
+  const senaraiDun = dunNegeri(kawasan, pps.negeri, parlimen || undefined)
   const [menyimpan, setMenyimpan] = useState(false)
   const [ralat, setRalat] = useState('')
 
@@ -72,6 +77,21 @@ export function EditPpsModal({ pps, onClose, onSaved }: EditPpsModalProps) {
       )
       return
     }
+
+    // Constituency saved separately (checked against the official list on the server)
+    if (parlimen !== (pps.parlimen ?? '') || dun !== (pps.dun ?? '')) {
+      setMenyimpan(true)
+      const { error: ralatKawasan } = await supabase.rpc('tetapkan_kawasan_pps', {
+        p_id: pps.id,
+        p_parlimen: parlimen || null,
+        p_dun: dun || null,
+      })
+      setMenyimpan(false)
+      if (ralatKawasan) {
+        setRalat('Maklumat PPS disimpan, tetapi Parlimen/ADUN gagal disimpan. Sila cuba lagi.')
+        return
+      }
+    }
     onSaved()
   }
 
@@ -108,6 +128,40 @@ export function EditPpsModal({ pps, onClose, onSaved }: EditPpsModalProps) {
             <div>
               <label className="mb-1 block text-sm font-medium text-neutral-700">Mukim</label>
               <input value={mukim} onChange={(e) => setMukim(e.target.value)} className={`${inputClass} uppercase`} />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-neutral-700">Parlimen</label>
+              <select
+                value={parlimen}
+                onChange={(e) => {
+                  setParlimen(e.target.value)
+                  setDun('')
+                }}
+                className={inputClass}
+              >
+                <option value="">— Belum ditetapkan —</option>
+                {parlimenNegeri(kawasan, pps.negeri).map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-neutral-700">ADUN</label>
+              <select
+                value={dun}
+                onChange={(e) => setDun(e.target.value)}
+                disabled={!parlimen || senaraiDun.length === 0}
+                className={`${inputClass} disabled:bg-neutral-50 disabled:text-neutral-400`}
+              >
+                <option value="">{parlimen && senaraiDun.length === 0 ? 'Tiada ADUN' : '— Pilih ADUN —'}</option>
+                {senaraiDun.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-neutral-700">

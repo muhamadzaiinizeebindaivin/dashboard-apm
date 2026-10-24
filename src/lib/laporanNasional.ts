@@ -16,6 +16,17 @@ export type ItemLaporanNasional = {
   jumlahKeluarga: number
   tamatPada?: string | null // set when the disaster has been ended (Tamat)
   mulaPada?: string | null // first Laporan Semasa of the disaster (date filter)
+  // PPS of the row with their constituency, so a Parlimen/ADUN filter can rebuild it
+  // (absent for older disasters reported before per-PPS tracking)
+  ppsButiran?: PpsButiran[]
+}
+
+export type PpsButiran = {
+  nama: string
+  parlimen: string | null
+  dun: string | null
+  jumlahMangsa: number
+  jumlahKeluarga: number
 }
 
 type BarisSemasa = {
@@ -49,6 +60,8 @@ type BarisPusat = {
   jumlah_mangsa: number
   jumlah_keluarga: number
   status: string
+  parlimen: string | null
+  dun: string | null
 }
 
 // A disaster whose PPS live in pps_pusat: list only the PPS that are still
@@ -73,6 +86,7 @@ function itemDariPusat(nama: string, terkini: BarisSemasa, pusat: BarisPusat[]):
         pps: null,
         jumlahMangsa: 0,
         jumlahKeluarga: 0,
+        ppsButiran: [],
       },
     ]
   }
@@ -93,6 +107,13 @@ function itemDariPusat(nama: string, terkini: BarisSemasa, pusat: BarisPusat[]):
     pps: arr.map((p) => p.nama).join('\n'),
     jumlahMangsa: arr.reduce((n, p) => n + p.jumlah_mangsa, 0),
     jumlahKeluarga: arr.reduce((n, p) => n + p.jumlah_keluarga, 0),
+    ppsButiran: arr.map((p) => ({
+      nama: p.nama,
+      parlimen: p.parlimen,
+      dun: p.dun,
+      jumlahMangsa: p.jumlah_mangsa,
+      jumlahKeluarga: p.jumlah_keluarga,
+    })),
   }))
 }
 
@@ -103,6 +124,8 @@ export type PpsDitutup = {
   daerah: string | null
   ditutup_pada: string
   catatan_tutup: string | null
+  parlimen: string | null
+  dun: string | null
 }
 
 // Deaths / injuries / missing per disaster + state, from the latest report of
@@ -127,7 +150,7 @@ export async function ambilPpsDitutup24Jam(): Promise<PpsDitutup[]> {
   const sejak = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
   const data = await supabase
     .from('pps_pusat')
-    .select('nama, nama_bencana, negeri, daerah, ditutup_pada, catatan_tutup')
+    .select('nama, nama_bencana, negeri, daerah, ditutup_pada, catatan_tutup, parlimen, dun')
     .eq('status', 'ditutup')
     .gte('ditutup_pada', sejak)
     .order('ditutup_pada', { ascending: false })
@@ -168,7 +191,7 @@ export async function ambilLaporanNasional(): Promise<ItemLaporanNasional[]> {
   const pusatData = await ambilSemua<BarisPusat>(() =>
     supabase
       .from('pps_pusat')
-      .select('nama_bencana, negeri, daerah, zon, nama, jumlah_mangsa, jumlah_keluarga, status')
+      .select('nama_bencana, negeri, daerah, zon, nama, jumlah_mangsa, jumlah_keluarga, status, parlimen, dun')
       .order('id'),
   )
 

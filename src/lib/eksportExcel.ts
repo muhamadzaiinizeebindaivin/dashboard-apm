@@ -32,6 +32,8 @@ export type PpsEksport = {
   pengurus_nama: string | null
   pengurus_jawatan: string | null
   pengurus_telefon: string | null
+  parlimen: string | null
+  dun: string | null
 }
 
 export type DataEksport = {
@@ -46,7 +48,15 @@ export type DataEksport = {
 }
 
 // `nama`: only these disasters (date filter of the Laporan Nasional)
-export type TapisEksport = { negeri?: string; zon?: string; jenis?: string; nama?: string[] }
+// `parlimen` / `dun`: only the PPS of that constituency (ShelterStatus sheet)
+export type TapisEksport = {
+  negeri?: string
+  zon?: string
+  jenis?: string
+  nama?: string[]
+  parlimen?: string
+  dun?: string
+}
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
@@ -440,7 +450,13 @@ export async function ambilDataEksport(tapis: TapisEksport): Promise<DataEksport
       .filter(([n, j]) => (!tapis.jenis || j === tapis.jenis) && (!tapis.nama || tapis.nama.includes(n)))
       .map(([n]) => n),
   )
-  const ppsAktif = semuaPps.filter((p) => bencanaAktif.has(p.nama_bencana) && lulusNegeri(p.negeri))
+  const ppsAktif = semuaPps.filter(
+    (p) =>
+      bencanaAktif.has(p.nama_bencana) &&
+      lulusNegeri(p.negeri) &&
+      (!tapis.parlimen || p.parlimen === tapis.parlimen) &&
+      (!tapis.dun || p.dun === tapis.dun),
+  )
   const laporanAktif = laporan.filter(
     (r) => !!r.nama_bencana && bencanaAktif.has(r.nama_bencana) && lulusNegeri(r.negeri),
   )
@@ -453,7 +469,8 @@ export async function ambilDataEksport(tapis: TapisEksport): Promise<DataEksport
     kumpulan.set(`${negeri}|${jenis}`, { negeri, jenis })
   }
   for (const p of ppsAktif) tambah(p.negeri, p.nama_bencana)
-  for (const r of laporanAktif) tambah(r.negeri!, r.nama_bencana!)
+  // With a Parlimen/ADUN filter, only disasters that have PPS in that constituency
+  if (!tapis.parlimen && !tapis.dun) for (const r of laporanAktif) tambah(r.negeri!, r.nama_bencana!)
   const senaraiKumpulan = [...kumpulan.values()].sort(
     (a, b) => a.negeri.localeCompare(b.negeri) || a.jenis.localeCompare(b.jenis),
   )

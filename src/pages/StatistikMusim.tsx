@@ -11,30 +11,16 @@ import type { ToastState } from '../components/Toast'
 import { Memuat, SkeletonKad } from '../components/Memuatkan'
 import { PaparanStatistikMusim } from '../components/PaparanStatistikMusim'
 
-// Monsoon seasons with dates set by Sekretariat (table musim_monsun).
-// Phase 1: define the seasons. Phase 2 adds the statistics of a selected season.
-
-export type JenisMusim = 'timur_laut' | 'barat_daya'
+// Seasons / weather phenomena with dates set by Sekretariat (table musim_monsun),
+// e.g. "Monsun Timur Laut", "La Niña". Each season opens its full statistics.
 
 export type Musim = {
   id: string
   nama: string
-  jenis: JenisMusim
+  jenis: string // Jenis Fenomena Cuaca, free text
   tarikh_mula: string // YYYY-MM-DD
   tarikh_tamat: string // YYYY-MM-DD, inclusive
   catatan: string | null
-}
-
-export const LABEL_JENIS: Record<JenisMusim, string> = {
-  timur_laut: 'Monsun Timur Laut',
-  barat_daya: 'Monsun Barat Daya',
-}
-
-const SINGKATAN_JENIS: Record<JenisMusim, string> = { timur_laut: 'MTL', barat_daya: 'MBD' }
-
-const WARNA_JENIS: Record<JenisMusim, string> = {
-  timur_laut: 'bg-sky-100 text-sky-800',
-  barat_daya: 'bg-amber-100 text-amber-800',
 }
 
 const inputClass =
@@ -66,11 +52,18 @@ function statusMusim(m: Musim): { label: string; className: string } {
   return { label: 'Sedang berlangsung', className: 'bg-emerald-100 text-emerald-800' }
 }
 
-// "MTL 2026/2027" when the season crosses a year, "MBD 2027" otherwise
-function namaCadangan(jenis: JenisMusim, mula: string, tamat: string) {
+// Initials of the phenomenon + years: "Monsun Timur Laut" 2026→2027 = "MTL 2026/2027", "La Niña" 2027 = "LN 2027"
+function namaCadangan(jenis: string, mula: string, tamat: string) {
   if (!mula || !tamat) return ''
+  const singkatan = jenis
+    .trim()
+    .split(/[\s\-/]+/)
+    .filter(Boolean)
+    .map((w) => w[0].toUpperCase())
+    .join('')
   const [y1, y2] = [mula.slice(0, 4), tamat.slice(0, 4)]
-  return `${SINGKATAN_JENIS[jenis]} ${y1 === y2 ? y1 : `${y1}/${y2}`}`
+  const tahun = y1 === y2 ? y1 : `${y1}/${y2}`
+  return singkatan ? `${singkatan} ${tahun}` : tahun
 }
 
 // ---------------------------------------------------------------------------
@@ -83,7 +76,7 @@ type MusimModalProps = {
 }
 
 function MusimModal({ musim, onClose, onSaved }: MusimModalProps) {
-  const [jenis, setJenis] = useState<JenisMusim>(musim?.jenis ?? 'timur_laut')
+  const [jenis, setJenis] = useState(musim?.jenis ?? '')
   const [mula, setMula] = useState(musim?.tarikh_mula ?? '')
   const [tamat, setTamat] = useState(musim?.tarikh_tamat ?? '')
   const [nama, setNama] = useState(musim?.nama ?? '')
@@ -97,6 +90,10 @@ function MusimModal({ musim, onClose, onSaved }: MusimModalProps) {
 
   async function simpan() {
     setRalat('')
+    if (!jenis.trim()) {
+      setRalat('Sila isi Jenis Fenomena Cuaca.')
+      return
+    }
     if (!mula || !tamat) {
       setRalat('Sila pilih Tarikh Mula dan Tarikh Tamat.')
       return
@@ -112,7 +109,7 @@ function MusimModal({ musim, onClose, onSaved }: MusimModalProps) {
 
     const rekod = {
       nama: namaPapar.trim(),
-      jenis,
+      jenis: jenis.trim(),
       tarikh_mula: mula,
       tarikh_tamat: tamat,
       catatan: catatan.trim() || null,
@@ -126,7 +123,7 @@ function MusimModal({ musim, onClose, onSaved }: MusimModalProps) {
     if (error) {
       setRalat(
         error.code === '23P01'
-          ? `Tarikh ini bertindih dengan musim ${LABEL_JENIS[jenis]} yang lain.`
+          ? `Tarikh ini bertindih dengan musim "${jenis.trim()}" yang lain.`
           : error.code === '23505'
             ? 'Nama musim ini sudah wujud.'
             : error.code === '42501'
@@ -145,7 +142,7 @@ function MusimModal({ musim, onClose, onSaved }: MusimModalProps) {
         className="flex max-h-full w-full flex-col overflow-hidden bg-white shadow-2xl sm:max-h-[90vh] sm:max-w-lg sm:rounded-2xl"
       >
         <div className="flex items-center justify-between border-b border-neutral-100 px-5 py-4">
-          <h2 className="text-lg font-semibold text-neutral-900">{musim ? 'Kemaskini Musim' : 'Tambah Musim'}</h2>
+          <h2 className="text-lg font-semibold text-neutral-900">{musim ? 'Kemaskini' : 'Tambah'}</h2>
           <button onClick={onClose} title="Tutup" className="rounded-full p-2 text-neutral-500 hover:bg-neutral-100">
             <X size={18} />
           </button>
@@ -154,24 +151,14 @@ function MusimModal({ musim, onClose, onSaved }: MusimModalProps) {
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-neutral-700">
-              Jenis Monsun <span className="text-red-500">*</span>
+              Jenis Fenomena Cuaca <span className="text-red-500">*</span>
             </label>
-            <div className="grid grid-cols-2 gap-2">
-              {(Object.keys(LABEL_JENIS) as JenisMusim[]).map((j) => (
-                <button
-                  key={j}
-                  type="button"
-                  onClick={() => setJenis(j)}
-                  className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-                    jenis === j
-                      ? 'border-emerald-600 bg-emerald-50 text-emerald-800'
-                      : 'border-neutral-200 text-neutral-600 hover:border-emerald-400'
-                  }`}
-                >
-                  {LABEL_JENIS[j]}
-                </button>
-              ))}
-            </div>
+            <input
+              value={jenis}
+              onChange={(e) => setJenis(e.target.value)}
+              placeholder="cth. Monsun Timur Laut, La Niña"
+              className={inputClass}
+            />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -323,7 +310,7 @@ export function StatistikMusim() {
             <ChevronRight size={13} className="text-neutral-300" />
             <span className="font-medium text-emerald-700">Statistik Musim</span>
           </div>
-          <h1 className="text-xl font-semibold text-neutral-900">Statistik Musim Monsun</h1>
+          <h1 className="text-xl font-semibold text-neutral-900">Statistik Musim</h1>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -365,7 +352,7 @@ export function StatistikMusim() {
           <p className="text-sm font-medium text-neutral-600">Belum ada musim ditetapkan.</p>
           <p className="max-w-sm text-xs text-neutral-400">
             {bolehUrus
-              ? 'Tekan "Tambah Musim" untuk menetapkan tarikh Monsun Timur Laut atau Monsun Barat Daya.'
+              ? 'Tekan "Tambah Musim" untuk menetapkan tarikh sesuatu musim atau fenomena cuaca.'
               : 'Musim akan dipaparkan di sini selepas ditetapkan oleh Super Admin.'}
           </p>
         </div>
@@ -382,8 +369,8 @@ export function StatistikMusim() {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="truncate text-base font-semibold text-neutral-900">{m.nama}</h2>
-                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${WARNA_JENIS[m.jenis]}`}>
-                        {LABEL_JENIS[m.jenis]}
+                      <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-800">
+                        {m.jenis}
                       </span>
                     </div>
                     <p className="mt-1 text-sm text-neutral-600">
@@ -407,24 +394,24 @@ export function StatistikMusim() {
                     Lihat Statistik
                   </button>
                   {bolehUrus && (
-                    <div className="flex gap-1.5">
-                      <button
-                        onClick={() => setBorang({ musim: m })}
-                        title="Kemaskini"
-                        className="flex items-center gap-1 rounded-lg border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:border-emerald-500 hover:text-emerald-700"
-                      >
-                        <Pencil size={13} />
-                        Kemaskini
-                      </button>
-                      <button
-                        onClick={() => setHendakPadam(m)}
-                        title="Padam"
-                        className="flex items-center gap-1 rounded-lg border border-neutral-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:border-red-400 hover:bg-red-50"
-                      >
-                        <Trash2 size={13} />
-                        Padam
-                      </button>
-                    </div>
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={() => setBorang({ musim: m })}
+                      title="Kemaskini"
+                      className="flex items-center gap-1 rounded-lg border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:border-emerald-500 hover:text-emerald-700"
+                    >
+                      <Pencil size={13} />
+                      Kemaskini
+                    </button>
+                    <button
+                      onClick={() => setHendakPadam(m)}
+                      title="Padam"
+                      className="flex items-center gap-1 rounded-lg border border-neutral-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:border-red-400 hover:bg-red-50"
+                    >
+                      <Trash2 size={13} />
+                      Padam
+                    </button>
+                  </div>
                   )}
                 </div>
               </div>

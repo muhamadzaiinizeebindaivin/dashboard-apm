@@ -28,11 +28,6 @@ import type { ToastState } from './Toast'
 
 // Statistics of one season (Statistik Musim page, Phase 2)
 
-const LABEL_JENIS: Record<Musim['jenis'], string> = {
-  timur_laut: 'Monsun Timur Laut',
-  barat_daya: 'Monsun Barat Daya',
-}
-
 const nombor = (n: number) => n.toLocaleString('ms-MY', { maximumFractionDigits: 1 })
 
 function tarikhPendek(iso: string) {
@@ -240,7 +235,7 @@ export function PaparanStatistikMusim({ musim, senarai, onTukar, onKembali }: Pr
       {/* Season bar */}
       <div className={`mt-6 flex flex-wrap items-center justify-between gap-3 ${kad}`}>
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">{LABEL_JENIS[musim.jenis]}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">{musim.jenis}</p>
           <h2 className="text-lg font-semibold text-neutral-900">{musim.nama}</h2>
           <p className="text-sm text-neutral-500">
             {tarikhPendek(musim.tarikh_mula)} – {tarikhPendek(musim.tarikh_tamat)}

@@ -256,6 +256,7 @@ export async function bangunLaporanNasionalDoc(
   ditutup: PpsDitutup[] = [],
   tapis: TapisGraf = {},
   korban: KorbanNegeri[] = [],
+  kawasan: string[] = [], // e.g. ['Perak', 'P.062 Sungai Siput', 'N.21 Lintang'] when filtered by Parlimen/ADUN
 ): Promise<{ doc: jsPDF; namaFail: string }> {
   const { default: JsPDF } = await import('jspdf')
   const { default: autoTable } = await import('jspdf-autotable')
@@ -286,6 +287,13 @@ export async function bangunLaporanNasionalDoc(
   doc.text(tarikh.toUpperCase(), lebar / 2, 90, { align: 'center' })
   doc.setFontSize(10)
   doc.text(`KEMASKINI SEHINGGA ${masa}`, lebar / 2, 97, { align: 'center' })
+  // Report for one constituency (Parlimen / ADUN): named clearly on the cover
+  if (kawasan.length > 0) {
+    doc.setFontSize(13)
+    doc.setTextColor(255, 150, 40)
+    doc.text(kawasan.join(' — ').toUpperCase(), lebar / 2, 107, { align: 'center', maxWidth: lebar - 40 })
+    doc.setTextColor(255, 255, 255)
+  }
   doc.setFontSize(11)
   doc.text('Pusat Kawalan Operasi Pusat', lebar / 2, 116, { align: 'center' })
   doc.setFontSize(9)
@@ -717,7 +725,19 @@ export async function bangunLaporanNasionalDoc(
   }
 
   const stamp = `${sekarang.getFullYear()}-${pad(sekarang.getMonth() + 1)}-${pad(sekarang.getDate())}-${pad(sekarang.getHours())}${pad(sekarang.getMinutes())}`
-  return { doc, namaFail: `laporan-bencana-nasional-${stamp}.pdf` }
+  // Constituency in the file name too, e.g. "laporan-bencana-p.062-sungai-siput-2026-10-21-1400.pdf"
+  const bahagianKawasan = kawasan
+    .slice(1)
+    .join('-')
+    .toLowerCase()
+    .replace(/[^a-z0-9.]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return {
+    doc,
+    namaFail: bahagianKawasan
+      ? `laporan-bencana-${bahagianKawasan}-${stamp}.pdf`
+      : `laporan-bencana-nasional-${stamp}.pdf`,
+  }
 }
 
 export async function janaLaporanNasional(items: ItemLaporanNasional[]) {

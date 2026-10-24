@@ -37,10 +37,12 @@ import type { PpsExcel } from '../lib/bacaLaporanSemasa'
 import { lampiranUntukHantar, pilihanAsal } from '../lib/bacaLampiranSemasa'
 import type { KunciLampiran, Lampiran } from '../lib/bacaLampiranSemasa'
 import { SemakLampiran } from '../components/SemakLampiran'
+import { StatusNamaBencana } from '../components/StatusNamaBencana'
 import { hurufBesar, kemasNamaTempat, kunci } from '../lib/normalisasi'
 import { semakPps } from '../lib/ppsPusat'
 import { useJenisBencana } from '../lib/jenisBencana'
 import type { PpsInput } from '../lib/ppsPusat'
+import { useKawasan, parlimenNegeri, dunNegeri } from '../lib/kawasanPilihanRaya'
 
 const AWAL_FIELD: FieldDef[] = [
   TARIKH_MASA_FIELD,
@@ -479,6 +481,22 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
           sasaran.r.longitude = x.longitude
         }
       }
+
+      // Same for the constituency: only new PPS ask for a Parlimen / ADUN
+      const { data: kawasanSedia } = await supabase.rpc('kawasan_pps_sedia', {
+        p_code: ambilKod('laporan'),
+        p_nama_bencana: hasil.nilai.nama_bencana,
+        p_negeri: hasil.nilai.negeri,
+        p_pps: senaraiRata.map(({ g, r }) => ({ daerah: g.daerah, nama: r.nama })),
+      })
+      for (const x of (kawasanSedia as { i: number; parlimen: string; dun: string | null }[]) ?? []) {
+        const sasaran = senaraiRata[x.i]
+        if (sasaran) {
+          sasaran.r.parlimen = x.parlimen
+          sasaran.r.dun = x.dun
+          sasaran.r.kawasanSedia = true
+        }
+      }
     }
 
     setFail(f)
@@ -502,6 +520,18 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
   const perluLokasi = (r: PpsInput) => (r.latitude == null || r.longitude == null) && !metaPps[r.kunci]?.ditutup
   const ppsTanpaLokasi = kumpulanPps.flatMap((g) => g.rows.filter(perluLokasi))
   const bilTanpaLokasi = ppsTanpaLokasi.length
+  // Parlimen + ADUN are required for every new PPS (same exemption as the location: PPS marked "Tutup").
+  // Only enforced once the official list has loaded, so a network hiccup never blocks a report.
+  const kawasan = useKawasan()
+  const adaSenaraiKawasan = !!nilai.negeri && parlimenNegeri(kawasan, nilai.negeri).length > 0
+  const perluKawasan = (r: PpsInput) => {
+    if (!adaSenaraiKawasan || r.kawasanSedia || metaPps[r.kunci]?.ditutup) return false
+    if (!r.parlimen) return true
+    // KL, Putrajaya and Labuan have no ADUN
+    return !r.dun && dunNegeri(kawasan, nilai.negeri!, r.parlimen).length > 0
+  }
+  const ppsTanpaKawasan = kumpulanPps.flatMap((g) => g.rows.filter(perluKawasan))
+  const bilTanpaKawasan = ppsTanpaKawasan.length
 
   async function handleHantar() {
     setRalat('')
@@ -571,6 +601,15 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
           )
           return
         }
+        // Every new PPS must have its Parlimen and ADUN (reports per YB constituency)
+        if (bilTanpaKawasan > 0) {
+          const nama = ppsTanpaKawasan.slice(0, 3).map((r) => r.nama.trim() || 'PPS tanpa nama')
+          setRalat(
+            `Sila pilih Parlimen dan ADUN bagi ${bilTanpaKawasan} PPS sebelum menghantar: ${nama.join(', ')}` +
+              (bilTanpaKawasan > 3 ? ` dan ${bilTanpaKawasan - 3} lagi.` : '.'),
+          )
+          return
+        }
 
         pps = kumpulan.map((g) => {
           const items = g.rows.map((r) => {
@@ -583,6 +622,9 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
               jumlah_keluarga: Number(r.keluarga),
               latitude: r.latitude,
               longitude: r.longitude,
+              // Constituency chosen for a new PPS (already-known PPS keep theirs on the server)
+              parlimen: r.kawasanSedia ? null : (r.parlimen ?? null),
+              dun: r.kawasanSedia ? null : (r.dun ?? null),
               // Excel details (absent for PPS added by hand here)
               mukim: m?.mukim ? hurufBesar(m.mukim) : null,
               pengurus_nama: m?.pengurusNama ? hurufBesar(m.pengurusNama) : null,
@@ -798,12 +840,24 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
                           ]
                         : []),
                       'PPS yang ditanda "Tutup" dalam fail akan dicadangkan untuk ditutup. Sekretariat akan mengesahkan.',
+                      ...(bilTanpaKawasan > 0
+                        ? [
+                            `${bilTanpaKawasan} PPS baharu belum dipilih Parlimen/ADUN. Parlimen dan ADUN wajib dipilih sebelum laporan boleh dihantar.`,
+                          ]
+                        : []),
                     ]}
                     onTukar={kosongkanFail}
                   />
 
                   <Bahagian tajuk="Maklumat Bencana">
                     {SEMASA_MAKLUMAT_FIELDS.map(renderMedan)}
+                    {/* Same disaster as its Laporan Awal? Warns about new / ended / misspelt names */}
+                    <StatusNamaBencana
+                      kodAkses={ambilKod('laporan')}
+                      nama={nilai.nama_bencana ?? ''}
+                      negeri={nilai.negeri}
+                      onPilih={(nama) => setNilai((prev) => ({ ...prev, nama_bencana: nama }))}
+                    />
                     {renderMedan(TARIKH_MASA_FIELD)}
                     {renderMedan(RINGKASAN_TEKS_FIELD)}
                   </Bahagian>
@@ -897,6 +951,7 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
                               onChange={(rows) => ubahKumpulan(g.kunci, { rows })}
                               negeri={nilai.negeri}
                               perluLokasi={perluLokasi}
+                              perluKawasan={perluKawasan}
                             />
                           </div>
                         )

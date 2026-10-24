@@ -6,10 +6,7 @@ import type { Musim } from '../pages/StatistikMusim'
 // Export of the Statistik Musim view: PDF (same look as the other reports) and
 // Excel (one sheet per section). Both use the figures already computed on screen.
 
-const LABEL_JENIS: Record<Musim['jenis'], string> = {
-  timur_laut: 'Monsun Timur Laut',
-  barat_daya: 'Monsun Barat Daya',
-}
+
 
 const pad = (n: number) => String(n).padStart(2, '0')
 const nombor = (n: number) => n.toLocaleString('ms-MY', { maximumFractionDigits: 1 })
@@ -363,7 +360,7 @@ export async function janaExcelStatistikMusim(musim: Musim, d: StatistikMusimDat
   })
   const ringkasan: Sel[][] = [
     ['Musim', musim.nama],
-    ['Jenis', LABEL_JENIS[musim.jenis]],
+    ['Fenomena Cuaca', musim.jenis],
     ['Tarikh Mula', tarikhExcel(musim.tarikh_mula)],
     ['Tarikh Tamat', tarikhExcel(musim.tarikh_tamat)],
     ['Dikira Sehingga', tarikhExcel(d.sehingga)],
