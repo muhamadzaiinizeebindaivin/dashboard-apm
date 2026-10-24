@@ -4,19 +4,26 @@ import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 
 export type UserRole = 'pkop' | 'pkon'
+export type StatusAkaun = 'menunggu_kelulusan' | 'aktif' | 'ditolak'
 
 type Profile = {
   id: string
   full_name: string | null
-  role: UserRole
+  role: UserRole | null // null until a Super Admin approves the registration
+  status: StatusAkaun
+  catatan_kelulusan: string | null // reason given when a registration is rejected
 }
 
 type AuthContextValue = {
   session: Session | null
   profile: Profile | null
   loading: boolean
+  profilSedia: boolean // the profile request has answered (row found or not)
   signOut: () => Promise<void>
+  muatSemulaProfil: () => Promise<void>
 }
+
+const PROFIL_KOLUM = 'id, full_name, role, status, catatan_kelulusan'
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
@@ -28,6 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // right after login instead of blocking on a second fetch; the role
   // badge in the nav just fills in a moment later once profile arrives.
   const [loading, setLoading] = useState(true)
+  const [profilSedia, setProfilSedia] = useState(false)
   const loadedUserId = useRef<string | null>(null)
 
   useEffect(() => {
@@ -54,13 +62,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // changed — skip re-fetching unless it's genuinely a different user.
     if (loadedUserId.current === session.user.id) return
 
+    setProfilSedia(false)
     supabase
       .from('profiles')
-      .select('id, full_name, role')
+      .select(PROFIL_KOLUM)
       .eq('id', session.user.id)
       .single()
       .then(({ data }) => {
-        setProfile(data as Profile | null)
+        // No row (deleted / never created) or request refused: profile stays null,
+        // and the guards then show the status page instead of the dashboard
+        setProfile((data as Profile | null) ?? null)
+        setProfilSedia(true)
         loadedUserId.current = session.user.id
       })
   }, [session])
@@ -69,8 +81,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut()
   }
 
+  // "Semak semula" on the waiting page: has a Super Admin decided yet?
+  async function muatSemulaProfil() {
+    if (!session?.user) return
+    const { data } = await supabase.from('profiles').select(PROFIL_KOLUM).eq('id', session.user.id).single()
+    if (data) setProfile(data as Profile)
+  }
+
   return (
-    <AuthContext.Provider value={{ session, profile, loading, signOut }}>
+    <AuthContext.Provider value={{ session, profile, loading, profilSedia, signOut, muatSemulaProfil }}>
       {children}
     </AuthContext.Provider>
   )

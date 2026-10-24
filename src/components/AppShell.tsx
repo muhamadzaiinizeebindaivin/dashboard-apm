@@ -3,6 +3,9 @@ import type { ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Menu, X, ChevronsLeft } from 'lucide-react'
 import { SidebarContent } from './Sidebar'
+import { StatusAkaun } from './StatusAkaun'
+import { useAuth } from '../hooks/useAuth'
+import { PemuatHalaman } from './Memuatkan'
 import apmLogo from '../assets/apm-logo.png'
 
 type AppShellProps = {
@@ -23,6 +26,7 @@ function bacaKecil() {
 export function AppShell({ children }: AppShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [kecil, setKecil] = useState(bacaKecil)
+  const { profile, profilSedia } = useAuth()
 
   function togolSidebar() {
     setKecil((k) => {
@@ -34,6 +38,11 @@ export function AppShell({ children }: AppShellProps) {
       return !k
     })
   }
+
+  // Closed by default: wait for the profile, then only an approved account gets in
+  // (covers the logged-in Laman Utama, which is outside RequireAuth)
+  if (!profilSedia) return <PemuatHalaman latar />
+  if (!profile || profile.status !== 'aktif') return <StatusAkaun />
 
   return (
     <div className="relative min-h-[100dvh] overflow-hidden bg-gradient-to-br from-sky-100 via-sky-50 to-white">

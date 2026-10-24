@@ -18,7 +18,7 @@ export function RequireRole({ allow }: RequireRoleProps) {
     return <PemuatHalaman penuh={false} />
   }
 
-  if (!allow.includes(profile.role)) {
+  if (!profile.role || !allow.includes(profile.role)) {
     return <Navigate to="/sekretariat" replace />
   }
 

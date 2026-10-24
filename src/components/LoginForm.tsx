@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { motion } from 'framer-motion'
 import { Mail, Lock } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
 type LoginFormProps = {
@@ -22,7 +23,11 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
-      setRalat('E-mel atau kata laluan salah.')
+      setRalat(
+        /not confirmed/i.test(error.message)
+          ? 'E-mel belum disahkan. Sila klik pautan pengesahan dalam e-mel pendaftaran anda.'
+          : 'E-mel atau kata laluan salah.',
+      )
       setLoading(false)
       return
     }
@@ -74,6 +79,13 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       >
         {loading ? 'Log masuk...' : 'LOG MASUK'}
       </motion.button>
+
+      <p className="text-center text-sm text-neutral-600">
+        Belum mempunyai akaun?{' '}
+        <Link to="/daftar" className="font-semibold text-emerald-700 hover:underline">
+          Daftar di sini
+        </Link>
+      </p>
     </form>
   )
 }

@@ -22,6 +22,7 @@ import { SenaraiSumbangan } from './pages/SenaraiSumbangan'
 import { SenaraiSumbanganNegeri } from './pages/SenaraiSumbanganNegeri'
 import { Admin } from './pages/Admin'
 import { SetPassword } from './pages/SetPassword'
+import { Daftar } from './pages/Daftar'
 import { TidakDijumpai } from './pages/TidakDijumpai'
 
 // Lazy-loaded: these three pull in Leaflet/react-leaflet, which is a large
@@ -66,6 +67,7 @@ function App() {
               }
             />
             <Route path="/set-password" element={<SetPassword />} />
+            <Route path="/daftar" element={<Daftar />} />
 
             <Route element={<RequireAuth />}>
               {/* Laporan Awal / Semasa sent from inside the dashboard: staff need no access code */}

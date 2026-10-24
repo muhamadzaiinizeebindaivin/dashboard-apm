@@ -77,7 +77,7 @@ export async function janaPdfStatistikMusim(musim: Musim, d: StatistikMusimData)
   doc.setFontSize(9)
   const sehingga = d.sehingga < musim.tarikh_tamat ? ` (dikira sehingga ${tarikh(d.sehingga)})` : ''
   doc.text(
-    `${LABEL_JENIS[musim.jenis]}  ·  ${tarikh(musim.tarikh_mula)} – ${tarikh(musim.tarikh_tamat)}${sehingga}`,
+    `${musim.jenis}  ·  ${tarikh(musim.tarikh_mula)} – ${tarikh(musim.tarikh_tamat)}${sehingga}`,
     lebar / 2,
     53,
     { align: 'center' },

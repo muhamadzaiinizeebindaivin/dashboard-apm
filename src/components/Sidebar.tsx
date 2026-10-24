@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { NavLink } from 'react-router-dom'
 import { LogOut } from 'lucide-react'
@@ -8,6 +8,25 @@ import { NAV_TABS } from '../lib/navTabs'
 import { ROLE_LABEL } from '../lib/roles'
 import { ConfirmModal } from './ConfirmModal'
 import { Skeleton } from './Memuatkan'
+import { supabase } from '../lib/supabase'
+import { useRealtime } from '../lib/realtime'
+
+// Registrations waiting for approval (badge on the Admin tab, Super Admin only)
+function useBilPermohonan(aktif: boolean) {
+  const [bil, setBil] = useState(0)
+  const kira = useCallback(async () => {
+    const { count } = await supabase
+      .from('profiles')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'menunggu_kelulusan')
+    setBil(count ?? 0)
+  }, [])
+  useEffect(() => {
+    if (aktif) kira()
+  }, [aktif, kira])
+  useRealtime('bil-permohonan', ['profiles'], kira, { aktif })
+  return aktif ? bil : 0
+}
 
 type SidebarContentProps = {
   onNavigate?: () => void
@@ -23,7 +42,8 @@ const PERALIHAN = 'duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]'
 export function SidebarContent({ onNavigate, kecil = false }: SidebarContentProps) {
   const { profile, signOut } = useAuth()
   const [confirmSignOut, setConfirmSignOut] = useState(false)
-  const TABS = NAV_TABS.filter((tab) => profile && tab.allow.includes(profile.role))
+  const TABS = NAV_TABS.filter((tab) => !!profile?.role && tab.allow.includes(profile.role))
+  const bilPermohonan = useBilPermohonan(profile?.role === 'pkop')
 
   // Labels fade out at once when collapsing, and fade in a bit later when expanding
   const label = `whitespace-nowrap transition-opacity ${PERALIHAN} ${kecil ? 'opacity-0' : 'opacity-100 delay-100'}`
@@ -84,6 +104,16 @@ export function SidebarContent({ onNavigate, kecil = false }: SidebarContentProp
                         )}
                         <Ikon size={18} className="shrink-0" />
                         <span className={label}>{tab.label}</span>
+                        {tab.to === '/admin' && bilPermohonan > 0 && (
+                          <span
+                            title={`${bilPermohonan} permohonan akaun menunggu kelulusan`}
+                            className={`rounded-full bg-amber-500 text-[11px] font-semibold text-white ${
+                              kecil ? 'absolute right-3 top-1.5 h-2.5 w-2.5' : 'ml-auto px-1.5 py-0.5'
+                            }`}
+                          >
+                            {kecil ? '' : bilPermohonan}
+                          </span>
+                        )}
                       </span>
                     )}
                   </NavLink>
@@ -104,7 +134,7 @@ export function SidebarContent({ onNavigate, kecil = false }: SidebarContentProp
           <div className="overflow-hidden">
             {profile && (
               <span className="mb-3 ml-2 inline-block whitespace-nowrap rounded-full bg-emerald-700/90 px-3 py-1 text-xs font-medium text-white">
-                {ROLE_LABEL[profile.role] ?? profile.role}
+                {profile.role ? (ROLE_LABEL[profile.role] ?? profile.role) : 'Menunggu Kelulusan'}
               </span>
             )}
           </div>
