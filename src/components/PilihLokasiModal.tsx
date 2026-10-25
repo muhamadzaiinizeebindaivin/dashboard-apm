@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet'
+import { MapContainer, Marker, useMap, useMapEvents } from 'react-leaflet'
+import { LapisanAsasPeta } from './LapisanAsasPeta'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { X, Search, LocateFixed, Loader2, MapPin } from 'lucide-react'
@@ -276,10 +277,7 @@ function Kandungan({ awal, negeri, cadangan, tajuk = 'Pilih Lokasi PPS', onSimpa
         {/* Map */}
         <div className="relative min-h-0 flex-1">
           <MapContainer center={permulaan.pusat} zoom={permulaan.zoom} scrollWheelZoom className="h-full w-full">
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
+            <LapisanAsasPeta />
             <BetulkanSaiz />
             <TerbangKe tujuan={tujuan} />
             <KlikPeta

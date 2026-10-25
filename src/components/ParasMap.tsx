@@ -1,4 +1,5 @@
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import { MapContainer, Marker, Popup, useMap } from 'react-leaflet'
+import { LapisanAsasPeta } from './LapisanAsasPeta'
 import { useEffect } from 'react'
 import { LocateFixed } from 'lucide-react'
 import L from 'leaflet'
@@ -111,10 +112,7 @@ export function ParasMap({ points, center, className }: ParasMapProps) {
   return (
     <div className={`relative w-full overflow-hidden rounded-2xl border border-neutral-200 ${className ?? 'h-96'}`}>
       <MapContainer center={initialCenter} zoom={center ? 14 : points.length > 0 ? 8 : 6} className="h-full w-full">
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+        <LapisanAsasPeta />
         {points.map((p) => (
           <Marker
             key={p.id}

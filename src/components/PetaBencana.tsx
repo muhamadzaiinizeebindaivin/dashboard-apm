@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { MapContainer, TileLayer, Marker, CircleMarker, Popup, useMap, useMapEvents } from 'react-leaflet'
+import { MapContainer, Marker, CircleMarker, Popup, useMap, useMapEvents } from 'react-leaflet'
+import { LapisanAsasPeta } from './LapisanAsasPeta'
 import L from 'leaflet'
 import { Construction } from 'lucide-react'
 import 'leaflet/dist/leaflet.css'
@@ -274,10 +275,7 @@ export function PetaBencana({
       scrollWheelZoom={zoomRoda}
       className="h-full w-full"
     >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
+      <LapisanAsasPeta />
       <BetulkanSaiz />
       <Fokus negeri={negeriFokus} />
       {onLetak && <KlikLetak aktif={meletak} onLetak={onLetak} />}
