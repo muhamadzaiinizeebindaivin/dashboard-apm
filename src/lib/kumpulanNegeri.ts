@@ -35,6 +35,7 @@ export function tajukLaporan(negeri?: string | null): string {
 }
 
 // Real state values behind a choice, for database filters: .in('negeri', ahliKumpulan(x))
+// (records can also be saved directly as "Wilayah Persekutuan", e.g. PARAS)
 export function ahliKumpulan(pilihan: string): string[] {
-  return pilihan === WILAYAH_PERSEKUTUAN ? [...ANGGOTA_WP] : [pilihan]
+  return pilihan === WILAYAH_PERSEKUTUAN ? [...ANGGOTA_WP, WILAYAH_PERSEKUTUAN] : [pilihan]
 }

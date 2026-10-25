@@ -2,9 +2,11 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft } from 'lucide-react'
 import apmLogo from '../assets/apm-logo.png'
-import { NEGERI_FLAG, NEGERI_LIST } from '../lib/negeriVisual'
+import { NEGERI_FLAG } from '../lib/negeriVisual'
+import { SENARAI_KUMPULAN_NEGERI } from '../lib/kumpulanNegeri'
 
-const NEGERI_LOGO = NEGERI_LIST.map((nama) => ({ nama, logo: NEGERI_FLAG[nama] }))
+// KL, Putrajaya and Labuan: one "Wilayah Persekutuan" team page
+const NEGERI_LOGO = SENARAI_KUMPULAN_NEGERI.map((nama) => ({ nama, logo: NEGERI_FLAG[nama] }))
 
 export function Paras() {
   const navigate = useNavigate()

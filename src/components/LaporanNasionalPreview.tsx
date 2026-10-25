@@ -65,7 +65,7 @@ function CartaGabungan({
         const gy = py + ph - (ph * i) / 4
         return (
           <g key={i}>
-            <line x1={px} y1={gy} x2={px + pw} y2={gy} stroke="#e5e5e5" strokeWidth={1} />
+            <line x1={px} y1={gy} x2={px + pw} y2={gy} className="stroke-neutral-200" strokeWidth={1} />
             <text x={px - 4} y={gy + 3} textAnchor="end" className="fill-neutral-400 text-[8px]">
               {Math.round((skalaKiri * i) / 4)}
             </text>

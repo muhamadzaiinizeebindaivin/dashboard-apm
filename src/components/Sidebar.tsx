@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { NavLink } from 'react-router-dom'
 import { LogOut, UserCircle } from 'lucide-react'
+import { PemilihTema } from './PemilihTema'
 import apmLogo from '../assets/apm-logo.png'
 import { useAuth } from '../hooks/useAuth'
 import { NAV_TABS } from '../lib/navTabs'
@@ -138,6 +139,10 @@ export function SidebarContent({ onNavigate, kecil = false }: SidebarContentProp
               </span>
             )}
           </div>
+        </div>
+        {/* Light / dark / follow the device */}
+        <div className={kecil ? '' : 'px-[11px] pb-1'}>
+          <PemilihTema padat={kecil} />
         </div>
         <NavLink
           to="/profil"

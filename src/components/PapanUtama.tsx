@@ -13,7 +13,8 @@ import type { PpsAwam, TitikTrend } from '../lib/petaAwam'
 // Palette of this page: white glass, blue / navy, orange highlights.
 // Editing stays in the Bencana tab.
 
-const NAVY = '#0b2a5c'
+// Headings and figures: navy in light mode, light blue in dark mode (index.css --warna-navy)
+const NAVY = 'var(--warna-navy)'
 const BIRU = '#2563eb'
 const OREN = '#f97316'
 const KELABU = '#94a3b8'
@@ -99,7 +100,7 @@ function GrafTrend({ data, tempoh }: { data: TitikTrend[]; tempoh: '24j' | '7h' 
         </linearGradient>
       </defs>
       {[0.25, 0.5, 0.75].map((f) => (
-        <line key={f} x1="0" x2={W} y1={atas + (bawah - atas) * f} y2={atas + (bawah - atas) * f} stroke="#e2e8f0" strokeDasharray="3 4" />
+        <line key={f} x1="0" x2={W} y1={atas + (bawah - atas) * f} y2={atas + (bawah - atas) * f} className="stroke-neutral-200" strokeDasharray="3 4" />
       ))}
       {kawasan && <path d={kawasan} fill="url(#kawasan-mangsa)" />}
       {titikKeluarga.length > 1 && (
@@ -152,7 +153,7 @@ function KadTrend() {
               key={t}
               onClick={() => setTempoh(t)}
               className={`rounded-full px-3 py-1 transition-colors ${
-                tempoh === t ? 'bg-white text-[#0b2a5c] shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
+                tempoh === t ? 'bg-white text-[#0b2a5c] shadow-sm dark:text-[#7dd3fc]' : 'text-neutral-500 hover:text-neutral-700'
               }`}
             >
               {t === '24j' ? '24 JAM' : '7 HARI'}
@@ -221,7 +222,7 @@ function KadStatusPps({ pps }: { pps: PpsAwam[] }) {
 
       <div className="mt-4 flex items-center gap-5">
         <svg viewBox="0 0 140 140" className="h-36 w-36 shrink-0 -rotate-90" role="img" aria-label="Status PPS">
-          <circle cx="70" cy="70" r={r} fill="none" stroke="#eef2f7" strokeWidth="14" />
+          <circle cx="70" cy="70" r={r} fill="none" className="stroke-neutral-100" strokeWidth="14" />
           {jumlah > 0 &&
             bahagian.map((b) => {
               const panjang = (b.nilai / jumlah) * lilitan
@@ -249,7 +250,7 @@ function KadStatusPps({ pps }: { pps: PpsAwam[] }) {
             dominantBaseline="central"
             fontSize="28"
             fontWeight="700"
-            fill={NAVY}
+            style={{ fill: NAVY }}
           >
             {jumlah}
           </text>

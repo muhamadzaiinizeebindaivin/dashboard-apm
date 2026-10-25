@@ -63,6 +63,7 @@ function LapisanAktif({ mod }: { mod: Mod }) {
   return (
     <TileLayer
       key="jalan"
+      className="lapisan-jalan" // darkened in dark mode (index.css)
       attribution={ATR_OSM}
       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       maxZoom={19}

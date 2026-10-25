@@ -121,3 +121,102 @@
     animation: none;
   }
 }
+
+/* =====================================================================
+   Dark theme ("Gelap"): the class .dark on <html> (src/lib/tema.ts)
+   Tailwind v4 colour classes read CSS variables, so redefining the palette
+   here switches the whole app without editing every component.
+   ===================================================================== */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Headings and figures of the homepage dashboard (PapanUtama): navy / light blue */
+:root {
+  --warna-navy: #0b2a5c;
+}
+
+:root.dark {
+  color-scheme: dark;
+  --warna-navy: #bfdbfe;
+
+  /* Surfaces: "white" becomes a dark slate (glass cards keep their transparency) */
+  --color-white: #1b2333;
+
+  /* Greys: scale inverted (dark text -> light, light backgrounds -> dark) */
+  --color-neutral-50: #161b26;
+  --color-neutral-100: #222a38;
+  --color-neutral-200: #313a4a;
+  --color-neutral-300: #475163;
+  --color-neutral-400: #7c8596;
+  --color-neutral-500: #9aa3b2;
+  --color-neutral-600: #c3c9d3;
+  --color-neutral-700: #dde1e7;
+  --color-neutral-800: #edf0f4;
+  --color-neutral-900: #f6f7f9;
+  --color-neutral-950: #ffffff;
+
+  /* Light tints -> deep muted tints; strong shades slightly lighter for contrast */
+  --color-emerald-50: #0c2a22;
+  --color-emerald-100: #0f3a2e;
+  --color-emerald-200: #14513f;
+  --color-emerald-300: #1b6b53;
+  --color-emerald-600: #10b981;
+  --color-emerald-700: #059669;
+  --color-emerald-800: #34d399;
+
+  --color-sky-50: #0b1322;
+  --color-sky-100: #0e1a2e;
+  --color-sky-200: #16304f;
+  --color-sky-300: #1d4570;
+  --color-sky-700: #7dd3fc;
+  --color-sky-800: #bae6fd;
+
+  --color-cyan-200: #134a55;
+
+  --color-amber-50: #2a2008;
+  --color-amber-100: #3a2c0b;
+  --color-amber-200: #5a4310;
+  --color-amber-700: #fbbf24;
+  --color-amber-800: #fcd34d;
+
+  --color-orange-50: #2c1a0c;
+  --color-orange-100: #3d2410;
+
+  --color-red-50: #2b1416;
+  --color-red-100: #3d181c;
+  --color-red-200: #5c2228;
+  --color-red-600: #ef4444;
+  --color-red-700: #f87171;
+  --color-red-800: #fca5a5;
+}
+
+/* Text on coloured buttons stays white */
+.dark .text-white {
+  color: #ffffff;
+}
+
+/* Login inputs: dark autofill instead of the light override above */
+.dark .login-input:-webkit-autofill,
+.dark .login-input:-webkit-autofill:hover,
+.dark .login-input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #1b2333 inset;
+  -webkit-text-fill-color: #f6f7f9;
+}
+
+/* Maps: dark street map (satellite / hybrid stay as they are), dark controls and popups */
+.dark .lapisan-jalan {
+  filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9);
+}
+.dark .leaflet-container {
+  background: #161b26;
+}
+.dark .leaflet-bar a,
+.dark .leaflet-control-attribution {
+  background: #1b2333;
+  color: #dde1e7;
+  border-color: #313a4a;
+}
+.dark .leaflet-popup-content-wrapper,
+.dark .leaflet-popup-tip {
+  background: #1b2333;
+  color: #edf0f4;
+}

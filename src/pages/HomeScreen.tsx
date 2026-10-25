@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { ShieldCheck, FileText, FileSpreadsheet, HandCoins, MapPin, FileWarning } from 'lucide-react'
 import { LoginModal } from '../components/LoginModal'
 import type { PautanAwam } from '../components/LoginModal'
+import { PemilihTema } from '../components/PemilihTema'
 import { AppShell } from '../components/AppShell'
 import { DokumenAwamCard } from '../components/DokumenAwamCard'
 import { AmaranBanner } from '../components/AmaranBanner'
@@ -133,6 +134,7 @@ export function HomeScreen() {
         <header className="flex items-center justify-between px-4 py-4 sm:px-8 sm:py-5">
           <img src={apmLogo} alt="Logo APM" className="h-11 w-11 object-contain sm:h-14 sm:w-14" />
           <div className="flex items-center gap-2">
+            <PemilihTema />
             {QUICK_LINKS.map(({ to, label, page, icon: Icon, withPetugas }) => (
               <button
                 key={to}

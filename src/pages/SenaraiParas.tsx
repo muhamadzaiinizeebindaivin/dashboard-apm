@@ -79,10 +79,10 @@ export function SenaraiParas() {
     }
   }, [])
 
-  // Normal/REHAT sessions: one marker per negeri, as before. KECEMASAN
-  // sessions: every one gets its own marker, so an emergency is never hidden
-  // behind a newer session in the same negeri — and they stay visible for
-  // 30 min after the last GPS update, since signal loss is likely in a real one.
+  // Normal/REHAT sessions: one marker per member (session), so two teams of the same
+  // state — e.g. KL and Labuan, both "Wilayah Persekutuan" — never hide each other.
+  // KECEMASAN sessions stay visible for 30 min after the last GPS update, since
+  // signal loss is likely in a real one.
   const DUA_MINIT = 2 * 60 * 1000
   const TIGA_PULUH_MINIT = 30 * 60 * 1000
   const umur = (p: LokasiPoint) => Date.now() - new Date(p.created_at).getTime()
@@ -112,9 +112,9 @@ export function SenaraiParas() {
     lokasi
       .filter((p) => p.status === 'aktif' && p.keadaan !== 'kecemasan' && umur(p) < DUA_MINIT)
       .reduce((map, p) => {
-        const existing = map.get(p.negeri)
+        const existing = map.get(p.id)
         if (!existing || new Date(p.created_at) > new Date(existing.created_at)) {
-          map.set(p.negeri, p)
+          map.set(p.id, p)
         }
         return map
       }, new Map<string, LokasiPoint>())

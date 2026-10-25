@@ -4,6 +4,7 @@ import { AuthProvider } from './hooks/useAuth'
 import { RequireAuth } from './components/RequireAuth'
 import { RequireRole } from './components/RequireRole'
 import { RequireCode } from './components/RequireCode'
+import './lib/tema' // applies the saved theme (light / dark / device) for every page
 import { Layout } from './components/Layout'
 import { HomeScreen } from './pages/HomeScreen'
 import { Sumbangan } from './pages/Sumbangan'
