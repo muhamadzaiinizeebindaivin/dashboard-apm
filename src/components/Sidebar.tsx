@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { NavLink } from 'react-router-dom'
-import { LogOut } from 'lucide-react'
+import { LogOut, UserCircle } from 'lucide-react'
 import apmLogo from '../assets/apm-logo.png'
 import { useAuth } from '../hooks/useAuth'
 import { NAV_TABS } from '../lib/navTabs'
@@ -139,6 +139,20 @@ export function SidebarContent({ onNavigate, kecil = false }: SidebarContentProp
             )}
           </div>
         </div>
+        <NavLink
+          to="/profil"
+          onClick={onNavigate}
+          title={kecil ? 'Profil Saya' : undefined}
+          aria-label="Profil Saya"
+          className={({ isActive }) =>
+            `flex w-full items-center gap-3 rounded-xl px-[19px] py-2.5 text-sm font-medium ${
+              isActive ? 'bg-emerald-700 text-white' : 'text-neutral-700 hover:bg-white/60'
+            }`
+          }
+        >
+          <UserCircle size={18} className="shrink-0" />
+          <span className={label}>Profil Saya</span>
+        </NavLink>
         <button
           onClick={() => setConfirmSignOut(true)}
           title={kecil ? 'Log Keluar' : undefined}

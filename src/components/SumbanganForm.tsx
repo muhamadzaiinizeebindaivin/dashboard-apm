@@ -82,7 +82,48 @@ export function SumbanganForm({ onSuccess, negeriTetap, existing }: SumbanganFor
 
     setMenghantar(true)
 
-    const sumbanganId = existing?.id ?? crypto.randomUUID()
+    const itemBaharu = items
+      .filter((it) => it.nama.trim() !== '')
+      .map((it) => ({ nama_item: it.nama, kuantiti: it.kuantiti, unit: it.unit }))
+
+    // New donation (public form or staff): one server call creates the donation AND its
+    // items together, with checks and a per-address limit against spam
+    if (!existing) {
+      const { error } = await supabase.rpc('hantar_sumbangan', {
+        p_data: {
+          jenis_kumpulan: jenisKumpulan,
+          nama_kumpulan: namaKumpulan,
+          no_tel: noTel,
+          negeri,
+          jenis_sumbangan: jenisSumbangan,
+          lokasi_bantuan: lokasiBantuan,
+        },
+        p_items: itemBaharu,
+      })
+      setMenghantar(false)
+      if (error) {
+        setRalat(
+          error.code === '54000'
+            ? 'Terlalu banyak penghantaran dari rangkaian ini. Sila cuba lagi dalam sejam.'
+            : 'Gagal menghantar. Sila cuba lagi.',
+        )
+        return
+      }
+      setJenisKumpulan('')
+      setNamaKumpulan('')
+      setNoTel('')
+      setNegeri(negeriTetap ?? '')
+      setJenisSumbangan('')
+      setLokasiBantuan('')
+      setItems([{ id: 1, nama: '', kuantiti: '', unit: '' }])
+      setDihantar(true)
+      setTimeout(() => setDihantar(false), 1500)
+      onSuccess?.()
+      return
+    }
+
+    // Editing an existing donation (staff only, checked by the database)
+    const sumbanganId = existing.id
 
     const payload = {
       jenis_kumpulan: jenisKumpulan,
@@ -93,9 +134,7 @@ export function SumbanganForm({ onSuccess, negeriTetap, existing }: SumbanganFor
       lokasi_bantuan: lokasiBantuan,
     }
 
-    const { error: sumbanganError } = existing
-      ? await supabase.from('sumbangan').update(payload).eq('id', existing.id)
-      : await supabase.from('sumbangan').insert({ id: sumbanganId, ...payload })
+    const { error: sumbanganError } = await supabase.from('sumbangan').update(payload).eq('id', existing.id)
 
     if (sumbanganError) {
       setRalat('Gagal menghantar. Sila cuba lagi.')
@@ -105,18 +144,9 @@ export function SumbanganForm({ onSuccess, negeriTetap, existing }: SumbanganFor
 
     // Replacing all items on each save is simpler than diffing individual
     // rows, and this list is always short (a handful of line items).
-    if (existing) {
-      await supabase.from('sumbangan_items').delete().eq('sumbangan_id', sumbanganId)
-    }
+    await supabase.from('sumbangan_items').delete().eq('sumbangan_id', sumbanganId)
 
-    const itemRows = items
-      .filter((it) => it.nama.trim() !== '')
-      .map((it) => ({
-        sumbangan_id: sumbanganId,
-        nama_item: it.nama,
-        kuantiti: it.kuantiti,
-        unit: it.unit,
-      }))
+    const itemRows = itemBaharu.map((it) => ({ sumbangan_id: sumbanganId, ...it }))
 
     if (itemRows.length > 0) {
       const { error: itemsError } = await supabase.from('sumbangan_items').insert(itemRows)
@@ -125,16 +155,6 @@ export function SumbanganForm({ onSuccess, negeriTetap, existing }: SumbanganFor
         setMenghantar(false)
         return
       }
-    }
-
-    if (!existing) {
-      setJenisKumpulan('')
-      setNamaKumpulan('')
-      setNoTel('')
-      setNegeri(negeriTetap ?? '')
-      setJenisSumbangan('')
-      setLokasiBantuan('')
-      setItems([{ id: 1, nama: '', kuantiti: '', unit: '' }])
     }
 
     setMenghantar(false)

@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Navigation, Loader2, Coffee, Siren } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { ambilPetugas } from '../lib/accessCode'
+import { ambilKod, ambilPetugas } from '../lib/accessCode'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { ParasMap } from '../components/ParasMap'
 import type { LokasiPoint } from '../components/ParasMap'
@@ -41,8 +41,10 @@ export function ParasJejak() {
   // Supabase Realtime also enforces the table's RLS for anon clients.
   useEffect(() => {
     async function muatSemula() {
+      // The PARAS access code is checked by the server too (team names / phones / positions)
       const { data, error } = await supabase.rpc('get_paras_lokasi_by_negeri', {
         p_negeri: negeri,
+        p_code: ambilKod('paras'),
       })
       if (error) return // retried by the next poll in 3 s; the markers stay meanwhile
       const semua = (data as LokasiPoint[]) ?? []
@@ -105,6 +107,7 @@ export function ParasJejak() {
           p_nama: petugas?.nama ?? null,
           p_pangkat: petugas?.pangkat ?? null,
           p_no_tel: petugas?.noTel ?? null,
+          p_code: ambilKod('paras'),
         })
       },
       () => {
@@ -147,6 +150,7 @@ export function ParasJejak() {
           p_nama: petugas?.nama ?? null,
           p_pangkat: petugas?.pangkat ?? null,
           p_no_tel: petugas?.noTel ?? null,
+          p_code: ambilKod('paras'),
         })
 
         intervalRef.current = setInterval(hantarPosisi, 500)

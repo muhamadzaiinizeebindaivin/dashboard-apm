@@ -23,6 +23,7 @@ import { SenaraiSumbanganNegeri } from './pages/SenaraiSumbanganNegeri'
 import { Admin } from './pages/Admin'
 import { SetPassword } from './pages/SetPassword'
 import { Daftar } from './pages/Daftar'
+import { ProfilSaya } from './pages/ProfilSaya'
 import { TidakDijumpai } from './pages/TidakDijumpai'
 
 // Lazy-loaded: these three pull in Leaflet/react-leaflet, which is a large
@@ -81,6 +82,7 @@ function App() {
                   <Route path="statistik" element={<StatistikMusim />} />
                 </Route>
                 <Route path="logistik" element={<Logistik />} />
+                <Route path="profil" element={<ProfilSaya />} />
                 <Route path="bencana" element={<Bencana />} />
 
                 {/* Super Admin only — Admin (pkon) has no access to these */}
