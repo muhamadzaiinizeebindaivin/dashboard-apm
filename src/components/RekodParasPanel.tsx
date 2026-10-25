@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Search, FileDown, RefreshCw, ChevronLeft, ChevronRight, Inbox } from 'lucide-react'
-import { NEGERI_LIST } from '../lib/negeriVisual'
+import { SENARAI_KUMPULAN_NEGERI } from '../lib/kumpulanNegeri'
 import {
   ambilLogKeadaan,
   ambilRekodParas,
@@ -192,7 +192,7 @@ export function RekodParasPanel({ open, onClose }: RekodParasPanelProps) {
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 <select value={tapis.negeri} onChange={(e) => tukarTapis('negeri', e.target.value)} className={inputClass}>
                   <option value="">Semua Negeri</option>
-                  {NEGERI_LIST.map((n) => (
+                  {SENARAI_KUMPULAN_NEGERI.map((n) => (
                     <option key={n} value={n}>
                       {n}
                     </option>

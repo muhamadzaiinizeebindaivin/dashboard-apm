@@ -9,7 +9,9 @@ import {
   AlertTriangle,
   Tags,
 } from 'lucide-react'
-import { NEGERI_FLAG, NEGERI_LIST } from '../lib/negeriVisual'
+import { NEGERI_FLAG } from '../lib/negeriVisual'
+import { SENARAI_KUMPULAN_NEGERI, samaKumpulan } from '../lib/kumpulanNegeri'
+import { useNegeriTetap } from '../hooks/useNegeriTetap'
 import { supabase } from '../lib/supabase'
 import { useRealtime } from '../lib/realtime'
 import { PetaBencana } from '../components/PetaBencana'
@@ -56,6 +58,11 @@ export function Bencana() {
   const [paras, setParas] = useState<(ParasPeta & { created_at: string })[]>([])
 
   const [negeriFokus, setNegeriFokus] = useState('')
+  // PKON: the map stays on their state (the database only sends that state anyway)
+  const negeriTetap = useNegeriTetap()
+  useEffect(() => {
+    if (negeriTetap && negeriFokus !== negeriTetap) setNegeriFokus(negeriTetap)
+  }, [negeriTetap, negeriFokus])
   const [tapisKategori, setTapisKategori] = useState('')
   const [lapisan, setLapisan] = useState<Lapisan>({ titik: true, pps: true, paras: true, jalan: true })
   const [jalan, setJalan] = useState<JalanPeta[]>([])
@@ -130,7 +137,7 @@ export function Bencana() {
 
   // What the map shows
   const titikPapar = titik.filter(
-    (t) => (!negeriFokus || t.negeri === negeriFokus) && (!tapisKategori || t.kategori === tapisKategori),
+    (t) => (!negeriFokus || samaKumpulan(t.negeri, negeriFokus)) && (!tapisKategori || t.kategori === tapisKategori),
   )
   const terkini = Object.fromEntries(
     titikPapar.flatMap((t) => {
@@ -138,13 +145,14 @@ export function Bencana() {
       return d ? [[t.id, d] as const] : []
     }),
   )
-  const ppsPapar = pps.filter((p) => !negeriFokus || p.negeri === negeriFokus)
-  const parasPapar = parasSegar.filter((p) => !negeriFokus || p.negeri === negeriFokus)
-  const jalanPapar = jalan.filter((j) => !negeriFokus || j.negeri === negeriFokus)
+  // "Wilayah Persekutuan" covers KL, Putrajaya and Labuan
+  const ppsPapar = pps.filter((p) => !negeriFokus || samaKumpulan(p.negeri, negeriFokus))
+  const parasPapar = parasSegar.filter((p) => !negeriFokus || samaKumpulan(p.negeri, negeriFokus))
+  const jalanPapar = jalan.filter((j) => !negeriFokus || samaKumpulan(j.negeri, negeriFokus))
 
   // Per-state activity for the cards (not affected by the category filter)
-  const bilTitik = (n: string) => titik.filter((t) => t.negeri === n).length
-  const bilPps = (n: string) => pps.filter((p) => p.negeri === n).length
+  const bilTitik = (n: string) => titik.filter((t) => samaKumpulan(t.negeri, n)).length
+  const bilPps = (n: string) => pps.filter((p) => samaKumpulan(p.negeri, n)).length
 
   function tindakan(t: TitikBencana, jenis: TindakanTitik) {
     if (jenis === 'padam') {
@@ -341,7 +349,8 @@ export function Bencana() {
 
       {/* States — two glass levels: active states raised, quiet states recede */}
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        {NEGERI_LIST.map((n) => {
+        {/* PKON: only their own state's card */}
+        {SENARAI_KUMPULAN_NEGERI.filter((n) => !negeriTetap || n === negeriTetap).map((n) => {
           const t = bilTitik(n)
           const p = bilPps(n)
           const dipilih = negeriFokus === n
@@ -350,7 +359,7 @@ export function Bencana() {
           return (
             <button
               key={n}
-              onClick={() => setNegeriFokus(dipilih ? '' : n)}
+              onClick={() => !negeriTetap && setNegeriFokus(dipilih ? '' : n)}
               aria-pressed={dipilih}
               className={`flex items-center gap-3 rounded-2xl border p-3.5 text-left shadow-[0_8px_30px_rgba(15,23,42,0.06)] backdrop-blur-xl transition-colors ${
                 dipilih

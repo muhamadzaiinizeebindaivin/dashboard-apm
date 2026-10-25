@@ -10,6 +10,7 @@ import { Toast } from '../components/Toast'
 import type { ToastState } from '../components/Toast'
 import { NEGERI_FLAG } from '../lib/negeriVisual'
 import { supabase } from '../lib/supabase'
+import { WILAYAH_PERSEKUTUAN, ahliKumpulan } from '../lib/kumpulanNegeri'
 import { ambilSemua } from '../lib/ambilSemua'
 import { STATUS_LIST, STATUS_LABEL, STATUS_BADGE_CLASS } from '../lib/sumbanganStatus'
 import type { SumbanganStatus } from '../lib/sumbanganStatus'
@@ -61,7 +62,7 @@ export function SenaraiSumbanganNegeri() {
           .select(
             'id, jenis_kumpulan, nama_kumpulan, no_tel, jenis_sumbangan, lokasi_bantuan, status, created_at',
           )
-          .eq('negeri', negeri)
+          .in('negeri', ahliKumpulan(negeri))
           .order('created_at', { ascending: false })
           .order('id', { ascending: false }),
       )
@@ -135,7 +136,13 @@ export function SenaraiSumbanganNegeri() {
     <div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/60 bg-white/40 px-5 py-4 shadow-lg backdrop-blur-md">
         <div className="flex items-center gap-3">
-          <img src={NEGERI_FLAG[negeri]} alt={negeri} className="h-10 w-14 rounded object-contain" />
+          {NEGERI_FLAG[negeri] ? (
+            <img src={NEGERI_FLAG[negeri]} alt={negeri} className="h-10 w-14 rounded object-contain" />
+          ) : (
+            <span className="flex h-10 w-14 items-center justify-center rounded bg-white/60 text-sm font-bold text-neutral-500">
+              WP
+            </span>
+          )}
           <div>
             <div className="flex items-center gap-1.5 text-sm">
               <button
@@ -401,7 +408,7 @@ export function SenaraiSumbanganNegeri() {
           setModalOpen(false)
           muatSemula()
         }}
-        negeriTetap={negeri}
+        negeriTetap={negeri === WILAYAH_PERSEKUTUAN ? undefined : negeri}
       />
 
       <TambahSumbanganModal
@@ -411,7 +418,7 @@ export function SenaraiSumbanganNegeri() {
           setEditingRow(null)
           muatSemula()
         }}
-        negeriTetap={negeri}
+        negeriTetap={negeri === WILAYAH_PERSEKUTUAN ? undefined : negeri}
         existing={editingRow ?? undefined}
       />
 

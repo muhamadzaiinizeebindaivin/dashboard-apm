@@ -13,6 +13,7 @@ export type KenderaanRow = {
   keadaan: string
   keterangan_kerosakan: string | null
   foto_url: string | null
+  negeri?: string | null // state the vehicle belongs to (null = not assigned yet, PKOP only)
   created_at: string
 }
 

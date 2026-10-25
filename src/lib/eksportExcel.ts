@@ -1,5 +1,6 @@
 import type { Cell, Row, Style, Workbook, Worksheet } from 'exceljs'
 import { supabase } from './supabase'
+import { samaKumpulan } from './kumpulanNegeri'
 import { cariZon } from './laporanBencana'
 import { kunci } from './normalisasi'
 import { pastikan } from './pastikan'
@@ -434,7 +435,8 @@ export async function ambilDataEksport(tapis: TapisEksport): Promise<DataEksport
   const tamat = new Set(((tamatData as { nama_bencana: string }[]) ?? []).map((t) => t.nama_bencana))
 
   const lulusNegeri = (n: string | null) =>
-    !!n && (!tapis.negeri || n === tapis.negeri) && (!tapis.zon || cariZon(n) === tapis.zon)
+    // "Wilayah Persekutuan" covers KL, Putrajaya and Labuan
+    !!n && (!tapis.negeri || samaKumpulan(n, tapis.negeri)) && (!tapis.zon || cariZon(n) === tapis.zon)
 
   // Type of each active disaster = type in its latest report
   const jenisIkutBencana = new Map<string, string>()

@@ -14,6 +14,7 @@ import logoTerengganu from '../assets/negeri/terengganu.png'
 import logoKualaLumpur from '../assets/negeri/kuala_lumpur.png'
 import logoPutrajaya from '../assets/negeri/putrajaya.png'
 import logoLabuan from '../assets/negeri/labuan.png'
+import logoWilayahPersekutuan from '../assets/negeri/wilayah_persekutuan.png'
 
 export const NEGERI_FLAG: Record<string, string> = {
   Johor: logoJohor,
@@ -32,6 +33,8 @@ export const NEGERI_FLAG: Record<string, string> = {
   'Kuala Lumpur': logoKualaLumpur,
   Putrajaya: logoPutrajaya,
   Labuan: logoLabuan,
+  // Grouped KL + Putrajaya + Labuan: the Wilayah Persekutuan flag
+  'Wilayah Persekutuan': logoWilayahPersekutuan,
 }
 
 export const NEGERI_LIST = [

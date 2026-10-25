@@ -7,11 +7,12 @@ import { JENIS_KENDERAAN, JENIS_DEFAULT_PHOTO } from '../lib/kenderaanVisual'
 
 type TambahKenderaanModalProps = {
   open: boolean
+  negeri: string // state the new vehicle belongs to (chosen on the Logistik page)
   onClose: () => void
   onSuccess: () => void
 }
 
-export function TambahKenderaanModal({ open, onClose, onSuccess }: TambahKenderaanModalProps) {
+export function TambahKenderaanModal({ open, negeri, onClose, onSuccess }: TambahKenderaanModalProps) {
   const [namaKenderaan, setNamaKenderaan] = useState('')
   const [nomborPlat, setNomborPlat] = useState('')
   const [jenisKenderaan, setJenisKenderaan] = useState('')
@@ -81,6 +82,7 @@ export function TambahKenderaanModal({ open, onClose, onSuccess }: TambahKendera
       keadaan,
       keterangan_kerosakan: keadaan === 'rosak' ? keteranganKerosakan : null,
       foto_url: fotoUrl,
+      negeri,
     })
 
     setMenghantar(false)

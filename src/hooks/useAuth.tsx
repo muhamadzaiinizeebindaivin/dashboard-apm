@@ -12,6 +12,7 @@ type Profile = {
   role: UserRole | null // null until a Super Admin approves the registration
   status: StatusAkaun
   catatan_kelulusan: string | null // reason given when a registration is rejected
+  negeri: string | null // PKON: the only state (or "Wilayah Persekutuan") they can see; PKOP: null
 }
 
 type AuthContextValue = {
@@ -23,7 +24,7 @@ type AuthContextValue = {
   muatSemulaProfil: () => Promise<void>
 }
 
-const PROFIL_KOLUM = 'id, full_name, role, status, catatan_kelulusan'
+const PROFIL_KOLUM = 'id, full_name, role, status, catatan_kelulusan, negeri'
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 

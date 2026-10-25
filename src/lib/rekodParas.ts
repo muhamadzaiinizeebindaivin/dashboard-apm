@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { ahliKumpulan } from './kumpulanNegeri'
 
 export type Keadaan = 'biasa' | 'rehat' | 'kecemasan'
 
@@ -46,7 +47,7 @@ function binaQuery(tapis: TapisRekodParas) {
   // Strip characters that would break PostgREST's or() syntax
   const carian = tapis.carian.replace(/[,()%*]/g, ' ').trim()
   if (carian) q = q.or(`nama.ilike.%${carian}%,no_tel.ilike.%${carian}%`)
-  if (tapis.negeri) q = q.eq('negeri', tapis.negeri)
+  if (tapis.negeri) q = q.in('negeri', ahliKumpulan(tapis.negeri))
   if (tapis.status === 'aktif') q = q.eq('status', 'aktif')
   if (tapis.status === 'tamat') q = q.neq('status', 'aktif')
   if (tapis.keadaan) q = q.eq('paras_keadaan_log.keadaan', tapis.keadaan)

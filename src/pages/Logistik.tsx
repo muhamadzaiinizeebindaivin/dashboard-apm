@@ -22,15 +22,28 @@ import type { KenderaanRow } from '../components/KenderaanDetailPanel'
 import { JENIS_KENDERAAN, JENIS_LABEL, JENIS_DEFAULT_PHOTO } from '../lib/kenderaanVisual'
 import { supabase } from '../lib/supabase'
 import { Memuat, SkeletonDokumen, SkeletonKenderaan } from '../components/Memuatkan'
+import { SENARAI_KUMPULAN_NEGERI } from '../lib/kumpulanNegeri'
+import { useNegeriTetap } from '../hooks/useNegeriTetap'
+
+// Logistik is kept per state: one document per state + that state's vehicles.
+// PKON: only their state (enforced by the database). PKOP: every state, with a filter.
 
 type DokumenRow = {
   id: string
   file_name: string
   file_path: string
+  negeri: string | null
   created_at: string
 }
 
+const selectNegeriClass =
+  'h-9 rounded-full border border-white/60 bg-white/60 px-3 text-sm text-neutral-700 outline-none backdrop-blur-md focus:border-emerald-600'
+
 export function Logistik() {
+  const negeriTetap = useNegeriTetap()
+  // PKOP: '' = every state (the document panel then shows documents without a state)
+  const [tapisNegeri, setTapisNegeri] = useState('')
+  const negeriAktif = negeriTetap ?? tapisNegeri
   const [dokumen, setDokumen] = useState<DokumenRow | null>(null)
   const [dokumenUrl, setDokumenUrl] = useState('')
   const [loadingDokumen, setLoadingDokumen] = useState(true)
@@ -60,12 +73,10 @@ export function Logistik() {
 
   async function muatSemulaDokumen() {
     setLoadingDokumen(true)
-    const { data, error } = await supabase
-      .from('logistik_dokumen')
-      .select('id, file_name, file_path, created_at')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+    // The chosen state's document; with "Semua negeri" (PKOP), an old document without a state
+    let q = supabase.from('logistik_dokumen').select('id, file_name, file_path, negeri, created_at')
+    q = negeriAktif ? q.eq('negeri', negeriAktif) : q.is('negeri', null)
+    const { data, error } = await q.order('created_at', { ascending: false }).limit(1).maybeSingle()
 
     if (error) {
       beriNotifikasi('error', 'Gagal memuatkan data Logistik. Semak sambungan internet anda.')
@@ -90,7 +101,7 @@ export function Logistik() {
     setLoadingKenderaan(true)
     const { data, error } = await supabase
       .from('logistik_kenderaan')
-      .select('id, nama_kenderaan, nombor_plat, jenis_kenderaan, keadaan, keterangan_kerosakan, foto_url, created_at')
+      .select('id, nama_kenderaan, nombor_plat, jenis_kenderaan, keadaan, keterangan_kerosakan, foto_url, negeri, created_at')
       .order('created_at', { ascending: false })
 
     setLoadingKenderaan(false)
@@ -103,16 +114,44 @@ export function Logistik() {
 
   useEffect(() => {
     setHalaman(1)
-  }, [carian, tapisJenis, tapisKeadaan])
+  }, [carian, tapisJenis, tapisKeadaan, tapisNegeri])
 
   useEffect(() => {
-    muatSemulaDokumen()
     muatSemulaKenderaan()
   }, [])
 
+  // One document per state: reload when the state changes
+  useEffect(() => {
+    muatSemulaDokumen()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [negeriAktif])
+
+  // PKOP: give a state to a vehicle / document recorded before Logistik was per state
+  async function tetapkanNegeriKenderaan(row: KenderaanRow, negeri: string) {
+    if (!negeri) return
+    const { error } = await supabase.from('logistik_kenderaan').update({ negeri }).eq('id', row.id)
+    if (error) {
+      beriNotifikasi('error', `Gagal menetapkan negeri bagi "${row.nama_kenderaan}".`)
+      return
+    }
+    setKenderaan((prev) => prev.map((k) => (k.id === row.id ? { ...k, negeri } : k)))
+    beriNotifikasi('success', `"${row.nama_kenderaan}" kini di bawah ${negeri}.`)
+  }
+
+  async function tetapkanNegeriDokumen(negeri: string) {
+    if (!negeri || !dokumen) return
+    const { error } = await supabase.from('logistik_dokumen').update({ negeri }).eq('id', dokumen.id)
+    if (error) {
+      beriNotifikasi('error', 'Gagal menetapkan negeri dokumen.')
+      return
+    }
+    beriNotifikasi('success', `Dokumen kini di bawah ${negeri}.`)
+    muatSemulaDokumen()
+  }
+
   async function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
     const fail = e.target.files?.[0]
-    if (!fail) return
+    if (!fail || !negeriAktif) return
 
     setRalat('')
     setMemuatNaik(true)
@@ -124,7 +163,8 @@ export function Logistik() {
       await supabase.from('logistik_dokumen').delete().eq('id', dokumen.id)
     }
 
-    const filePath = `${crypto.randomUUID()}-${fail.name}`
+    // One folder per state: the storage rules check it
+    const filePath = `${negeriAktif}/${crypto.randomUUID()}-${fail.name}`
 
     const { error: uploadError } = await supabase.storage
       .from('logistik-dokumen')
@@ -139,6 +179,7 @@ export function Logistik() {
     const { error: insertError } = await supabase.from('logistik_dokumen').insert({
       file_name: fail.name,
       file_path: filePath,
+      negeri: negeriAktif,
     })
 
     if (insertError) {
@@ -201,7 +242,9 @@ export function Logistik() {
       k.nombor_plat.toLowerCase().includes(carian.toLowerCase())
     const cocokJenis = tapisJenis === '' || k.jenis_kenderaan === tapisJenis
     const cocokKeadaan = tapisKeadaan === '' || k.keadaan === tapisKeadaan
-    return cocokCarian && cocokJenis && cocokKeadaan
+    // PKOP filter (a PKON only receives their state anyway)
+    const cocokNegeri = negeriTetap !== null || tapisNegeri === '' || k.negeri === tapisNegeri
+    return cocokCarian && cocokJenis && cocokKeadaan && cocokNegeri
   })
 
   const jumlahHalaman = Math.max(1, Math.ceil(kenderaanTertapis.length / SAIZ_HALAMAN))
@@ -221,16 +264,32 @@ export function Logistik() {
             <span className="font-medium text-emerald-700">Logistik</span>
           </div>
           <h1 className="text-2xl font-semibold text-neutral-900">Logistik</h1>
+          {negeriTetap && <p className="text-xs text-neutral-500">Negeri: {negeriTetap}</p>}
         </div>
 
-        <motion.button
-          whileTap={{ scale: 0.97 }}
-          onClick={() => setModalKenderaanOpen(true)}
-          className="flex items-center gap-1.5 rounded-full bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
-        >
-          <Plus size={16} />
-          Tambah Kenderaan
-        </motion.button>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* PKOP: choose the state; a PKON is fixed to theirs */}
+          {!negeriTetap && (
+            <select value={tapisNegeri} onChange={(e) => setTapisNegeri(e.target.value)} className={selectNegeriClass}>
+              <option value="">Semua negeri</option>
+              {SENARAI_KUMPULAN_NEGERI.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          )}
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={() => setModalKenderaanOpen(true)}
+            disabled={!negeriAktif}
+            title={negeriAktif ? undefined : 'Pilih negeri dahulu untuk menambah kenderaan'}
+            className="flex items-center gap-1.5 rounded-full bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Plus size={16} />
+            Tambah Kenderaan
+          </motion.button>
+        </div>
       </div>
 
       <AnimatePresence>
@@ -259,7 +318,9 @@ export function Logistik() {
       {/* Rekod logistik (dokumen) — on top */}
       <DashboardCard className="mt-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-base font-medium text-neutral-900">Rekod logistik</h2>
+          <h2 className="text-base font-medium text-neutral-900">
+            Rekod logistik{negeriAktif ? ` — ${negeriAktif}` : ''}
+          </h2>
 
           <div>
             <input
@@ -270,7 +331,8 @@ export function Logistik() {
             />
             <motion.button
               whileTap={{ scale: 0.97 }}
-              disabled={memuatNaik}
+              disabled={memuatNaik || !negeriAktif}
+              title={negeriAktif ? undefined : 'Pilih negeri dahulu untuk memuat naik dokumen'}
               onClick={() => fileInputRef.current?.click()}
               className="flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-neutral-700 hover:border-neutral-300 disabled:opacity-60"
             >
@@ -281,7 +343,9 @@ export function Logistik() {
         </div>
 
         <p className="mt-2 text-xs text-neutral-400">
-          Nota: memuat naik fail baru akan menggantikan fail sedia ada.
+          {negeriAktif
+            ? 'Nota: satu dokumen bagi setiap negeri — memuat naik fail baru akan menggantikan fail sedia ada.'
+            : 'Pilih negeri untuk melihat atau memuat naik dokumen negeri tersebut.'}
         </p>
 
         {ralat && <p className="mt-2 text-sm text-red-600">{ralat}</p>}
@@ -292,7 +356,9 @@ export function Logistik() {
               <SkeletonDokumen />
             </Memuat>
           ) : !dokumen ? (
-            <p className="text-sm text-neutral-500">Tiada dokumen dimuat naik lagi.</p>
+            <p className="text-sm text-neutral-500">
+              {negeriAktif ? 'Tiada dokumen dimuat naik lagi.' : 'Tiada dokumen tanpa negeri.'}
+            </p>
           ) : (
             <AnimatePresence>
               <motion.div
@@ -310,6 +376,21 @@ export function Logistik() {
                     <p className="text-xs text-neutral-400">
                       {new Date(dokumen.created_at).toLocaleString('ms-MY')}
                     </p>
+                    {/* Document recorded before Logistik was per state (PKOP only sees it) */}
+                    {!dokumen.negeri && (
+                      <select
+                        defaultValue=""
+                        onChange={(e) => tetapkanNegeriDokumen(e.target.value)}
+                        className="mt-1 rounded-full border border-amber-400 bg-white px-2 py-0.5 text-xs text-amber-700 outline-none"
+                      >
+                        <option value="">Tiada negeri — tetapkan…</option>
+                        {SENARAI_KUMPULAN_NEGERI.map((n) => (
+                          <option key={n} value={n}>
+                            {n}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                 </div>
 
@@ -438,13 +519,16 @@ export function Logistik() {
                 const gambar = k.foto_url ?? JENIS_DEFAULT_PHOTO[k.jenis_kenderaan] ?? JENIS_DEFAULT_PHOTO['4wd']
                 const baik = k.keadaan === 'baik'
                 return (
-                  <motion.button
+                  <motion.div
                     key={k.id}
                     layout
+                    role="button"
+                    tabIndex={0}
                     onClick={() => setSelectedKenderaan(k)}
+                    onKeyDown={(e) => e.key === 'Enter' && setSelectedKenderaan(k)}
                     exit={{ opacity: 0, scale: 0.9, y: -8 }}
                     transition={{ duration: 0.2, ease: 'easeOut' }}
-                    className="overflow-hidden rounded-2xl border border-white/60 bg-white/40 text-left shadow-lg backdrop-blur-md transition-colors hover:border-emerald-500"
+                    className="cursor-pointer overflow-hidden rounded-2xl border border-white/60 bg-white/40 text-left shadow-lg backdrop-blur-md transition-colors hover:border-emerald-500"
                   >
                     <div className="h-48 w-full bg-neutral-100">
                       <img
@@ -469,9 +553,29 @@ export function Logistik() {
                         >
                           {baik ? 'BAIK' : 'ROSAK'}
                         </span>
+                        {/* PKOP: which state the vehicle belongs to */}
+                        {!negeriTetap && k.negeri && (
+                          <span className="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-medium text-sky-800">{k.negeri}</span>
+                        )}
                       </div>
+                      {/* Recorded before Logistik was per state: PKOP assigns it */}
+                      {!negeriTetap && !k.negeri && (
+                        <select
+                          defaultValue=""
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => tetapkanNegeriKenderaan(k, e.target.value)}
+                          className="mt-2 w-full rounded-full border border-amber-400 bg-white px-2.5 py-1 text-xs text-amber-700 outline-none"
+                        >
+                          <option value="">Tiada negeri — tetapkan…</option>
+                          {SENARAI_KUMPULAN_NEGERI.map((n) => (
+                            <option key={n} value={n}>
+                              {n}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </div>
-                  </motion.button>
+                  </motion.div>
                 )
               })}
             </motion.div>
@@ -513,6 +617,7 @@ export function Logistik() {
 
       <TambahKenderaanModal
         open={modalKenderaanOpen}
+        negeri={negeriAktif}
         onClose={() => setModalKenderaanOpen(false)}
         onSuccess={() => {
           setModalKenderaanOpen(false)

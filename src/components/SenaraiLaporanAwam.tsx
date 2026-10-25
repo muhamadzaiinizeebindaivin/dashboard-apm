@@ -29,7 +29,8 @@ import { pastikan } from '../lib/pastikan'
 import { TARIKH_MASA_FIELD, KEJADIAN_FIELDS, HAL_LAIN_FIELD, PENYEDIA_FIELDS } from '../lib/laporanBencana'
 import { SEMASA_MAKLUMAT_FIELDS, SEMASA_PENYEDIA_FIELDS, TREND_LABEL } from '../lib/laporanBencana'
 import type { FieldDef, LaporanBencanaRow } from '../lib/laporanBencana'
-import { NEGERI_LIST } from '../lib/negeriVisual'
+import { SENARAI_KUMPULAN_NEGERI, ahliKumpulan } from '../lib/kumpulanNegeri'
+import { useNegeriTetap } from '../hooks/useNegeriTetap'
 import { janaRekodKejadian } from '../lib/janaRekodKejadian'
 import { useBencanaTamat } from '../lib/bencanaTamat'
 import { Memuat, PemuatSebaris, SkeletonBaris } from './Memuatkan'
@@ -107,6 +108,7 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
   // Other Excel sheets stored with each Laporan Semasa (loaded on expand)
   const [lampiranMap, setLampiranMap] = useState<Record<string, DataLampiran>>({})
   const [tapisNegeri, setTapisNegeri] = useState('')
+  const negeriTetap = useNegeriTetap()
   const [pendingDelete, setPendingDelete] = useState<LaporanBencanaRow | null>(null)
   const [sahkanId, setSahkanId] = useState<string | null>(null)
   const [sahkanNilai, setSahkanNilai] = useState({ nama: '', jawatan: '', telefon: '' })
@@ -124,13 +126,14 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
   // Same type + negeri filter for the list, "Muat lagi" and the PDF
   const asas = useCallback(() => {
     const q = supabase.from('laporan_bencana').select('*').eq('jenis_laporan', jenis)
-    return tapisNegeri ? q.eq('negeri', tapisNegeri) : q
+    // "Wilayah Persekutuan" = KL, Putrajaya and Labuan
+    return tapisNegeri ? q.in('negeri', ahliKumpulan(tapisNegeri)) : q
   }, [jenis, tapisNegeri])
 
   const kiraJumlah = useCallback(async () => {
     const id = permintaan.current
     let q = supabase.from('laporan_bencana').select('id', { count: 'exact', head: true }).eq('jenis_laporan', jenis)
-    if (tapisNegeri) q = q.eq('negeri', tapisNegeri)
+    if (tapisNegeri) q = q.in('negeri', ahliKumpulan(tapisNegeri))
     const { count, error } = await q
     if (id !== permintaan.current) return
     if (!error && count !== null) setJumlah(count)
@@ -437,18 +440,21 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={tapisNegeri}
-              onChange={(e) => setTapisNegeri(e.target.value)}
-              className="h-9 rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-700 outline-none focus:border-emerald-600"
-            >
-              <option value="">Semua negeri</option>
-              {NEGERI_LIST.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
+            {/* PKON: no state choice, the database only returns their state */}
+            {!negeriTetap && (
+              <select
+                value={tapisNegeri}
+                onChange={(e) => setTapisNegeri(e.target.value)}
+                className="h-9 rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-700 outline-none focus:border-emerald-600"
+              >
+                <option value="">Semua negeri</option>
+                {SENARAI_KUMPULAN_NEGERI.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            )}
             <button
               onClick={handleJanaPdf}
               disabled={menjanaPdf || loading || rows.length === 0}

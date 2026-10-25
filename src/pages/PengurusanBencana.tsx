@@ -14,6 +14,8 @@ import {
   MapPinOff,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../hooks/useAuth'
+import { kumpulanNegeri } from '../lib/kumpulanNegeri'
 import { useRealtime } from '../lib/realtime'
 import { ambilSemua } from '../lib/ambilSemua'
 import { pastikan } from '../lib/pastikan'
@@ -69,12 +71,13 @@ const selectClass =
 
 type KadBencanaProps = {
   b: RingkasanBencana
+  bolehTamat: boolean // PKON: only disasters entirely in their own state
   onTamat: (b: RingkasanBencana) => void
   onAktif: (b: RingkasanBencana) => void
   onLokasi: (b: RingkasanBencana) => void
 }
 
-function KadBencana({ b, onTamat, onAktif, onLokasi }: KadBencanaProps) {
+function KadBencana({ b, bolehTamat, onTamat, onAktif, onLokasi }: KadBencanaProps) {
   const tamat = !!b.tamat
   const trend = b.trend ? TREND_LABEL[b.trend] : null
 
@@ -167,7 +170,14 @@ function KadBencana({ b, onTamat, onAktif, onLokasi }: KadBencanaProps) {
             Tetapkan lokasi
           </button>
         )}
-        {tamat ? (
+        {!bolehTamat ? (
+          <span
+            title="Bencana ini melibatkan beberapa negeri. Hanya Super Admin boleh menamatkan atau mengaktifkannya semula."
+            className="rounded-full bg-neutral-100 px-3 py-2.5 text-xs font-medium text-neutral-500 sm:py-1.5"
+          >
+            Beberapa negeri: hanya Super Admin
+          </span>
+        ) : tamat ? (
           <button
             onClick={() => onAktif(b)}
             className="rounded-full border border-emerald-200 bg-white/80 px-3 py-2.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50 sm:py-1.5"
@@ -189,6 +199,10 @@ function KadBencana({ b, onTamat, onAktif, onLokasi }: KadBencanaProps) {
 
 export function PengurusanBencana() {
   const navigate = useNavigate()
+  const { profile } = useAuth()
+  // A disaster spread over several states (Wilayah Persekutuan = one) is ended by PKOP only
+  const bolehTamat = (b: RingkasanBencana) =>
+    profile?.role === 'pkop' || new Set(b.negeri.map(kumpulanNegeri)).size <= 1
   const senaraiTamat = useBencanaTamat()
   const [laporan, setLaporan] = useState<BarisLaporan[]>([])
   const [pps, setPps] = useState<BarisPps[]>([])
@@ -455,6 +469,7 @@ export function PengurusanBencana() {
             <KadBencana
               key={b.nama}
               b={b}
+              bolehTamat={bolehTamat(b)}
               onTamat={(x) => buka(x, 'tamat')}
               onAktif={(x) => buka(x, 'aktif')}
               onLokasi={setLokasiUntuk}

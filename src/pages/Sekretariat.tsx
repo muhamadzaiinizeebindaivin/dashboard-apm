@@ -18,7 +18,7 @@ import type { TitikGraf } from '../lib/laporanNasionalGraf'
 import { bangunLaporanNasionalDoc } from '../lib/janaLaporanNasional'
 import { cariZon } from '../lib/laporanBencana'
 import { useJenisBencana } from '../lib/jenisBencana'
-import { NEGERI_LIST } from '../lib/negeriVisual'
+import { SENARAI_KUMPULAN_NEGERI, samaKumpulan, tajukLaporan } from '../lib/kumpulanNegeri'
 import { HAD_TIADA_KEMASKINI_JAM } from '../lib/ppsPusat'
 
 const ZON_LIST = ['Utara', 'Tengah', 'Selatan', 'Timur', 'Borneo']
@@ -115,6 +115,11 @@ export function Sekretariat() {
   const [tiadaBencana, setTiadaBencana] = useState(false)
   const [menjanaGraf, setMenjanaGraf] = useState(false)
   const [tapisNegeri, setTapisNegeri] = useState('')
+  // PKON: their state is fixed (the database only gives them that state anyway)
+  const negeriTetap = profile?.role === 'pkon' ? (profile.negeri ?? null) : null
+  useEffect(() => {
+    if (negeriTetap && tapisNegeri !== negeriTetap) setTapisNegeri(negeriTetap)
+  }, [negeriTetap, tapisNegeri])
   const [tapisJenis, setTapisJenis] = useState('')
   const [tapisZon, setTapisZon] = useState('')
   const [tapisStatus, setTapisStatus] = useState<'' | 'aktif' | 'tamat'>('')
@@ -166,20 +171,18 @@ export function Sekretariat() {
   useRealtime('pps-badge', ['pps_pusat'], kiraBadge, { aktif: onLanding })
 
   const muatStatusExcel = useCallback(async () => {
+    // Download status per state: PKOP = national downloads, PKON = their state's
+    let qLog = supabase.from('eksport_excel_log').select('dimuat_turun_pada, laporan_hingga')
+    qLog = negeriTetap ? qLog.eq('negeri', negeriTetap) : qLog.is('negeri', null)
     const [log, lap] = await Promise.all([
-      supabase
-        .from('eksport_excel_log')
-        .select('dimuat_turun_pada, laporan_hingga')
-        .order('dimuat_turun_pada', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
+      qLog.order('dimuat_turun_pada', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('laporan_bencana').select('created_at').order('created_at', { ascending: false }).limit(1).maybeSingle(),
     ])
     setStatusExcelSedia(true)
     if (log.error || lap.error) return // keep the last state
     setMuatTurunTerakhir(log.data ? { pada: log.data.dimuat_turun_pada, laporanHingga: log.data.laporan_hingga } : null)
     setLaporanTerakhir(lap.data?.created_at ?? null)
-  }, [])
+  }, [negeriTetap])
 
   useEffect(() => {
     if (onLanding) muatStatusExcel()
@@ -324,7 +327,7 @@ export function Sekretariat() {
     ? previewData.items
         .filter(
           (i) =>
-            (!tapisNegeri || i.negeri === tapisNegeri) &&
+            (!tapisNegeri || samaKumpulan(i.negeri, tapisNegeri)) &&
             (!tapisJenis || i.jenisBencana === tapisJenis) &&
             (!tapisZon || i.zon === tapisZon) &&
             lulusBencana(i.namaBencana),
@@ -338,7 +341,7 @@ export function Sekretariat() {
   const ditutupTertapis = previewData
     ? previewData.ditutup.filter(
         (p) =>
-          (!tapisNegeri || p.negeri === tapisNegeri) &&
+          (!tapisNegeri || samaKumpulan(p.negeri, tapisNegeri)) &&
           (!tapisZon || cariZon(p.negeri) === tapisZon) &&
           (!tapisJenis || jenisIkutBencana.get(p.nama_bencana) === tapisJenis) &&
           lulusBencana(p.nama_bencana) &&
@@ -350,7 +353,7 @@ export function Sekretariat() {
   const korbanTertapis = previewData
     ? previewData.korban.filter(
         (k) =>
-          (!tapisNegeri || k.negeri === tapisNegeri) &&
+          (!tapisNegeri || samaKumpulan(k.negeri, tapisNegeri)) &&
           (!tapisZon || cariZon(k.negeri) === tapisZon) &&
           (!tapisJenis || jenisIkutBencana.get(k.nama_bencana) === tapisJenis) &&
           lulusBencana(k.nama_bencana),
@@ -363,7 +366,9 @@ export function Sekretariat() {
     try {
       // Only a full download (no filter) counts as "downloaded" for the shared status
       const tapisTarikh = !!(tapisDari || tapisHingga)
-      const penuh = !tapisNegeri && !tapisZon && !tapisJenis && !tapisTarikh && !adaTapisKawasan
+      // "Full" download = no filter other than a PKON's fixed state
+      const penuh =
+        (!tapisNegeri || tapisNegeri === negeriTetap) && !tapisZon && !tapisJenis && !tapisTarikh && !adaTapisKawasan
       // Latest report included in this download, read (server time) before building the files
       const { data: terkini } = penuh
         ? await supabase.from('laporan_bencana').select('created_at').order('created_at', { ascending: false }).limit(1).maybeSingle()
@@ -379,7 +384,9 @@ export function Sekretariat() {
       })
       if (bil > 0 && penuh) {
         // If this fails the button just stays green: the file itself was downloaded
-        await supabase.from('eksport_excel_log').insert({ laporan_hingga: terkini?.created_at ?? null })
+        await supabase
+          .from('eksport_excel_log')
+          .insert({ laporan_hingga: terkini?.created_at ?? null, negeri: negeriTetap })
         muatStatusExcel()
       }
       setToast(
@@ -541,6 +548,8 @@ export function Sekretariat() {
           <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100 py-3">
             <select
               value={tapisNegeri}
+              disabled={!!negeriTetap}
+              title={negeriTetap ? 'Anda hanya boleh melihat laporan negeri anda' : undefined}
               onChange={(e) => {
                 setTapisNegeri(e.target.value)
                 // Another state: its constituencies change too
@@ -550,7 +559,7 @@ export function Sekretariat() {
               className="h-9 rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-700 outline-none focus:border-emerald-600"
             >
               <option value="">Semua Negeri</option>
-              {NEGERI_LIST.map((n) => (
+              {SENARAI_KUMPULAN_NEGERI.map((n) => (
                 <option key={n} value={n}>
                   {n}
                 </option>
@@ -607,18 +616,21 @@ export function Sekretariat() {
                 </option>
               ))}
             </select>
-            <select
-              value={tapisZon}
-              onChange={(e) => setTapisZon(e.target.value)}
-              className="h-9 rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-700 outline-none focus:border-emerald-600"
-            >
-              <option value="">Semua Zon</option>
-              {ZON_LIST.map((z) => (
-                <option key={z} value={z}>
-                  {z}
-                </option>
-              ))}
-            </select>
+            {/* A zone groups several states: not for a PKON */}
+            {!negeriTetap && (
+              <select
+                value={tapisZon}
+                onChange={(e) => setTapisZon(e.target.value)}
+                className="h-9 rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-700 outline-none focus:border-emerald-600"
+              >
+                <option value="">Semua Zon</option>
+                {ZON_LIST.map((z) => (
+                  <option key={z} value={z}>
+                    {z}
+                  </option>
+                ))}
+              </select>
+            )}
             <select
               value={tapisStatus}
               onChange={(e) => setTapisStatus(e.target.value as '' | 'aktif' | 'tamat')}
@@ -682,6 +694,7 @@ export function Sekretariat() {
               duaJam={dataGraf?.duaJam ?? []}
               harian={dataGraf?.harian ?? []}
               masaJana={previewData.masaJana}
+              tajuk={tajukLaporan(tapisNegeri)}
             />
           </div>
         </DashboardCard>

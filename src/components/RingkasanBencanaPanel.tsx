@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, FileDown, ChevronLeft, ChevronRight, Inbox } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { NEGERI_LIST } from '../lib/negeriVisual'
+import { SENARAI_KUMPULAN_NEGERI, ahliKumpulan } from '../lib/kumpulanNegeri'
 import { formatTarikh, ikonKategori, warnaSelamat } from '../lib/titikBencana'
 import type { KategoriBencana, TitikBencana } from '../lib/titikBencana'
 import { janaRingkasanBencana } from '../lib/janaRingkasanBencana'
@@ -53,7 +53,7 @@ export function RingkasanBencanaPanel({ open, onClose, kategori }: RingkasanBenc
       .eq('status', 'selesai')
       .gte('tarikh_selesai', mula.toISOString())
       .lt('tarikh_selesai', tamat.toISOString())
-    if (negeri) q = q.eq('negeri', negeri)
+    if (negeri) q = q.in('negeri', ahliKumpulan(negeri))
     if (tapisKategori) q = q.eq('kategori', tapisKategori)
 
     q.order('tarikh_selesai', { ascending: false }).then(({ data, error }) => {
@@ -161,7 +161,7 @@ export function RingkasanBencanaPanel({ open, onClose, kategori }: RingkasanBenc
               </select>
               <select value={negeri} onChange={(e) => setNegeri(e.target.value)} className={selectClass}>
                 <option value="">Semua Negeri</option>
-                {NEGERI_LIST.map((n) => (
+                {SENARAI_KUMPULAN_NEGERI.map((n) => (
                   <option key={n} value={n}>
                     {n}
                   </option>

@@ -6,6 +6,7 @@ import type { ItemLaporanNasional, KorbanNegeri, PpsDitutup } from './laporanNas
 import { ambilDataGraf } from './laporanNasionalGraf'
 import type { TapisGraf, TitikGraf } from './laporanNasionalGraf'
 import type { jsPDF } from 'jspdf'
+import { tajukLaporan } from './kumpulanNegeri'
 
 async function muatGambar(src: string): Promise<string | null> {
   try {
@@ -279,9 +280,11 @@ export async function bangunLaporanNasionalDoc(
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(13)
   doc.text('ANGKATAN PERTAHANAN AWAM MALAYSIA', lebar / 2, 60, { align: 'center' })
-  doc.setFontSize(25)
+  // National, one state, or Wilayah Persekutuan (a PKON always gets their own state)
+  const tajuk = tajukLaporan(tapis.negeri)
+  doc.setFontSize(tajuk.length > 30 ? 20 : 25)
   doc.setTextColor(255, 150, 40)
-  doc.text('LAPORAN BENCANA NASIONAL', lebar / 2, 76, { align: 'center' })
+  doc.text(tajuk, lebar / 2, 76, { align: 'center', maxWidth: lebar - 30 })
   doc.setTextColor(255, 255, 255)
   doc.setFontSize(15)
   doc.text(tarikh.toUpperCase(), lebar / 2, 90, { align: 'center' })

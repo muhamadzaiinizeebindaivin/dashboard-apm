@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { Home, ChevronRight, Trash2, Check, X, Loader2, UserPlus } from 'lucide-react'
+import { Home, ChevronRight, ChevronLeft, Trash2, Check, X, Loader2, UserPlus } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useRealtime } from '../lib/realtime'
 import { ROLE_LABEL } from '../lib/roles'
@@ -11,6 +11,8 @@ import type { ToastState } from '../components/Toast'
 import { useAuth } from '../hooks/useAuth'
 import type { StatusAkaun, UserRole } from '../hooks/useAuth'
 import { SkeletonBarisJadual } from '../components/Memuatkan'
+import { SENARAI_KUMPULAN_NEGERI } from '../lib/kumpulanNegeri'
+import { KodAksesSection } from '../components/KodAksesSection'
 
 // Accounts are created by self-registration (/daftar) only. Here the Super Admin
 // approves or rejects new registrations and manages existing accounts.
@@ -24,6 +26,7 @@ type ProfileRow = {
   status: StatusAkaun
   catatan_kelulusan: string | null
   emel_disahkan_pada: string | null // null = verification link not clicked yet
+  negeri: string | null // PKON only: the state (or Wilayah Persekutuan) they can see
   created_at: string
 }
 
@@ -48,12 +51,18 @@ type Keputusan = { pengguna: ProfileRow; jenis: 'lulus' | 'tolak' }
 function KeputusanModal({ keputusan, onClose, onSelesai }: { keputusan: Keputusan; onClose: () => void; onSelesai: (mesej: string) => void }) {
   const { pengguna, jenis } = keputusan
   const [peranan, setPeranan] = useState<UserRole>('pkon')
+  const [negeri, setNegeri] = useState(pengguna.negeri ?? '')
   const [catatan, setCatatan] = useState('')
   const [menyimpan, setMenyimpan] = useState(false)
   const [ralat, setRalat] = useState('')
   const lulus = jenis === 'lulus'
 
   async function sahkan() {
+    // An Admin (PKON) only sees one state: it must be chosen
+    if (lulus && peranan === 'pkon' && !negeri) {
+      setRalat('Sila pilih negeri bagi Admin (PKON).')
+      return
+    }
     setMenyimpan(true)
     setRalat('')
     const { error } = await supabase.rpc('putuskan_permohonan', {
@@ -61,6 +70,7 @@ function KeputusanModal({ keputusan, onClose, onSelesai }: { keputusan: Keputusa
       p_keputusan: jenis,
       p_role: lulus ? peranan : null,
       p_catatan: lulus ? null : catatan.trim() || null,
+      p_negeri: lulus && peranan === 'pkon' ? negeri : null,
     })
     setMenyimpan(false)
     if (error) {
@@ -95,6 +105,28 @@ function KeputusanModal({ keputusan, onClose, onSelesai }: { keputusan: Keputusa
               <option value="pkon">Admin (PKON)</option>
               <option value="pkop">Super Admin (PKOP)</option>
             </select>
+            {peranan === 'pkon' ? (
+              <div className="mt-3">
+                <label className="mb-1 block text-sm font-medium text-neutral-700">
+                  Negeri <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={negeri}
+                  onChange={(e) => setNegeri(e.target.value)}
+                  className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-600"
+                >
+                  <option value="">— Pilih negeri —</option>
+                  {SENARAI_KUMPULAN_NEGERI.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-neutral-400">Admin hanya boleh melihat data negeri ini.</p>
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-neutral-400">Super Admin boleh melihat semua negeri.</p>
+            )}
           </div>
         ) : (
           <div className="mt-4">
@@ -160,7 +192,7 @@ export function Admin() {
   const muatSemula = useCallback(async () => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, full_name, email, jawatan_unit, role, status, catatan_kelulusan, emel_disahkan_pada, created_at')
+      .select('id, full_name, email, jawatan_unit, role, status, catatan_kelulusan, emel_disahkan_pada, negeri, created_at')
       .order('created_at', { ascending: false })
     setLoading(false)
     if (error) {
@@ -179,6 +211,13 @@ export function Admin() {
   const permohonan = users.filter((u) => u.status === 'menunggu_kelulusan')
   const akaun = users.filter((u) => u.status !== 'menunggu_kelulusan')
 
+  // Pagination of the account list
+  const SAIZ_HALAMAN = 10
+  const [halaman, setHalaman] = useState(1)
+  const jumlahHalaman = Math.max(1, Math.ceil(akaun.length / SAIZ_HALAMAN))
+  const halamanSemasa = Math.min(halaman, jumlahHalaman) // e.g. after deleting the last row of the last page
+  const akaunHalaman = akaun.slice((halamanSemasa - 1) * SAIZ_HALAMAN, halamanSemasa * SAIZ_HALAMAN)
+
   async function handleRoleChange(userId: string, role: UserRole) {
     setUpdatingId(userId)
     // .select() returns the updated row: an empty result means RLS refused it silently
@@ -190,6 +229,19 @@ export function Admin() {
     }
     setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role } : u)))
     setToast({ type: 'success', message: 'Peranan dikemas kini.' })
+  }
+
+  async function handleNegeriChange(userId: string, negeri: string) {
+    if (!negeri) return
+    setUpdatingId(userId)
+    const { data, error } = await supabase.from('profiles').update({ negeri }).eq('id', userId).select('id')
+    setUpdatingId(null)
+    if (error || !data || data.length === 0) {
+      setToast({ type: 'error', message: 'Gagal menukar negeri. Anda mungkin tiada kebenaran untuk tindakan ini.' })
+      return
+    }
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, negeri } : u)))
+    setToast({ type: 'success', message: `Negeri dikemas kini: ${negeri}.` })
   }
 
   async function confirmDelete() {
@@ -300,6 +352,8 @@ export function Admin() {
         </div>
       )}
 
+      <KodAksesSection />
+
       {/* Accounts */}
       <div className="mt-6 overflow-x-auto rounded-2xl border border-white/60 bg-white/40 shadow-lg backdrop-blur-md">
         <table className="w-full text-left text-sm">
@@ -309,15 +363,16 @@ export function Admin() {
               <th className="hidden px-5 py-3 font-medium sm:table-cell">Emel</th>
               <th className="hidden px-5 py-3 font-medium lg:table-cell">Jawatan / Unit</th>
               <th className="px-5 py-3 font-medium">Peranan</th>
+              <th className="px-5 py-3 font-medium">Negeri</th>
               <th className="hidden px-5 py-3 font-medium md:table-cell">Status</th>
               <th className="px-5 py-3 font-medium" />
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <SkeletonBarisJadual baris={5} lajur={6} />
+              <SkeletonBarisJadual baris={5} lajur={7} />
             ) : (
-              akaun.map((user) => (
+              akaunHalaman.map((user) => (
                 <tr
                   key={user.id}
                   className={`border-b border-white/40 transition-all duration-300 last:border-0 ${
@@ -356,6 +411,30 @@ export function Admin() {
                       </select>
                     )}
                   </td>
+                  <td className="px-5 py-3">
+                    {user.status === 'aktif' && user.role === 'pkon' ? (
+                      <select
+                        value={user.negeri ?? ''}
+                        disabled={updatingId === user.id}
+                        onChange={(e) => handleNegeriChange(user.id, e.target.value)}
+                        className={`rounded-full border bg-white px-2.5 py-1 text-xs font-medium outline-none focus:border-emerald-500 disabled:opacity-60 ${
+                          user.negeri ? 'border-neutral-200 text-neutral-600' : 'border-amber-400 text-amber-700'
+                        }`}
+                      >
+                        {/* A PKON without a state sees nothing until one is chosen */}
+                        {!user.negeri && <option value="">— Pilih negeri —</option>}
+                        {SENARAI_KUMPULAN_NEGERI.map((n) => (
+                          <option key={n} value={n}>
+                            {n}
+                          </option>
+                        ))}
+                      </select>
+                    ) : user.status === 'aktif' && user.role === 'pkop' ? (
+                      <span className="text-xs text-neutral-500">Semua negeri</span>
+                    ) : (
+                      <span className="text-xs text-neutral-400">—</span>
+                    )}
+                  </td>
                   <td className="hidden px-5 py-3 md:table-cell">
                     <span title={user.status === 'ditolak' ? (user.catatan_kelulusan ?? undefined) : undefined}>
                       <LencanaStatus status={user.status} />
@@ -392,6 +471,36 @@ export function Admin() {
           </tbody>
         </table>
       </div>
+
+      {akaun.length > SAIZ_HALAMAN && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 px-1">
+          <p className="text-xs text-neutral-500">
+            {(halamanSemasa - 1) * SAIZ_HALAMAN + 1}–{Math.min(halamanSemasa * SAIZ_HALAMAN, akaun.length)} daripada{' '}
+            {akaun.length} pengguna
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setHalaman(halamanSemasa - 1)}
+              disabled={halamanSemasa === 1}
+              className="flex items-center gap-1 rounded-full border border-white/60 bg-white/50 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:border-emerald-400 disabled:opacity-40"
+            >
+              <ChevronLeft size={14} />
+              Sebelum
+            </button>
+            <span className="text-xs font-medium text-neutral-500">
+              Halaman {halamanSemasa} / {jumlahHalaman}
+            </span>
+            <button
+              onClick={() => setHalaman(halamanSemasa + 1)}
+              disabled={halamanSemasa === jumlahHalaman}
+              className="flex items-center gap-1 rounded-full border border-white/60 bg-white/50 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:border-emerald-400 disabled:opacity-40"
+            >
+              Seterusnya
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {keputusan && (
         <KeputusanModal

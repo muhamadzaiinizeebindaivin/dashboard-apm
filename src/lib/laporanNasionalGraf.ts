@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { ambilSemua } from './ambilSemua'
+import { samaKumpulan } from './kumpulanNegeri'
 
 type BarisSemasa = {
   id: string
@@ -170,7 +171,7 @@ export function snapshotIkutBencana(masa: Date, sejarah: SejarahPps, tapis: Tapi
         if (ditutup) continue
 
         const p = data.pusat.get(id)!
-        if (tapis.negeri && p.negeri !== tapis.negeri) continue
+        if (tapis.negeri && !samaKumpulan(p.negeri, tapis.negeri)) continue
         if (tapis.zon && p.zon !== tapis.zon) continue
 
         tambah(nama, terkini.jenis_bencana, p.negeri ?? '', k.mangsa, k.keluarga, 1)
@@ -184,7 +185,7 @@ export function snapshotIkutBencana(masa: Date, sejarah: SejarahPps, tapis: Tapi
     if (tapis.jenis && sumber.jenis_bencana !== tapis.jenis) continue
 
     for (const p of pps.filter((x) => x.laporan_id === sumber.id)) {
-      if (tapis.negeri && p.negeri !== tapis.negeri) continue
+      if (tapis.negeri && !samaKumpulan(p.negeri, tapis.negeri)) continue
       if (tapis.zon && p.zon !== tapis.zon) continue
       tambah(
         nama,

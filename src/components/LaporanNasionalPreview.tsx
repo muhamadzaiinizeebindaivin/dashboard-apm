@@ -154,6 +154,7 @@ type LaporanNasionalPreviewProps = {
   masaJana: Date
   ditutup?: PpsDitutup[]
   korban?: KorbanNegeri[]
+  tajuk?: string // "LAPORAN BENCANA NEGERI PERAK" when filtered / for a PKON
 }
 
 function jejakTitik(mulaX: number, mulaY: number, delta: [number, number][]): [number, number][] {
@@ -431,6 +432,7 @@ export function LaporanNasionalPreview({
   masaJana,
   ditutup = [],
   korban = [],
+  tajuk = 'LAPORAN BENCANA NASIONAL',
 }: LaporanNasionalPreviewProps) {
   const jumlahKorban = {
     kematian: korban.reduce((n, k) => n + k.kematian, 0),
@@ -468,7 +470,7 @@ export function LaporanNasionalPreview({
     <div className="space-y-6">
       <div className="rounded-xl bg-[#0b2a5c] px-6 py-5 text-center text-white">
         <p className="text-xs font-semibold tracking-wide">ANGKATAN PERTAHANAN AWAM MALAYSIA</p>
-        <p className="mt-1 text-xl font-bold text-amber-400">LAPORAN BENCANA NASIONAL</p>
+        <p className="mt-1 text-xl font-bold text-amber-400">{tajuk}</p>
         <p className="mt-1 text-sm">{tarikh.toUpperCase()}</p>
         <p className="text-xs text-white/80">KEMASKINI SEHINGGA {masa}</p>
       </div>

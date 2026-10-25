@@ -2,7 +2,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Home, ChevronRight } from 'lucide-react'
-import { NEGERI_FLAG, NEGERI_LIST } from '../lib/negeriVisual'
+import { NEGERI_FLAG } from '../lib/negeriVisual'
+import { SENARAI_KUMPULAN_NEGERI, kumpulanNegeri } from '../lib/kumpulanNegeri'
 import { supabase } from '../lib/supabase'
 import { ambilSemua } from '../lib/ambilSemua'
 import { Skeleton } from '../components/Memuatkan'
@@ -23,7 +24,9 @@ export function SenaraiSumbangan() {
       const data = await ambilSemua<{ negeri: string }>(() => supabase.from('sumbangan').select('negeri').order('id'))
       const kiraan: Record<string, number> = {}
       for (const row of data) {
-        kiraan[row.negeri] = (kiraan[row.negeri] ?? 0) + 1
+        // KL, Putrajaya and Labuan are counted together under "Wilayah Persekutuan"
+        const k = kumpulanNegeri(row.negeri)
+        kiraan[k] = (kiraan[k] ?? 0) + 1
       }
       setKiraanNegeri(kiraan)
       setRalat(false)
@@ -60,7 +63,7 @@ export function SenaraiSumbangan() {
       </div>
 
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-        {NEGERI_LIST.map((negeri, i) => (
+        {SENARAI_KUMPULAN_NEGERI.map((negeri, i) => (
           <motion.button
             key={negeri}
             initial={{ opacity: 0, y: 8 }}
@@ -70,7 +73,13 @@ export function SenaraiSumbangan() {
             onClick={() => navigate(`/senarai-sumbangan/${encodeURIComponent(negeri)}`)}
             className="flex flex-col items-center gap-3 rounded-2xl border border-white/60 bg-white/40 p-4 text-sm font-medium text-neutral-800 shadow-lg backdrop-blur-md transition-colors hover:border-emerald-500"
           >
-            <img src={NEGERI_FLAG[negeri]} alt={negeri} className="h-16 w-full rounded object-contain" />
+            {NEGERI_FLAG[negeri] ? (
+              <img src={NEGERI_FLAG[negeri]} alt={negeri} className="h-16 w-full rounded object-contain" />
+            ) : (
+              <span className="flex h-16 w-full items-center justify-center rounded bg-white/60 text-lg font-bold text-neutral-500">
+                WP
+              </span>
+            )}
             <span className="text-center leading-tight">{negeri}</span>
             {loading ? (
               <Skeleton className="h-5 w-8 rounded-full" />

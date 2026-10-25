@@ -18,7 +18,8 @@ import {
 import { supabase } from '../lib/supabase'
 import { useRealtime } from '../lib/realtime'
 import { ambilSemua } from '../lib/ambilSemua'
-import { NEGERI_LIST } from '../lib/negeriVisual'
+import { SENARAI_KUMPULAN_NEGERI, samaKumpulan } from '../lib/kumpulanNegeri'
+import { useNegeriTetap } from '../hooks/useNegeriTetap'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { EditPpsModal } from '../components/EditPpsModal'
 import { Memuat, Skeleton, SkeletonKad } from '../components/Memuatkan'
@@ -273,6 +274,7 @@ export function PengurusanPps() {
   const [loading, setLoading] = useState(true)
   const [carian, setCarian] = useState('')
   const [tapisNegeri, setTapisNegeri] = useState('')
+  const negeriTetap = useNegeriTetap()
   const [tapisBencana, setTapisBencana] = useState('')
   const [tapisStatus, setTapisStatus] = useState<TapisStatus>('aktif')
   const [dipilih, setDipilih] = useState<{ pps: PpsPusat; jenis: Tindakan } | null>(null)
@@ -323,7 +325,7 @@ export function PengurusanPps() {
   const ditapis = senarai.filter(
     (p) =>
       (!q || p.nama.toLowerCase().includes(q) || (p.daerah ?? '').toLowerCase().includes(q)) &&
-      (!tapisNegeri || p.negeri === tapisNegeri) &&
+      (!tapisNegeri || samaKumpulan(p.negeri, tapisNegeri)) &&
       (!tapisBencana || p.nama_bencana === tapisBencana) &&
       (tapisStatus === 'semua' ||
         (tapisStatus === 'aktif'
@@ -452,14 +454,17 @@ export function PengurusanPps() {
             className={`${selectClass} w-full pl-9`}
           />
         </div>
-        <select value={tapisNegeri} onChange={(e) => setTapisNegeri(e.target.value)} className={selectClass}>
-          <option value="">Semua Negeri</option>
-          {NEGERI_LIST.map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-        </select>
+        {/* PKON: no state choice, the database only returns their state */}
+        {!negeriTetap && (
+          <select value={tapisNegeri} onChange={(e) => setTapisNegeri(e.target.value)} className={selectClass}>
+            <option value="">Semua Negeri</option>
+            {SENARAI_KUMPULAN_NEGERI.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        )}
         <select value={tapisBencana} onChange={(e) => setTapisBencana(e.target.value)} className={selectClass}>
           <option value="">Semua Bencana</option>
           {senaraiBencana.map((b) => (
