@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Pencil, Trash2, Loader2, Tags } from 'lucide-react'
+import { X, Pencil, Trash2, Loader2, Plus } from 'lucide-react'
 import {
   ikonKategori,
   kemaskiniKategori,
   kiraPenggunaanKategori,
   padamKategori,
+  tambahKategori,
   PILIHAN_IKON,
   PILIHAN_WARNA,
   warnaSelamat,
@@ -31,6 +32,7 @@ export function UrusKategoriModal({ open, kategori, onClose, onDipadam }: UrusKa
   const [ralatKiraan, setRalatKiraan] = useState(false)
 
   const [disunting, setDisunting] = useState<KategoriBencana | null>(null)
+  const [menambah, setMenambah] = useState(false) // "Tambah Kategori" form open
   const [label, setLabel] = useState('')
   const [warna, setWarna] = useState(PILIHAN_WARNA[0])
   const [ikon, setIkon] = useState('MapPin')
@@ -45,6 +47,7 @@ export function UrusKategoriModal({ open, kategori, onClose, onDipadam }: UrusKa
     if (!open) return
     let batal = false
     setDisunting(null)
+    setMenambah(false)
     setKiraan(null)
     setRalatKiraan(false)
     kiraPenggunaanKategori()
@@ -62,11 +65,42 @@ export function UrusKategoriModal({ open, kategori, onClose, onDipadam }: UrusKa
   if (!open) return null
 
   function bukaSunting(k: KategoriBencana) {
+    setMenambah(false)
     setDisunting(k)
     setLabel(k.label)
     setWarna(warnaSelamat(k.warna))
     setIkon(k.ikon)
     setRalat('')
+  }
+
+  function bukaTambah() {
+    setDisunting(null)
+    setMenambah(true)
+    setLabel('')
+    setWarna(PILIHAN_WARNA[0])
+    setIkon('MapPin')
+    setRalat('')
+  }
+
+  // New category (also created automatically when a Laporan Awal uses a new disaster type)
+  async function tambah() {
+    if (!label.trim()) {
+      setRalat('Sila isi nama kategori.')
+      return
+    }
+    if (kategori.some((k) => k.label.trim().toLowerCase() === label.trim().toLowerCase())) {
+      setRalat('Kategori ini sudah wujud.')
+      return
+    }
+    setMenyimpan(true)
+    setRalat('')
+    const { error } = await tambahKategori(label, warna, ikon, kategori.length + 1)
+    setMenyimpan(false)
+    if (error) {
+      setRalat(error.code === '42501' ? 'Anda tiada kebenaran untuk menambah kategori.' : 'Gagal menambah kategori.')
+      return
+    }
+    setMenambah(false)
   }
 
   async function simpan() {
@@ -114,6 +148,70 @@ export function UrusKategoriModal({ open, kategori, onClose, onDipadam }: UrusKa
     setHendakPadam(null)
   }
 
+  // Name / icon / colour form, shared by "edit" (inside a row) and "add" (at the bottom)
+  function borang(onSimpan: () => void, teks: string, onBatal: () => void) {
+    return (
+      <div className="space-y-3 border-t border-emerald-100 bg-emerald-50/50 p-3">
+        <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Nama kategori" className={inputClass} />
+        <div>
+          <p className="mb-1 text-xs font-medium text-neutral-600">Ikon</p>
+          <div className="flex flex-wrap gap-1.5">
+            {PILIHAN_IKON.map((nama) => {
+              const IkonPilihan = ikonKategori(nama)
+              return (
+                <button
+                  key={nama}
+                  type="button"
+                  onClick={() => setIkon(nama)}
+                  title={nama}
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg border ${
+                    ikon === nama ? 'border-emerald-600 bg-white text-emerald-700' : 'border-neutral-200 bg-white text-neutral-500'
+                  }`}
+                >
+                  <IkonPilihan size={15} />
+                </button>
+              )
+            })}
+          </div>
+        </div>
+        <div>
+          <p className="mb-1 text-xs font-medium text-neutral-600">Warna</p>
+          <div className="flex flex-wrap gap-1.5">
+            {PILIHAN_WARNA.map((w) => (
+              <button
+                key={w}
+                type="button"
+                onClick={() => setWarna(w)}
+                title={w}
+                className={`h-7 w-7 rounded-full border-2 ${warna === w ? 'border-neutral-900' : 'border-white'}`}
+                style={{ background: w }}
+              />
+            ))}
+          </div>
+        </div>
+        {ralat && <p className="text-xs text-red-600">{ralat}</p>}
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onBatal}
+            className="rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-600"
+          >
+            Batal
+          </button>
+          <button
+            type="button"
+            onClick={onSimpan}
+            disabled={menyimpan}
+            className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+          >
+            {menyimpan && <Loader2 size={13} className="animate-spin" />}
+            {menyimpan ? 'Menyimpan...' : teks}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <>
       {createPortal(
@@ -125,7 +223,7 @@ export function UrusKategoriModal({ open, kategori, onClose, onDipadam }: UrusKa
             <div className="flex items-center justify-between border-b border-neutral-100 px-5 py-4">
               <div>
                 <h2 className="text-lg font-semibold text-neutral-900">Urus Kategori</h2>
-                <p className="text-xs text-neutral-500">Tukar nama, warna atau ikon. Titik sedia ada ikut berubah.</p>
+                <p className="text-xs text-neutral-500">Tambah, tukar nama, warna atau ikon. Titik sedia ada ikut berubah.</p>
               </div>
               <button
                 onClick={onClose}
@@ -198,81 +296,31 @@ export function UrusKategoriModal({ open, kategori, onClose, onDipadam }: UrusKa
                       </button>
                     </div>
 
-                    {sedangSunting && (
-                      <div className="space-y-3 border-t border-emerald-100 bg-emerald-50/50 p-3">
-                        <input
-                          value={label}
-                          onChange={(e) => setLabel(e.target.value)}
-                          placeholder="Nama kategori"
-                          className={inputClass}
-                        />
-                        <div>
-                          <p className="mb-1 text-xs font-medium text-neutral-600">Ikon</p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {PILIHAN_IKON.map((nama) => {
-                              const IkonPilihan = ikonKategori(nama)
-                              return (
-                                <button
-                                  key={nama}
-                                  type="button"
-                                  onClick={() => setIkon(nama)}
-                                  title={nama}
-                                  className={`flex h-8 w-8 items-center justify-center rounded-lg border ${
-                                    ikon === nama
-                                      ? 'border-emerald-600 bg-white text-emerald-700'
-                                      : 'border-neutral-200 bg-white text-neutral-500'
-                                  }`}
-                                >
-                                  <IkonPilihan size={15} />
-                                </button>
-                              )
-                            })}
-                          </div>
-                        </div>
-                        <div>
-                          <p className="mb-1 text-xs font-medium text-neutral-600">Warna</p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {PILIHAN_WARNA.map((w) => (
-                              <button
-                                key={w}
-                                type="button"
-                                onClick={() => setWarna(w)}
-                                title={w}
-                                className={`h-7 w-7 rounded-full border-2 ${warna === w ? 'border-neutral-900' : 'border-white'}`}
-                                style={{ background: w }}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                        {ralat && <p className="text-xs text-red-600">{ralat}</p>}
-                        <div className="flex justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setDisunting(null)}
-                            className="rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-600"
-                          >
-                            Batal
-                          </button>
-                          <button
-                            type="button"
-                            onClick={simpan}
-                            disabled={menyimpan}
-                            className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
-                          >
-                            {menyimpan && <Loader2 size={13} className="animate-spin" />}
-                            {menyimpan ? 'Menyimpan...' : 'Simpan Perubahan'}
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                    {sedangSunting && borang(simpan, 'Simpan Perubahan', () => setDisunting(null))}
                   </div>
                 )
               })}
             </div>
 
-            <div className="flex items-center gap-2 border-t border-neutral-100 px-5 py-3 text-xs text-neutral-500">
-              <Tags size={13} className="shrink-0" />
-              Kategori baharu boleh ditambah semasa menambah titik bencana.
+            {/* Add a category directly (also created automatically from a Laporan Awal) */}
+            <div className="border-t border-neutral-100 px-5 py-3">
+              {menambah ? (
+                <div className="overflow-hidden rounded-xl border border-emerald-200">
+                  {borang(tambah, 'Tambah Kategori', () => setMenambah(false))}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={bukaTambah}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-emerald-400 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50"
+                >
+                  <Plus size={15} />
+                  Tambah Kategori
+                </button>
+              )}
+              <p className="mt-2 text-center text-xs text-neutral-400">
+                Kategori baharu juga dicipta secara automatik apabila Laporan Awal menggunakan jenis bencana baharu.
+              </p>
             </div>
           </div>
         </div>,
