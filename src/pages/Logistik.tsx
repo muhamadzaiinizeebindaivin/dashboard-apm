@@ -22,7 +22,7 @@ import type { KenderaanRow } from '../components/KenderaanDetailPanel'
 import { JENIS_KENDERAAN, JENIS_LABEL, JENIS_DEFAULT_PHOTO } from '../lib/kenderaanVisual'
 import { supabase } from '../lib/supabase'
 import { Memuat, SkeletonDokumen, SkeletonKenderaan } from '../components/Memuatkan'
-import { SENARAI_KUMPULAN_NEGERI } from '../lib/kumpulanNegeri'
+import { SENARAI_KUMPULAN_NEGERI, ahliKumpulan, samaKumpulan } from '../lib/kumpulanNegeri'
 import { useNegeriTetap } from '../hooks/useNegeriTetap'
 
 // Logistik is kept per state: one document per state + that state's vehicles.
@@ -75,7 +75,8 @@ export function Logistik() {
     setLoadingDokumen(true)
     // The chosen state's document; with "Semua negeri" (PKOP), an old document without a state
     let q = supabase.from('logistik_dokumen').select('id, file_name, file_path, negeri, created_at')
-    q = negeriAktif ? q.eq('negeri', negeriAktif) : q.is('negeri', null)
+    // "Wilayah Persekutuan" also finds documents saved as Kuala Lumpur / Putrajaya / Labuan
+    q = negeriAktif ? q.in('negeri', ahliKumpulan(negeriAktif)) : q.is('negeri', null)
     const { data, error } = await q.order('created_at', { ascending: false }).limit(1).maybeSingle()
 
     if (error) {
@@ -243,7 +244,7 @@ export function Logistik() {
     const cocokJenis = tapisJenis === '' || k.jenis_kenderaan === tapisJenis
     const cocokKeadaan = tapisKeadaan === '' || k.keadaan === tapisKeadaan
     // PKOP filter (a PKON only receives their state anyway)
-    const cocokNegeri = negeriTetap !== null || tapisNegeri === '' || k.negeri === tapisNegeri
+    const cocokNegeri = negeriTetap !== null || tapisNegeri === '' || samaKumpulan(k.negeri, tapisNegeri)
     return cocokCarian && cocokJenis && cocokKeadaan && cocokNegeri
   })
 

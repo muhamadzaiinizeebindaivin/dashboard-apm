@@ -1,6 +1,6 @@
 import type { Cell, Row, Style, Workbook, Worksheet } from 'exceljs'
 import { supabase } from './supabase'
-import { samaKumpulan } from './kumpulanNegeri'
+import { kumpulanNegeri, samaKumpulan } from './kumpulanNegeri'
 import { cariZon } from './laporanBencana'
 import { kunci } from './normalisasi'
 import { pastikan } from './pastikan'
@@ -466,7 +466,9 @@ export async function ambilDataEksport(tapis: TapisEksport): Promise<DataEksport
   // One workbook per state + disaster type (the NDCC template holds a single type),
   // sorted by state, then type
   const kumpulan = new Map<string, { negeri: string; jenis: string }>()
-  const tambah = (negeri: string, nama: string) => {
+  // KL, Putrajaya and Labuan: one Wilayah Persekutuan workbook
+  const tambah = (negeriAsal: string, nama: string) => {
+    const negeri = kumpulanNegeri(negeriAsal)
     const jenis = jenisIkutBencana.get(nama)!
     kumpulan.set(`${negeri}|${jenis}`, { negeri, jenis })
   }
@@ -484,7 +486,8 @@ export async function ambilDataEksport(tapis: TapisEksport): Promise<DataEksport
   const keluaran: DataEksport[] = []
 
   for (const { negeri, jenis } of senaraiKumpulan) {
-    const padan = (nama: string | null, n: string | null) => n === negeri && !!nama && jenisIkutBencana.get(nama) === jenis
+    const padan = (nama: string | null, n: string | null) =>
+      kumpulanNegeri(n) === negeri && !!nama && jenisIkutBencana.get(nama) === jenis
     const pps = ppsAktif.filter((p) => padan(p.nama_bencana, p.negeri))
     const laporanDitapis = laporanAktif.filter((r) => padan(r.nama_bencana, r.negeri))
     const laporanSemasa = laporanDitapis.filter((r) => r.jenis_laporan === 'semasa')

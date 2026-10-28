@@ -6,7 +6,7 @@ import type { ItemLaporanNasional, KorbanNegeri, PpsDitutup } from './laporanNas
 import { ambilDataGraf } from './laporanNasionalGraf'
 import type { TapisGraf, TitikGraf } from './laporanNasionalGraf'
 import type { jsPDF } from 'jspdf'
-import { tajukLaporan } from './kumpulanNegeri'
+import { kumpulanNegeri, tajukLaporan } from './kumpulanNegeri'
 
 async function muatGambar(src: string): Promise<string | null> {
   try {
@@ -314,7 +314,7 @@ export async function bangunLaporanNasionalDoc(
 
   // Ended (TAMAT) disasters stay in the table but not in the "active" counters/map
   const aktif = items.filter((i) => !i.tamatPada)
-  const negeriSet = new Set(aktif.map((i) => i.negeri).filter(Boolean))
+  const negeriSet = new Set(aktif.map((i) => kumpulanNegeri(i.negeri)).filter(Boolean))
   const daerahSet = new Set(aktif.filter((i) => i.daerah).map((i) => `${i.negeri}|${i.daerah}`))
   const ppsCount = items.reduce((n, i) => n + (i.pps ? i.pps.split('\n').filter((s) => s.trim()).length : 0), 0)
   const jumlahMangsa = items.reduce((n, i) => n + i.jumlahMangsa, 0)
@@ -356,7 +356,7 @@ export async function bangunLaporanNasionalDoc(
   const petaTinggi = petaLebar / nisbahPeta
   const petaX = margin + kotakLebar + jarakLuar
 
-  const negeriAktif = [...new Set(aktif.map((i) => i.negeri).filter((n): n is string => !!n))]
+  const negeriAktif = [...new Set(aktif.map((i) => kumpulanNegeri(i.negeri)).filter((n): n is string => !!n))]
   const kotakTinggi = 5
   const lineTinggi = 2.6
   const langkah = kotakTinggi + 3 + 5 * lineTinggi + 2
@@ -392,7 +392,8 @@ export async function bangunLaporanNasionalDoc(
     const mx = petaX + norm.x * petaLebar
     const my = petaY + norm.y * petaTinggi
 
-    const punyaNegeri = aktif.filter((i) => i.negeri === negeri)
+    // KL, Putrajaya and Labuan: one Wilayah Persekutuan box
+    const punyaNegeri = aktif.filter((i) => kumpulanNegeri(i.negeri) === negeri)
     const jenisUtama = punyaNegeri[0]?.jenisBencana ?? ''
     lukisIkon(doc, jenisUtama, mx, my, 1.9)
 

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { kumpulanNegeri, samaKumpulan } from './kumpulanNegeri'
 import type { LucideIcon } from 'lucide-react'
 import { MapPin, Droplets, Waves, Mountain, Flame, Wind, CloudRain, Zap, Siren, Building2, Biohazard } from 'lucide-react'
 import { supabase } from './supabase'
@@ -312,7 +313,8 @@ export function dataTerkiniTitik(t: TitikBencana, ringkasan: RingkasanBencanaNeg
   const baris = ringkasan.filter((r) => r.nama_bencana === t.nama_bencana)
   if (baris.length === 0) return null
 
-  const sama = baris.find((r) => r.negeri === t.negeri)
+  // Same state, KL / Putrajaya / Labuan counting as one (Wilayah Persekutuan)
+  const sama = baris.find((r) => samaKumpulan(r.negeri, kumpulanNegeri(t.negeri)))
   const pilih = sama ? [sama] : baris
   const terkini = [...pilih].sort(
     (a, b) => new Date(b.laporan_terakhir ?? 0).getTime() - new Date(a.laporan_terakhir ?? 0).getTime(),

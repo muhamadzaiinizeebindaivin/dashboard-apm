@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { kumpulanNegeri } from './kumpulanNegeri'
 import { ambilSemua, dalamKepingan } from './ambilSemua'
 import { kunci } from './normalisasi'
 import { ambilSejarahPps, snapshotIkutBencana } from './laporanNasionalGraf'
@@ -166,7 +167,8 @@ export async function ambilStatistikMusim(tarikhMula: string, tarikhTamat: strin
     const nama = r.nama_bencana?.trim()
     if (!nama) continue
     jenisBencana.set(nama, r.jenis_bencana?.trim() || jenisBencana.get(nama) || 'Lain-lain') // latest wins
-    tambahKe(negeriBencana, nama, () => new Set<string>(), (s) => r.negeri && s.add(r.negeri))
+    // KL, Putrajaya and Labuan count as one state: Wilayah Persekutuan
+    tambahKe(negeriBencana, nama, () => new Set<string>(), (s) => r.negeri && s.add(kumpulanNegeri(r.negeri)))
   }
 
   // ---------- Day-by-day replay ----------
@@ -229,7 +231,7 @@ export async function ambilStatistikMusim(tarikhMula: string, tarikhTamat: strin
       if (dikira.length === 0) continue
       ikutPps.set(id, {
         nama,
-        negeri: p.negeri,
+        negeri: kumpulanNegeri(p.negeri),
         mangsa: Math.max(...dikira.map((k) => k.mangsa)),
         keluarga: Math.max(...dikira.map((k) => k.keluarga)),
         bilPps: 1,
@@ -247,7 +249,7 @@ export async function ambilStatistikMusim(tarikhMula: string, tarikhTamat: strin
       tambahKe(
         ikutPps,
         `L|${nama}|${r.negeri ?? ''}|${kunci(r.pps ?? '')}`,
-        () => ({ nama, negeri: r.negeri ?? 'Tidak dinyatakan', mangsa: 0, keluarga: 0, bilPps: 0 }),
+        () => ({ nama, negeri: kumpulanNegeri(r.negeri) || 'Tidak dinyatakan', mangsa: 0, keluarga: 0, bilPps: 0 }),
         (x) => {
           x.mangsa = Math.max(x.mangsa, r.jumlah_mangsa ?? 0)
           x.keluarga = Math.max(x.keluarga, r.jumlah_keluarga ?? 0)
@@ -336,7 +338,7 @@ export async function ambilStatistikMusim(tarikhMula: string, tarikhTamat: strin
   // ---------- Extra sheets ----------
   const semasa = laporanMusim.filter((r) => r.jenis_laporan === 'semasa' && r.nama_bencana)
   const laporanIkutId = new Map(semasa.map((r) => [r.id, r]))
-  const kunciLaporan = (r: BarisLaporan) => `${r.nama_bencana!.trim()}|${r.negeri ?? ''}`
+  const kunciLaporan = (r: BarisLaporan) => `${r.nama_bencana!.trim()}|${kumpulanNegeri(r.negeri)}`
 
   // Cumulative sheets: the 10 latest reports per disaster + state are enough to find the latest one with rows
   const terbaruDahulu = [...semasa].reverse()
@@ -377,7 +379,7 @@ export async function ambilStatistikMusim(tarikhMula: string, tarikhTamat: strin
     }
     return rows.filter((x) => dipilih.has(x.laporan_id))
   }
-  const negeriOf = (x: Ada) => laporanIkutId.get(x.laporan_id)?.negeri || 'Tidak dinyatakan'
+  const negeriOf = (x: Ada) => kumpulanNegeri(laporanIkutId.get(x.laporan_id)?.negeri) || 'Tidak dinyatakan'
 
   // Korban
   const korbanNegeri = new Map<string, { kematian: number; cedera: number; hilang: number }>()

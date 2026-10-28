@@ -18,7 +18,7 @@ import type { TitikGraf } from '../lib/laporanNasionalGraf'
 import { bangunLaporanNasionalDoc } from '../lib/janaLaporanNasional'
 import { cariZon } from '../lib/laporanBencana'
 import { useJenisBencana } from '../lib/jenisBencana'
-import { SENARAI_KUMPULAN_NEGERI, samaKumpulan, tajukLaporan } from '../lib/kumpulanNegeri'
+import { SENARAI_KUMPULAN_NEGERI, ahliKumpulan, samaKumpulan, tajukLaporan } from '../lib/kumpulanNegeri'
 import { HAD_TIADA_KEMASKINI_JAM } from '../lib/ppsPusat'
 
 const ZON_LIST = ['Utara', 'Tengah', 'Selatan', 'Timur', 'Borneo']
@@ -184,7 +184,7 @@ export function Sekretariat() {
   const muatStatusExcel = useCallback(async () => {
     // Download status per state: PKOP = national downloads, PKON = their state's
     let qLog = supabase.from('eksport_excel_log').select('dimuat_turun_pada, laporan_hingga')
-    qLog = negeriTetap ? qLog.eq('negeri', negeriTetap) : qLog.is('negeri', null)
+    qLog = negeriTetap ? qLog.in('negeri', ahliKumpulan(negeriTetap)) : qLog.is('negeri', null)
     const [log, lap] = await Promise.all([
       qLog.order('dimuat_turun_pada', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('laporan_bencana').select('created_at').order('created_at', { ascending: false }).limit(1).maybeSingle(),

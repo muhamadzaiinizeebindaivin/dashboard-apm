@@ -1,4 +1,5 @@
-import { NEGERI_LIST } from './negeriVisual'
+// Data entry: 13 states + "Wilayah Persekutuan" (KL, Putrajaya and Labuan are one choice)
+import { SENARAI_KUMPULAN_NEGERI } from './kumpulanNegeri'
 
 export type JenisLaporan = 'awal' | 'semasa'
 
@@ -16,7 +17,6 @@ export type FieldDef = {
   options?: string[]
   required?: boolean
   wide?: boolean
-  hint?: string // help text shown under the field
 }
 
 export type LaporanBencanaRow = {
@@ -58,7 +58,7 @@ export const KEJADIAN_FIELDS: FieldDef[] = [
   { key: 'level', no: '1.2', label: 'Level', en: 'Level', type: 'select', options: ['1', '2', '3'] },
   { key: 'nama_bencana', no: '1.3', label: 'Nama Bencana', en: 'Disaster Name' },
   { key: 'bidang_kuasa', no: '1.4', label: 'Bidang Kuasa', en: 'Jurisdiction' },
-  { key: 'negeri', no: '1.5', label: 'Negeri', en: 'State', type: 'select', options: NEGERI_LIST, required: true },
+  { key: 'negeri', no: '1.5', label: 'Negeri', en: 'State', type: 'select', options: SENARAI_KUMPULAN_NEGERI, required: true },
   { key: 'daerah', no: '1.6', label: 'Daerah/Bahagian', en: 'District' },
   { key: 'mukim', no: '1.7', label: 'Mukim/Daerah', en: 'Subdistrict' },
   { key: 'alamat', no: '1.8', label: 'Alamat', en: 'Address', wide: true },
@@ -108,6 +108,8 @@ export const ZON_NEGERI: Record<string, string> = {
   Sabah: 'Borneo',
   Sarawak: 'Borneo',
   Labuan: 'Borneo',
+  // KL + Putrajaya + Labuan, chosen as one
+  'Wilayah Persekutuan': 'Tengah',
 }
 
 export function cariZon(negeri: string): string {
@@ -130,7 +132,7 @@ export const TREND_LABEL: Record<string, { label: string; className: string }> =
 export const SEMASA_MAKLUMAT_FIELDS: FieldDef[] = [
   { key: 'jenis_bencana', label: 'Jenis Bencana', type: 'select', options: JENIS_BENCANA_SEMASA, required: true },
   { key: 'nama_bencana', label: 'Nama Bencana', required: true },
-  { key: 'negeri', label: 'Negeri', type: 'select', options: NEGERI_LIST, required: true },
+  { key: 'negeri', label: 'Negeri', type: 'select', options: SENARAI_KUMPULAN_NEGERI, required: true },
 ]
 
 export const SEMASA_PENYEDIA_FIELDS = PENYEDIA_FIELDS.filter((f) => f.type !== 'datetime')
@@ -139,6 +141,6 @@ export const SEMASA_PERHATIAN_FIELDS = PERHATIAN_FIELDS.filter((f) => f.type !==
 // The PPS themselves (name + counts + location per PPS) are now entered
 // through <SenaraiPpsInput>; only the group-level location stays here.
 export const PPS_FIELDS: FieldDef[] = [
-  { key: 'pps_negeri', label: 'Negeri', type: 'select', options: NEGERI_LIST, required: true },
+  { key: 'pps_negeri', label: 'Negeri', type: 'select', options: SENARAI_KUMPULAN_NEGERI, required: true },
   { key: 'pps_daerah', label: 'Daerah', required: true },
 ]

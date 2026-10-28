@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AlertTriangle, Loader2, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { NEGERI_LIST } from '../lib/negeriVisual'
+// KL, Putrajaya and Labuan: one "Wilayah Persekutuan" choice
+import { SENARAI_KUMPULAN_NEGERI, kumpulanNegeri } from '../lib/kumpulanNegeri'
 import { keNilaiTempatan } from '../lib/tarikhBebas'
 import { kemasNamaTempat, normalNamaBencana } from '../lib/normalisasi'
 import type { LaporanInsidenRow } from '../pages/LaporanInsiden'
@@ -55,7 +56,7 @@ export function EditInsidenModal({ insiden, onClose, onSaved }: Props) {
       ringkasan: insiden.ringkasan,
       tempat: insiden.tempat,
       daerah: insiden.daerah,
-      negeri: insiden.negeri,
+      negeri: kumpulanNegeri(insiden.negeri),
       sumber_laporan: insiden.sumber_laporan,
     })
   }, [insiden])
@@ -161,7 +162,7 @@ export function EditInsidenModal({ insiden, onClose, onSaved }: Props) {
                       className={inputClass}
                     >
                       <option value="">— Pilih —</option>
-                      {NEGERI_LIST.map((n) => (
+                      {SENARAI_KUMPULAN_NEGERI.map((n) => (
                         <option key={n} value={n}>
                           {n}
                         </option>

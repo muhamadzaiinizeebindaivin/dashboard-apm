@@ -1,4 +1,5 @@
 import { bacaTarikhMasa } from './tarikhBebas'
+import { WILAYAH_PERSEKUTUAN } from './kumpulanNegeri'
 import { kunci, normalJenis, normalNegeri, normalNamaBencana } from './normalisasi'
 
 // Reads the NDCC "Laporan Awal" Word template (.docx).
@@ -186,12 +187,12 @@ export async function bacaLaporanAwal(
 
   if (nilai.negeri) {
     const asal = nilai.negeri
-    // "WILAYAH PERSEKUTUAN" alone: the district says which one (Labuan, Kuala Lumpur, Putrajaya)
-    const wilayah = /^(wilayah persekutuan|w p|wp)$/.test(kunci(asal))
-    const negeri = normalNegeri(asal) ?? (wilayah && nilai.daerah ? normalNegeri(nilai.daerah) : null)
+    // KL, Putrajaya and Labuan (any spelling) are read as "Wilayah Persekutuan"
+    const negeri = normalNegeri(asal)
     if (!negeri) amaran.negeri = `Negeri "${asal}" tidak dikenali. Sila pilih daripada senarai.`
-    // Only flag a real change ("W.P. Labuan" -> Labuan), not capitals/spaces ("SABAH" -> Sabah)
-    else if (kunci(negeri) !== kunci(asal)) amaran.negeri = `Dibaca daripada "${asal}". Sila periksa.`
+    // Only flag a real change, not capitals/spaces ("SABAH" -> Sabah) or the W.P. grouping
+    else if (kunci(negeri) !== kunci(asal) && negeri !== WILAYAH_PERSEKUTUAN)
+      amaran.negeri = `Dibaca daripada "${asal}". Sila periksa.`
     nilai.negeri = negeri ?? ''
   }
 

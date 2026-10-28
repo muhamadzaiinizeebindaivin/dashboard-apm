@@ -1,4 +1,5 @@
 import { bacaTarikhMasa } from './tarikhBebas'
+import { WILAYAH_PERSEKUTUAN } from './kumpulanNegeri'
 import { kunci, normalJenis, normalNegeri, normalNamaBencana } from './normalisasi'
 import { bacaLampiran, NAMA_HELAIAN_LAMPIRAN } from './bacaLampiranSemasa'
 import type { Lampiran } from './bacaLampiranSemasa'
@@ -245,7 +246,9 @@ export async function bacaLaporanSemasa(
     const negeri = normalNegeri(negeriAsal)
     nilai.negeri = negeri ?? ''
     if (!negeri) amaran.negeri = `Negeri "${negeriAsal}" tidak dikenali. Sila pilih daripada senarai.`
-    else if (kunci(negeri) !== kunci(negeriAsal)) amaran.negeri = `Dibaca daripada "${negeriAsal}". Sila periksa.`
+    // KL, Putrajaya and Labuan are read as "Wilayah Persekutuan": not a reading problem
+    else if (kunci(negeri) !== kunci(negeriAsal) && negeri !== WILAYAH_PERSEKUTUAN)
+      amaran.negeri = `Dibaca daripada "${negeriAsal}". Sila periksa.`
   }
 
   // No "Jenis Bencana" in the template: guess from the name, then the file name

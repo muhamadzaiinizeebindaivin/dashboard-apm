@@ -45,7 +45,8 @@ import { StatusNamaBencana } from '../components/StatusNamaBencana'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { hurufBesar, kemasNamaTempat, kunci, normalNamaBencana } from '../lib/normalisasi'
 import { keNilaiTempatan } from '../lib/tarikhBebas'
-import { NEGERI_LIST } from '../lib/negeriVisual'
+// KL, Putrajaya and Labuan: one "Wilayah Persekutuan" choice
+import { SENARAI_KUMPULAN_NEGERI } from '../lib/kumpulanNegeri'
 import { semakPps } from '../lib/ppsPusat'
 import { useJenisBencana } from '../lib/jenisBencana'
 import type { PpsInput } from '../lib/ppsPusat'
@@ -69,14 +70,14 @@ const INSIDEN_RINGKASAN_FIELD: FieldDef = {
 const INSIDEN_LOKASI_FIELDS: FieldDef[] = [
   { key: 'tempat', label: 'Lokasi (Tempat)', wide: true, required: true, hint: 'Contoh: PULAU PANGKOR' },
   { key: 'daerah', label: 'Daerah', required: true },
-  { key: 'negeri', label: 'Negeri', type: 'select', options: NEGERI_LIST, required: true },
+  { key: 'negeri', label: 'Negeri', type: 'select', options: SENARAI_KUMPULAN_NEGERI, required: true },
 ]
 const INSIDEN_SUMBER_FIELD: FieldDef = {
   key: 'sumber_laporan',
   label: 'Sumber Laporan',
   wide: true,
   required: true,
-  hint: 'Contoh: PKOD MANJUNG, orang awam, Balai Bomba',
+  hint: 'Akan dipaparkan pada poster sebagai "SUMBER: …". Contoh: APM TIMUR LAUT, PKOD MANJUNG, BALAI BOMBA',
 }
 const INSIDEN_FIELD: FieldDef[] = [INSIDEN_MASA_FIELD, INSIDEN_RINGKASAN_FIELD, ...INSIDEN_LOKASI_FIELDS, INSIDEN_SUMBER_FIELD]
 

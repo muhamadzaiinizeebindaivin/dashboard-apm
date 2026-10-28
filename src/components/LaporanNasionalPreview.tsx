@@ -5,6 +5,7 @@ import type { ItemLaporanNasional, KorbanNegeri, PpsDitutup } from '../lib/lapor
 import type { TitikGraf } from '../lib/laporanNasionalGraf'
 import petaMalaysia from '../assets/peta-malaysia.png'
 import { NEGERI_NORM } from '../lib/negeriVisual'
+import { kumpulanNegeri } from '../lib/kumpulanNegeri'
 
 // Colour of each disaster type = its category's colour (Urus Kategori)
 const warnaHex = warnaJenis
@@ -328,7 +329,8 @@ function PetaLaporan({ items, negeriAktif }: { items: ItemLaporanNasional[]; neg
     const mx = petaX + norm.x * petaLebar
     const my = petaY + norm.y * petaTinggi
 
-    const punya = items.filter((i) => i.negeri === negeri)
+    // KL, Putrajaya and Labuan: one Wilayah Persekutuan box
+    const punya = items.filter((i) => kumpulanNegeri(i.negeri) === negeri)
     const jenisUtama = punya[0]?.jenisBencana ?? ''
     const daerah = new Set(punya.filter((i) => i.daerah).map((i) => i.daerah))
     const pps = punya.reduce((n, i) => n + kiraPps(i.pps), 0)
@@ -441,7 +443,7 @@ export function LaporanNasionalPreview({
   }
   // Ended (TAMAT) disasters stay in the table but not in the "active" counters/map
   const aktif = items.filter((i) => !i.tamatPada)
-  const negeriSet = new Set(aktif.map((i) => i.negeri).filter(Boolean))
+  const negeriSet = new Set(aktif.map((i) => kumpulanNegeri(i.negeri)).filter(Boolean))
   const daerahSet = new Set(aktif.filter((i) => i.daerah).map((i) => `${i.negeri}|${i.daerah}`))
   const ppsCount = items.reduce((n, i) => n + kiraPps(i.pps), 0)
   const jumlahMangsa = items.reduce((n, i) => n + i.jumlahMangsa, 0)
@@ -458,7 +460,7 @@ export function LaporanNasionalPreview({
     { label: 'Mangsa', nilai: jumlahMangsa },
   ]
 
-  const negeriAktif = [...new Set(aktif.map((i) => i.negeri).filter((n): n is string => !!n))]
+  const negeriAktif = [...new Set(aktif.map((i) => kumpulanNegeri(i.negeri)).filter((n): n is string => !!n))]
 
   // Same order as the category list (Urus Kategori)
   const jenisSet = susunJenis(items.map((i) => i.jenisBencana))

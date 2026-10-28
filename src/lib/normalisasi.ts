@@ -1,5 +1,6 @@
 import { NEGERI_LIST } from './negeriVisual'
 import { JENIS_BENCANA } from './laporanBencana'
+import { kumpulanNegeri } from './kumpulanNegeri'
 
 // Shared text normalisation for everything read from uploaded files
 // (Laporan Awal .docx, Laporan Semasa .xlsx).
@@ -21,13 +22,18 @@ const ALIAS_NEGERI: Record<string, string> = {
   ns: 'Negeri Sembilan',
   kl: 'Kuala Lumpur',
   wpkl: 'Kuala Lumpur',
+  'wilayah persekutuan': 'Wilayah Persekutuan',
+  wp: 'Wilayah Persekutuan',
+  'w p': 'Wilayah Persekutuan',
   malacca: 'Melaka',
 }
 
 export function normalNegeri(asal: string): string | null {
   // "WP Kuala Lumpur", "W.P. Labuan", "Wilayah Persekutuan Putrajaya"
   const k = kunci(asal).replace(/^(wilayah persekutuan|w p|wp) /, '')
-  return NEGERI_IKUT_KUNCI.get(k) ?? ALIAS_NEGERI[k] ?? null
+  const negeri = NEGERI_IKUT_KUNCI.get(k) ?? ALIAS_NEGERI[k] ?? null
+  // KL, Putrajaya and Labuan are recorded as one: "Wilayah Persekutuan"
+  return negeri ? kumpulanNegeri(negeri) : null
 }
 
 // Words that identify a disaster type inside a free-text name

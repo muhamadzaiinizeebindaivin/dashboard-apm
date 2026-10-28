@@ -98,4 +98,6 @@ export const NEGERI_NORM: Record<string, { x: number; y: number }> = {
   Labuan: { x: 0.7666, y: 0.331 },
   'Kuala Lumpur': { x: 0.1403, y: 0.6352 },
   Putrajaya: { x: 0.1406, y: 0.665 },
+  // KL + Putrajaya + Labuan as one: placed at Kuala Lumpur
+  'Wilayah Persekutuan': { x: 0.1403, y: 0.6352 },
 }

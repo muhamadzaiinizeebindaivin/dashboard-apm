@@ -2,7 +2,8 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { NEGERI_LIST } from '../lib/negeriVisual'
+// KL, Putrajaya and Labuan: one "Wilayah Persekutuan" choice
+import { SENARAI_KUMPULAN_NEGERI } from '../lib/kumpulanNegeri'
 
 const JENIS_BANTUAN = ['Makanan', 'Pakaian', 'Kesihatan'] as const
 
@@ -111,7 +112,7 @@ export function NgoForm({ onSuccess, negeriTetap, existing }: NgoFormProps) {
             className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-800 outline-none focus:border-emerald-600"
           >
             <option value="">Pilih negeri</option>
-            {NEGERI_LIST.map((n) => (
+            {SENARAI_KUMPULAN_NEGERI.map((n) => (
               <option key={n} value={n}>
                 {n}
               </option>

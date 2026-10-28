@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import { ambilSemua } from './ambilSemua'
-import { samaKumpulan } from './kumpulanNegeri'
+import { kumpulanNegeri, samaKumpulan } from './kumpulanNegeri'
 
 type BarisSemasa = {
   id: string
@@ -174,7 +174,8 @@ export function snapshotIkutBencana(masa: Date, sejarah: SejarahPps, tapis: Tapi
         if (tapis.negeri && !samaKumpulan(p.negeri, tapis.negeri)) continue
         if (tapis.zon && p.zon !== tapis.zon) continue
 
-        tambah(nama, terkini.jenis_bencana, p.negeri ?? '', k.mangsa, k.keluarga, 1)
+        // KL, Putrajaya and Labuan count as one state
+        tambah(nama, terkini.jenis_bencana, kumpulanNegeri(p.negeri), k.mangsa, k.keluarga, 1)
       }
       continue
     }
@@ -190,7 +191,7 @@ export function snapshotIkutBencana(masa: Date, sejarah: SejarahPps, tapis: Tapi
       tambah(
         nama,
         sumber.jenis_bencana,
-        p.negeri ?? '',
+        kumpulanNegeri(p.negeri),
         p.jumlah_mangsa ?? 0,
         p.jumlah_keluarga ?? 0,
         p.pps ? p.pps.split('\n').filter((s) => s.trim()).length : 0,

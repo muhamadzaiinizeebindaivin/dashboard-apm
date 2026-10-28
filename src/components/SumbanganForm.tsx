@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Plus, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { NEGERI_LIST } from '../lib/negeriVisual'
+// KL, Putrajaya and Labuan: one "Wilayah Persekutuan" choice
+import { SENARAI_KUMPULAN_NEGERI, kumpulanNegeri } from '../lib/kumpulanNegeri'
 
 const JENIS_KUMPULAN = ['NGO', 'CDA', 'PERSATUAN', 'KELAB', 'PERSEKUTUAN']
 const JENIS_SUMBANGAN = ['BAHAN MENTAH', 'PERKHIDMATAN'] as const
@@ -30,7 +31,8 @@ export function SumbanganForm({ onSuccess, negeriTetap, existing }: SumbanganFor
   const [noTel, setNoTel] = useState(existing?.no_tel ?? '')
   const [negeri, setNegeri] = useState(negeriTetap ?? '')
   const [jenisSumbangan, setJenisSumbangan] = useState<string>(existing?.jenis_sumbangan ?? '')
-  const [lokasiBantuan, setLokasiBantuan] = useState(existing?.lokasi_bantuan ?? '')
+  // Older records may say "Labuan" / "Kuala Lumpur": shown (and saved) as Wilayah Persekutuan
+  const [lokasiBantuan, setLokasiBantuan] = useState(kumpulanNegeri(existing?.lokasi_bantuan))
   const [items, setItems] = useState<ItemSumbangan[]>([{ id: 1, nama: '', kuantiti: '', unit: '' }])
   const [dihantar, setDihantar] = useState(false)
   const [menghantar, setMenghantar] = useState(false)
@@ -221,7 +223,7 @@ export function SumbanganForm({ onSuccess, negeriTetap, existing }: SumbanganFor
             className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-800 outline-none focus:border-emerald-600"
           >
             <option value="">Pilih negeri</option>
-            {NEGERI_LIST.map((n) => (
+            {SENARAI_KUMPULAN_NEGERI.map((n) => (
               <option key={n} value={n}>
                 {n}
               </option>
@@ -265,7 +267,7 @@ export function SumbanganForm({ onSuccess, negeriTetap, existing }: SumbanganFor
           className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-800 outline-none focus:border-emerald-600"
         >
           <option value="">Pilih negeri</option>
-          {NEGERI_LIST.map((n) => (
+          {SENARAI_KUMPULAN_NEGERI.map((n) => (
             <option key={n} value={n}>
               {n}
             </option>

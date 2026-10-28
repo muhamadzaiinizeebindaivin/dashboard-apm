@@ -7,6 +7,7 @@ import { dataTerkiniTitik, ikonKategori, warnaSelamat } from '../lib/titikBencan
 import { HAD_TIADA_KEMASKINI_JAM } from '../lib/ppsPusat'
 import { useLaporanTerkini, usePetaAwam, useTrendMangsa } from '../lib/petaAwam'
 import type { PpsAwam, TitikTrend } from '../lib/petaAwam'
+import { kumpulanNegeri } from '../lib/kumpulanNegeri'
 
 // Laman Utama dashboard (public page and logged-in home): the Peta Bencana in
 // display-only mode with floating figures, and three cards underneath.
@@ -347,7 +348,8 @@ export function PapanUtama() {
   const keluarga =
     pps.reduce((n, p) => n + (p.jumlah_keluarga ?? 0), 0) +
     titik.filter((t) => !t.nama_bencana).reduce((n, t) => n + (t.jumlah_kir ?? 0), 0)
-  const negeri = new Set(bencana.flatMap((b) => b.negeri))
+  // KL, Putrajaya and Labuan count as one state
+  const negeri = new Set(bencana.flatMap((b) => b.negeri.map(kumpulanNegeri)))
 
   const gelembung: GelembungProps[] = [
     { ikon: AlertTriangle, nilai: nombor(bencana.length), label: 'Bencana aktif', warna: OREN },

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Plus, Loader2, MapPin, Pencil, ChevronDown, Search, Check } from 'lucide-react'
-import { NEGERI_LIST } from '../lib/negeriVisual'
+// KL, Putrajaya and Labuan: one "Wilayah Persekutuan" choice
+import { SENARAI_KUMPULAN_NEGERI, kumpulanNegeri } from '../lib/kumpulanNegeri'
 import {
   ikonKategori,
   kemaskiniKategori,
@@ -164,7 +165,8 @@ type TitikBencanaModalProps = {
 export function TitikBencanaModal({ mod, awal, koordinat, kategori, terkini, onSimpan, onClose }: TitikBencanaModalProps) {
   // Editing a point that follows its Laporan Semasa: its figures are read-only here
   const ikutLaporan = mod === 'kemaskini' && !!terkini
-  const [borang, setBorang] = useState<BorangTitik>(awal)
+  // Older points may say "Labuan" / "Kuala Lumpur": shown (and saved) as Wilayah Persekutuan
+  const [borang, setBorang] = useState<BorangTitik>(() => ({ ...awal, negeri: kumpulanNegeri(awal.negeri) || awal.negeri }))
   const [menyimpan, setMenyimpan] = useState(false)
   const [ralat, setRalat] = useState('')
 
@@ -372,7 +374,7 @@ export function TitikBencanaModal({ mod, awal, koordinat, kategori, terkini, onS
               </label>
               <select value={borang.negeri} onChange={(e) => set('negeri', e.target.value)} className={inputClass}>
                 <option value="">— Pilih —</option>
-                {NEGERI_LIST.map((n) => (
+                {SENARAI_KUMPULAN_NEGERI.map((n) => (
                   <option key={n} value={n}>
                     {n}
                   </option>
