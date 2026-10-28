@@ -12,6 +12,8 @@ import {
   Upload,
   AlertTriangle,
   Trash2,
+  PenLine,
+  Sparkles,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { ambilKod, padamKod } from '../lib/accessCode'
@@ -38,18 +40,60 @@ import { lampiranUntukHantar, pilihanAsal } from '../lib/bacaLampiranSemasa'
 import type { KunciLampiran, Lampiran } from '../lib/bacaLampiranSemasa'
 import { SemakLampiran } from '../components/SemakLampiran'
 import { StatusNamaBencana } from '../components/StatusNamaBencana'
-import { hurufBesar, kemasNamaTempat, kunci } from '../lib/normalisasi'
+import { ConfirmModal } from '../components/ConfirmModal'
+import { hurufBesar, kemasNamaTempat, kunci, normalNamaBencana } from '../lib/normalisasi'
+import { keNilaiTempatan } from '../lib/tarikhBebas'
 import { semakPps } from '../lib/ppsPusat'
 import { useJenisBencana } from '../lib/jenisBencana'
 import type { PpsInput } from '../lib/ppsPusat'
 import { useKawasan, parlimenNegeri, dunNegeri } from '../lib/kawasanPilihanRaya'
 
+// Laporan Awal: the date and the disaster name are often missed, so both are required here
+// (only for Laporan Awal: the shared field definitions stay unchanged for Laporan Semasa)
+const AWAL_TARIKH_FIELD: FieldDef = { ...TARIKH_MASA_FIELD, required: true }
+const AWAL_KEJADIAN_FIELDS: FieldDef[] = KEJADIAN_FIELDS.map((f) =>
+  f.key === 'nama_bencana'
+    ? {
+        ...f,
+        required: true,
+        hint:
+          'Format: (Jenis Bencana) (Lokaliti) (Bulan) (Tahun) — contoh: BANJIR DUNGUN OKTOBER 2026.\n' +
+          'Nama bencana ini perlu sama dengan nama dalam Laporan Semasa yang dihantar.',
+      }
+    : f,
+)
+
 const AWAL_FIELD: FieldDef[] = [
-  TARIKH_MASA_FIELD,
-  ...KEJADIAN_FIELDS,
+  AWAL_TARIKH_FIELD,
+  ...AWAL_KEJADIAN_FIELDS,
   HAL_LAIN_FIELD,
   ...PENYEDIA_FIELDS,
 ]
+
+const BULAN = [
+  'JANUARI',
+  'FEBRUARI',
+  'MAC',
+  'APRIL',
+  'MEI',
+  'JUN',
+  'JULAI',
+  'OGOS',
+  'SEPTEMBER',
+  'OKTOBER',
+  'NOVEMBER',
+  'DISEMBER',
+]
+
+// Suggested Nama Bencana: (Jenis Bencana) (Lokaliti) (Bulan) (Tahun), e.g. "BANJIR DUNGUN OKTOBER 2026".
+// Lokaliti = district, or the state when no district is given. Empty until enough is filled in.
+function binaNamaBencana(n: Record<string, string>) {
+  const jenis = (n.jenis_bencana ?? '').trim()
+  const lokaliti = (n.daerah || n.negeri || '').trim()
+  const masa = n.tarikh_masa ? new Date(n.tarikh_masa) : null
+  if (!jenis || !lokaliti || !masa || Number.isNaN(masa.getTime())) return ''
+  return normalNamaBencana(`${jenis} ${lokaliti} ${BULAN[masa.getMonth()]} ${masa.getFullYear()}`)
+}
 
 // Free-text summary written by the state ("Ringkasan Laporan" in the Excel)
 const RINGKASAN_TEKS_FIELD: FieldDef = { key: 'kandungan', label: 'Ringkasan Laporan', type: 'textarea', wide: true }
@@ -103,9 +147,15 @@ type MetaPps = Pick<
   | 'kanakPerempuan'
 >
 
-type MedanProps = { def: FieldDef; value: string; onChange: (v: string) => void; amaran?: string }
+type MedanProps = {
+  def: FieldDef
+  value: string
+  onChange: (v: string) => void
+  amaran?: string
+  tambahan?: ReactNode // extra content under the field (e.g. the name suggestion)
+}
 
-function Medan({ def, value, onChange, amaran }: MedanProps) {
+function Medan({ def, value, onChange, amaran, tambahan }: MedanProps) {
   return (
     <div className={def.wide ? 'sm:col-span-2' : ''}>
       <label className="mb-1 block text-sm font-medium text-neutral-700">
@@ -136,6 +186,8 @@ function Medan({ def, value, onChange, amaran }: MedanProps) {
           className={inputClass}
         />
       )}
+      {def.hint && <p className="mt-1 whitespace-pre-line text-xs text-neutral-500">{def.hint}</p>}
+      {tambahan}
       {amaran && (
         <p className="mt-1 flex items-start gap-1 text-xs text-amber-700">
           <AlertTriangle size={12} className="mt-0.5 shrink-0" />
@@ -209,6 +261,51 @@ function ZonMuatNaik({ jenis, membaca, ralat, onPilih }: ZonMuatNaikProps) {
         {ralat && <p className="text-sm text-red-600">{ralat}</p>}
       </div>
     </Bahagian>
+  )
+}
+
+type CaraAwal = '' | 'borang' | 'fail'
+
+// Laporan Awal step 1: fill the form directly, or upload the NDCC Word file
+function PilihCara({ onPilih }: { onPilih: (c: 'borang' | 'fail') => void }) {
+  const kelasKad =
+    'flex flex-col items-center gap-2 rounded-2xl border border-white/70 bg-white/60 px-4 py-6 text-center shadow-sm transition-colors hover:border-emerald-500 hover:bg-emerald-50/60'
+  return (
+    <Bahagian tajuk="Cara Mengisi Laporan Awal">
+      <button type="button" onClick={() => onPilih('borang')} className={kelasKad}>
+        <PenLine size={26} className="text-emerald-700" />
+        <span className="text-sm font-semibold text-neutral-800">Isi Borang</span>
+        <span className="text-xs text-neutral-500">Isi maklumat terus di sini. Tiada fail Word diperlukan.</span>
+      </button>
+      <button type="button" onClick={() => onPilih('fail')} className={kelasKad}>
+        <Upload size={26} className="text-emerald-700" />
+        <span className="text-sm font-semibold text-neutral-800">Muat Naik Fail</span>
+        <span className="text-xs text-neutral-500">Muat naik Laporan Awal NDCC (.docx) yang telah diisi.</span>
+      </button>
+    </Bahagian>
+  )
+}
+
+// Laporan Awal in form mode: reminder + way to switch to the upload
+function BannerBorang({ onTukar }: { onTukar: () => void }) {
+  return (
+    <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 text-sm text-emerald-900">
+      <p className="flex items-center gap-2 font-semibold">
+        <PenLine size={16} className="shrink-0" />
+        Isi borang Laporan Awal
+      </p>
+      <p className="mt-1 text-emerald-800">
+        Ruangan bertanda <span className="text-red-500">*</span> wajib diisi. Pastikan Tarikh/Masa dan Nama Bencana
+        betul sebelum menghantar.
+      </p>
+      <button
+        type="button"
+        onClick={onTukar}
+        className="mt-2 text-xs font-medium text-emerald-900 underline underline-offset-2"
+      >
+        Ada fail .docx? Muat naik fail
+      </button>
+    </div>
   )
 }
 
@@ -346,6 +443,11 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
   const [lampiran, setLampiran] = useState<Lampiran | null>(null)
   const [pilihanLampiran, setPilihanLampiran] = useState<Record<KunciLampiran, boolean> | null>(null)
   const [cadanganNama, setCadanganNama] = useState<string[]>([])
+  // Laporan Awal: fill the form directly or upload the Word file
+  const [cara, setCara] = useState<CaraAwal>('')
+  // Laporan Semasa: does the name match a Laporan Awal? (null = unknown, never blocks)
+  const [adaLaporanAwal, setAdaLaporanAwal] = useState<boolean | null>(null)
+  const [sahkanTanpaAwal, setSahkanTanpaAwal] = useState(false)
   // Jenis Bencana choices = the categories of the Bencana map (Urus Kategori)
   const senaraiJenis = useJenisBencana().map((j) => j.label)
 
@@ -360,6 +462,36 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
     }
   }, [])
 
+  // The form is shown once a file has been read, or straight away for Laporan Awal in form mode
+  const adaBorang = !!fail || (jenis === 'awal' && cara === 'borang')
+
+  function ubahNilai(key: string, v: string) {
+    setNilai((prev) => ({ ...prev, [key]: v }))
+    // Once the operator edits a field, its "please check" hint has served its purpose
+    setAmaran((a) => {
+      if (!(key in a)) return a
+      const baru = { ...a }
+      delete baru[key]
+      return baru
+    })
+  }
+
+  // Laporan Awal, 1.3: one-click name in the official format
+  function cadanganNamaAwal() {
+    const cadangan = binaNamaBencana(nilai)
+    if (!cadangan || kunci(cadangan) === kunci(nilai.nama_bencana ?? '')) return null
+    return (
+      <button
+        type="button"
+        onClick={() => ubahNilai('nama_bencana', cadangan)}
+        className="mt-1.5 flex items-center gap-1.5 rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-medium text-emerald-800 transition-colors hover:bg-emerald-50"
+      >
+        <Sparkles size={13} className="shrink-0" />
+        Guna cadangan: {cadangan}
+      </button>
+    )
+  }
+
   function renderMedan(medan: FieldDef) {
     const def = medan.key === 'jenis_bencana' ? { ...medan, options: senaraiJenis } : medan
     return (
@@ -367,17 +499,9 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
         key={def.key}
         def={def}
         value={nilai[def.key] ?? ''}
-        onChange={(v) => {
-          setNilai((prev) => ({ ...prev, [def.key]: v }))
-          // Once the operator edits a field, its "please check" hint has served its purpose
-          setAmaran((a) => {
-            if (!(def.key in a)) return a
-            const baru = { ...a }
-            delete baru[def.key]
-            return baru
-          })
-        }}
+        onChange={(v) => ubahNilai(def.key, v)}
         amaran={fail ? amaranUntuk(def) : undefined}
+        tambahan={jenis === 'awal' && def.key === 'nama_bencana' ? cadanganNamaAwal() : undefined}
       />
     )
   }
@@ -398,7 +522,18 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
     setJenis(v)
     setRalat('')
     setLokasiBencana(null)
+    setCara('')
+    setAdaLaporanAwal(null)
     kosongkanFail()
+  }
+
+  // Laporan Awal: switch between the form and the upload
+  function pilihCara(c: 'borang' | 'fail') {
+    setCara(c)
+    setRalat('')
+    setRalatFail('')
+    // Form mode: Tarikh/Masa starts at "now" so it's never left empty (still editable)
+    if (c === 'borang') setNilai((prev) => ({ ...prev, tarikh_masa: prev.tarikh_masa || keNilaiTempatan(new Date()) }))
   }
 
   // Hint for a field: a reading note, or "not found" for an empty required field
@@ -533,15 +668,16 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
   const ppsTanpaKawasan = kumpulanPps.flatMap((g) => g.rows.filter(perluKawasan))
   const bilTanpaKawasan = ppsTanpaKawasan.length
 
-  async function handleHantar() {
+  // `abaikanNama`: the operator confirmed sending a Laporan Semasa with no matching Laporan Awal
+  async function handleHantar(abaikanNama = false) {
     setRalat('')
 
     if (!jenis) {
       setRalat('Sila pilih jenis laporan.')
       return
     }
-    if (!fail) {
-      setRalat('Sila muat naik fail laporan.')
+    if (!adaBorang) {
+      setRalat(jenis === 'awal' ? 'Sila isi borang atau muat naik fail laporan.' : 'Sila muat naik fail laporan.')
       return
     }
 
@@ -663,6 +799,15 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
 
     // Same district spelling in every report ("labuan" -> "Labuan")
     if (rekod.daerah) rekod.daerah = kemasNamaTempat(rekod.daerah)
+    // Same name format in every report (UPPERCASE, single spaces), typed or read from a file
+    if (rekod.nama_bencana) rekod.nama_bencana = normalNamaBencana(rekod.nama_bencana)
+
+    // Laporan Semasa must use its Laporan Awal's name: warn, but let the operator send anyway
+    if (jenis === 'semasa' && adaLaporanAwal === false && !abaikanNama) {
+      setSahkanTanpaAwal(true)
+      return
+    }
+    setSahkanTanpaAwal(false)
 
     setMenghantar(true)
     const { error } = await supabase.rpc('submit_laporan_bencana', {
@@ -756,27 +901,45 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
                 </div>
               </div>
 
-              {/* Step 1 (both types): upload the NDCC file */}
-              {jenis && !fail && (
-                <ZonMuatNaik jenis={jenis} membaca={membacaFail} ralat={ralatFail} onPilih={muatNaikFail} />
+              {/* Laporan Awal step 1: fill the form or upload the Word file */}
+              {jenis === 'awal' && !fail && cara === '' && <PilihCara onPilih={pilihCara} />}
+
+              {/* Upload zone: Laporan Semasa always, Laporan Awal in upload mode */}
+              {((jenis === 'semasa' && !fail) || (jenis === 'awal' && cara === 'fail' && !fail)) && (
+                <>
+                  <ZonMuatNaik jenis={jenis} membaca={membacaFail} ralat={ralatFail} onPilih={muatNaikFail} />
+                  {jenis === 'awal' && (
+                    <button
+                      type="button"
+                      onClick={() => pilihCara('borang')}
+                      className="text-xs font-medium text-emerald-800 underline underline-offset-2"
+                    >
+                      Tiada fail? Isi borang sahaja
+                    </button>
+                  )}
+                </>
               )}
 
-              {/* Laporan Awal step 2: check the values, then choose the location */}
-              {jenis === 'awal' && fail && (
+              {/* Laporan Awal step 2: fill / check the values, then choose the location */}
+              {jenis === 'awal' && adaBorang && (
                 <>
-                  <BannerSemak
-                    fail={fail}
-                    bilAmaran={bilAmaran}
-                    nota={
-                      lokasiBencana
-                        ? []
-                        : ['Lokasi bencana tiada dalam fail. Sila pilih di peta (bahagian Lokasi Bencana).']
-                    }
-                    onTukar={kosongkanFail}
-                  />
+                  {fail ? (
+                    <BannerSemak
+                      fail={fail}
+                      bilAmaran={bilAmaran}
+                      nota={
+                        lokasiBencana
+                          ? []
+                          : ['Lokasi bencana tiada dalam fail. Sila pilih di peta (bahagian Lokasi Bencana).']
+                      }
+                      onTukar={kosongkanFail}
+                    />
+                  ) : (
+                    <BannerBorang onTukar={() => pilihCara('fail')} />
+                  )}
 
-                  <div className="grid gap-4 sm:grid-cols-2">{renderMedan(TARIKH_MASA_FIELD)}</div>
-                  <Bahagian tajuk="Maklumat Kejadian">{KEJADIAN_FIELDS.map(renderMedan)}</Bahagian>
+                  <div className="grid gap-4 sm:grid-cols-2">{renderMedan(AWAL_TARIKH_FIELD)}</div>
+                  <Bahagian tajuk="Maklumat Kejadian">{AWAL_KEJADIAN_FIELDS.map(renderMedan)}</Bahagian>
 
                   <Bahagian tajuk="Lokasi Bencana">
                     <div className="sm:col-span-2">
@@ -857,6 +1020,7 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
                       nama={nilai.nama_bencana ?? ''}
                       negeri={nilai.negeri}
                       onPilih={(nama) => setNilai((prev) => ({ ...prev, nama_bencana: nama }))}
+                      onStatus={setAdaLaporanAwal}
                     />
                     {renderMedan(TARIKH_MASA_FIELD)}
                     {renderMedan(RINGKASAN_TEKS_FIELD)}
@@ -975,11 +1139,11 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
 
               {ralat && <p className="text-sm text-red-600">{ralat}</p>}
 
-              {/* HANTAR only appears once a file has been read */}
-              {jenis && fail ? (
+              {/* HANTAR only appears once the form is shown (file read, or Laporan Awal form mode) */}
+              {jenis && adaBorang ? (
                 <motion.button
                   type="button"
-                  onClick={handleHantar}
+                  onClick={() => handleHantar()}
                   disabled={menghantar}
                   whileTap={{ scale: 0.97 }}
                   className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-700 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
@@ -994,6 +1158,18 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
           )}
         </div>
       </div>
+
+      <ConfirmModal
+        open={sahkanTanpaAwal}
+        title="Tiada Laporan Awal"
+        message={`Tiada Laporan Awal dengan nama "${normalNamaBencana(nilai.nama_bencana ?? '')}". Nama Laporan Semasa perlu sama dengan Laporan Awal. Teruskan juga?`}
+        confirmLabel="Hantar juga"
+        cancelLabel="Semak semula"
+        loading={menghantar}
+        loadingLabel="Menghantar..."
+        onConfirm={() => handleHantar(true)}
+        onCancel={() => setSahkanTanpaAwal(false)}
+      />
     </div>
   )
 }

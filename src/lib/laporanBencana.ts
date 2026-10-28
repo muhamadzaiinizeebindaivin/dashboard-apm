@@ -16,6 +16,7 @@ export type FieldDef = {
   options?: string[]
   required?: boolean
   wide?: boolean
+  hint?: string // help text shown under the field
 }
 
 export type LaporanBencanaRow = {

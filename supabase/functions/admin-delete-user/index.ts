@@ -27,20 +27,24 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-    // Scoped to the caller's own JWT — used only to find out who's calling.
-    const callerClient = createClient(supabaseUrl, serviceRoleKey, {
-      global: { headers: { Authorization: authHeader } },
-    })
-    const { data: callerData, error: callerErr } = await callerClient.auth.getUser()
-    if (callerErr || !callerData.user) {
-      return new Response(JSON.stringify({ error: 'Token tidak sah' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
     // Full service-role access, bypasses RLS.
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey)
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+
+    // Identify the caller: pass their JWT explicitly — there's no session server-side,
+    // so getUser() without an argument would fail with "Auth session missing".
+    const token = authHeader.replace(/^Bearer\s+/i, '')
+    const { data: callerData, error: callerErr } = await supabaseAdmin.auth.getUser(token)
+    if (callerErr || !callerData.user) {
+      return new Response(
+        JSON.stringify({ error: `Token tidak sah${callerErr ? `: ${callerErr.message}` : ''}` }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        },
+      )
+    }
 
     const { data: callerProfile } = await supabaseAdmin
       .from('profiles')

@@ -169,6 +169,12 @@ function KeputusanModal({ keputusan, onClose, onSelesai }: { keputusan: Keputusa
 }
 
 // Error message sent back by an Edge Function ({ error: "..." }), or a generic one
+// 401 from our edge functions = the login session no longer exists on the server
+// (signed out elsewhere, password changed…) even though the browser still holds a token.
+function sesiTamat(error: { context?: { status?: number } }) {
+  return error.context?.status === 401
+}
+
 async function mesejFungsi(error: { message: string; context?: { json?: () => Promise<unknown> } }) {
   const body = (await error.context?.json?.().catch(() => null)) as { error?: string } | null
   return body?.error ?? error.message
@@ -256,6 +262,13 @@ export function Admin() {
     setUpdatingId(null)
 
     if (error) {
+      if (sesiTamat(error)) {
+        // Dead session: clear it locally ('local' = no server call, which would fail anyway).
+        // onAuthStateChange then sets session to null and RequireAuth shows the login page.
+        setPendingDelete(null)
+        await supabase.auth.signOut({ scope: 'local' })
+        return
+      }
       setDeleteError(await mesejFungsi(error))
       return
     }
