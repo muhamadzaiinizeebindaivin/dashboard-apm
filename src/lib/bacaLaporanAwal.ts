@@ -51,6 +51,20 @@ function labelPenyedia(teks: string): { kunci: string | null; sisa: string } | n
   return null
 }
 
+// "Telah Diberi Perhatian" (Disahkan Oleh): same labels as "Disediakan Oleh", other fields
+const MEDAN_PERHATIAN: Record<string, string> = {
+  penyedia_nama: 'perhatian_nama',
+  penyedia_jawatan: 'perhatian_jawatan',
+  penyedia_telefon: 'perhatian_telefon',
+  _masa: '_masa_perhatian',
+  _tarikh: '_tarikh_perhatian',
+}
+function labelPerhatian(teks: string): { kunci: string | null; sisa: string } | null {
+  const l = labelPenyedia(teks)
+  if (!l) return null
+  return { kunci: l.kunci ? MEDAN_PERHATIAN[l.kunci] : null, sisa: l.sisa }
+}
+
 // `jenisDikenali`: current category names, so any of them is recognised in the file
 export async function bacaLaporanAwal(
   fail: File,
@@ -107,9 +121,6 @@ export async function bacaLaporanAwal(
     if (teksBaris.startsWith('disediakan oleh')) { bahagian = 'penyedia'; continue }
     if (teksBaris.startsWith('telah diberi perhatian')) { bahagian = 'perhatian'; continue }
 
-    // The verification block is filled later by the Sekretariat (Sahkan)
-    if (bahagian === 'perhatian') continue
-
     if (bahagian === 'hal_lain') {
       tambah('hal_lain', sel.map(teksSel).filter(Boolean).join('\n'))
       continue
@@ -127,7 +138,12 @@ export async function bacaLaporanAwal(
       const satuBaris = t.replace(/\n/g, ' ').trim()
       if (!satuBaris || satuBaris === ':') continue
 
-      const label = bahagian === 'penyedia' ? labelPenyedia(satuBaris) : labelKejadian(satuBaris)
+      const label =
+        bahagian === 'penyedia'
+          ? labelPenyedia(satuBaris)
+          : bahagian === 'perhatian'
+            ? labelPerhatian(satuBaris)
+            : labelKejadian(satuBaris)
       if (label) {
         jumpaLabel = true
         semasa = label.kunci
@@ -200,6 +216,13 @@ export async function bacaLaporanAwal(
   tetapkanMasa('penyedia_masa', `${nilai._tarikh ?? ''} ${nilai._masa ?? ''}`.trim(), 'Masa & Tarikh')
   delete nilai._tarikh
   delete nilai._masa
+  tetapkanMasa(
+    'perhatian_masa',
+    `${nilai._tarikh_perhatian ?? ''} ${nilai._masa_perhatian ?? ''}`.trim(),
+    'Masa & Tarikh (Disahkan Oleh)',
+  )
+  delete nilai._tarikh_perhatian
+  delete nilai._masa_perhatian
 
   // No date at the top of the form: suggest the "Disediakan Oleh" time
   if (!nilai.tarikh_masa && !amaran.tarikh_masa && nilai.penyedia_masa) {

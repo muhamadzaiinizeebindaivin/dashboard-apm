@@ -14,6 +14,7 @@ import {
   Trash2,
   PenLine,
   Sparkles,
+  Megaphone,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { ambilKod, padamKod } from '../lib/accessCode'
@@ -24,6 +25,7 @@ import {
   KEJADIAN_FIELDS,
   HAL_LAIN_FIELD,
   PENYEDIA_FIELDS,
+  PERHATIAN_FIELDS,
   SEMASA_MAKLUMAT_FIELDS,
   SEMASA_PENYEDIA_FIELDS,
   SEMASA_PERHATIAN_FIELDS,
@@ -43,10 +45,40 @@ import { StatusNamaBencana } from '../components/StatusNamaBencana'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { hurufBesar, kemasNamaTempat, kunci, normalNamaBencana } from '../lib/normalisasi'
 import { keNilaiTempatan } from '../lib/tarikhBebas'
+import { NEGERI_LIST } from '../lib/negeriVisual'
 import { semakPps } from '../lib/ppsPusat'
 import { useJenisBencana } from '../lib/jenisBencana'
 import type { PpsInput } from '../lib/ppsPusat'
 import { useKawasan, parlimenNegeri, dunNegeri } from '../lib/kawasanPilihanRaya'
+
+type JenisPilihan = '' | 'insiden' | 'awal' | 'semasa'
+
+// Laporan Insiden comes first: an event that may (or may not) become a disaster, assessed by PKOP
+const JENIS_PILIHAN = [{ value: 'insiden', label: 'Laporan Insiden' }, ...JENIS_LAPORAN] as const
+
+// Laporan Insiden: form only (no file), printed later on the "Makluman Awal Insiden" poster
+const INSIDEN_MASA_FIELD: FieldDef = { key: 'tarikh_masa', label: 'Tarikh & Masa Berlaku', type: 'datetime', required: true }
+const INSIDEN_RINGKASAN_FIELD: FieldDef = {
+  key: 'ringkasan',
+  label: 'Ringkasan Insiden',
+  type: 'textarea',
+  wide: true,
+  required: true,
+  hint: 'Contoh: BANJIR DI BEBERAPA KAWASAN AKIBAT HUJAN LEBAT',
+}
+const INSIDEN_LOKASI_FIELDS: FieldDef[] = [
+  { key: 'tempat', label: 'Lokasi (Tempat)', wide: true, required: true, hint: 'Contoh: PULAU PANGKOR' },
+  { key: 'daerah', label: 'Daerah', required: true },
+  { key: 'negeri', label: 'Negeri', type: 'select', options: NEGERI_LIST, required: true },
+]
+const INSIDEN_SUMBER_FIELD: FieldDef = {
+  key: 'sumber_laporan',
+  label: 'Sumber Laporan',
+  wide: true,
+  required: true,
+  hint: 'Contoh: PKOD MANJUNG, orang awam, Balai Bomba',
+}
+const INSIDEN_FIELD: FieldDef[] = [INSIDEN_MASA_FIELD, INSIDEN_RINGKASAN_FIELD, ...INSIDEN_LOKASI_FIELDS, INSIDEN_SUMBER_FIELD]
 
 // Laporan Awal: the date and the disaster name are often missed, so both are required here
 // (only for Laporan Awal: the shared field definitions stay unchanged for Laporan Semasa)
@@ -58,9 +90,14 @@ const AWAL_KEJADIAN_FIELDS: FieldDef[] = KEJADIAN_FIELDS.map((f) =>
         required: true,
         hint:
           'Format: (Jenis Bencana) (Lokaliti) (Bulan) (Tahun) — contoh: BANJIR DUNGUN OKTOBER 2026.\n' +
-          'Nama bencana ini perlu sama dengan nama dalam Laporan Semasa yang dihantar.',
+          'Nama bencana ini perlu sama dengan nama dalam Laporan Semasa yang akan dihantar.',
       }
     : f,
+)
+
+// "Telah Diberi Perhatian": required for every Laporan Awal (Nama + Masa & Tarikh)
+const AWAL_PERHATIAN_FIELDS: FieldDef[] = PERHATIAN_FIELDS.map((f) =>
+  f.key === 'perhatian_nama' || f.key === 'perhatian_masa' ? { ...f, required: true } : f,
 )
 
 const AWAL_FIELD: FieldDef[] = [
@@ -68,6 +105,7 @@ const AWAL_FIELD: FieldDef[] = [
   ...AWAL_KEJADIAN_FIELDS,
   HAL_LAIN_FIELD,
   ...PENYEDIA_FIELDS,
+  ...AWAL_PERHATIAN_FIELDS,
 ]
 
 const BULAN = [
@@ -351,7 +389,7 @@ type KejayaanHantarProps = { berjaya: Berjaya; onLagi: () => void; onKeluar: () 
 // Shown in place of the form after a successful submit, until the user
 // chooses what to do next (no auto-dismiss).
 function KejayaanHantar({ berjaya, onLagi, onKeluar }: KejayaanHantarProps) {
-  const labelJenis = JENIS_LAPORAN.find((j) => j.value === berjaya.jenis)?.label ?? 'Laporan'
+  const labelJenis = JENIS_PILIHAN.find((j) => j.value === berjaya.jenis)?.label ?? 'Laporan'
 
   return (
     <motion.div
@@ -378,7 +416,7 @@ function KejayaanHantar({ berjaya, onLagi, onKeluar }: KejayaanHantarProps) {
         </div>
         {berjaya.nama && (
           <div className="flex justify-between gap-4 px-4 py-2.5">
-            <dt className="text-neutral-500">Nama bencana</dt>
+            <dt className="text-neutral-500">{berjaya.jenis === 'insiden' ? 'Insiden' : 'Nama bencana'}</dt>
             <dd className="text-right font-medium text-neutral-800">{berjaya.nama}</dd>
           </div>
         )}
@@ -421,9 +459,10 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const jenisAwal = params.get('jenis')
-  const [jenis, setJenis] = useState<'' | 'awal' | 'semasa'>(
-    jenisAwal === 'awal' || jenisAwal === 'semasa' ? jenisAwal : '',
-  )
+  const [jenis, setJenis] = useState<JenisPilihan>(() => {
+    if (jenisAwal === 'awal' || jenisAwal === 'semasa') return jenisAwal
+    return ''
+  })
   const [nilai, setNilai] = useState<Record<string, string>>({})
   const [ringkasan, setRingkasan] = useState<string>('')
   const [menghantar, setMenghantar] = useState(false)
@@ -463,7 +502,7 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
   }, [])
 
   // The form is shown once a file has been read, or straight away for Laporan Awal in form mode
-  const adaBorang = !!fail || (jenis === 'awal' && cara === 'borang')
+  const adaBorang = jenis === 'insiden' || !!fail || (jenis === 'awal' && cara === 'borang')
 
   function ubahNilai(key: string, v: string) {
     setNilai((prev) => ({ ...prev, [key]: v }))
@@ -518,13 +557,15 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
     setPilihanLampiran(null)
   }
 
-  function pilihJenis(v: '' | 'awal' | 'semasa') {
+  function pilihJenis(v: JenisPilihan) {
     setJenis(v)
     setRalat('')
     setLokasiBencana(null)
     setCara('')
     setAdaLaporanAwal(null)
     kosongkanFail()
+    // Laporan Insiden: Tarikh & Masa Berlaku starts at "now" (still editable)
+    if (v === 'insiden') setNilai({ tarikh_masa: keNilaiTempatan(new Date()) })
   }
 
   // Laporan Awal: switch between the form and the upload
@@ -668,6 +709,53 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
   const ppsTanpaKawasan = kumpulanPps.flatMap((g) => g.rows.filter(perluKawasan))
   const bilTanpaKawasan = ppsTanpaKawasan.length
 
+  // Laporan Insiden: its own table and RPC, assessed later by PKOP
+  async function hantarInsiden() {
+    const tiadaIsi = INSIDEN_FIELD.find((f) => f.required && !nilai[f.key]?.trim())
+    if (tiadaIsi) {
+      setRalat(`Sila isi ruangan "${tiadaIsi.label}".`)
+      return
+    }
+    const masa = new Date(nilai.tarikh_masa)
+    if (Number.isNaN(masa.getTime())) {
+      setRalat('Tarikh & Masa Berlaku tidak sah.')
+      return
+    }
+
+    setMenghantar(true)
+    const { error } = await supabase.rpc('submit_laporan_insiden', {
+      p_code: ambilKod('laporan'),
+      p_data: {
+        tarikh_masa: masa.toISOString(),
+        // Printed in capitals on the poster: stored the same way
+        ringkasan: normalNamaBencana(nilai.ringkasan),
+        tempat: normalNamaBencana(nilai.tempat),
+        daerah: kemasNamaTempat(nilai.daerah),
+        negeri: nilai.negeri,
+        sumber_laporan: normalNamaBencana(nilai.sumber_laporan),
+      },
+    })
+    setMenghantar(false)
+
+    if (error?.code === '42501') {
+      if (dalaman) {
+        setRalat('Anda tiada kebenaran untuk menghantar laporan.')
+        return
+      }
+      padamKod('laporan')
+      window.location.reload()
+      return
+    }
+    if (error) {
+      setRalat('Gagal menghantar laporan. Sila cuba lagi.')
+      return
+    }
+
+    setBerjaya({ jenis: 'insiden', nama: normalNamaBencana(nilai.ringkasan), masa: new Date() })
+    pilihJenis('')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   // `abaikanNama`: the operator confirmed sending a Laporan Semasa with no matching Laporan Awal
   async function handleHantar(abaikanNama = false) {
     setRalat('')
@@ -678,6 +766,11 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
     }
     if (!adaBorang) {
       setRalat(jenis === 'awal' ? 'Sila isi borang atau muat naik fail laporan.' : 'Sila muat naik fail laporan.')
+      return
+    }
+
+    if (jenis === 'insiden') {
+      await hantarInsiden()
       return
     }
 
@@ -881,13 +974,13 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
                   Jenis Laporan <span className="text-red-500">*</span>
                 </label>
                 <div className="flex flex-wrap gap-2">
-                  {JENIS_LAPORAN.map(({ value, label }) => {
+                  {JENIS_PILIHAN.map(({ value, label }) => {
                     const active = jenis === value
                     return (
                       <button
                         key={value}
                         type="button"
-                        onClick={() => pilihJenis(value as 'awal' | 'semasa')}
+                        onClick={() => pilihJenis(value)}
                         className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
                           active
                             ? 'border-emerald-700 bg-emerald-700 text-white'
@@ -900,6 +993,26 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
                   })}
                 </div>
               </div>
+
+              {/* Laporan Insiden: form only */}
+              {jenis === 'insiden' && (
+                <>
+                  <div className="rounded-xl border border-orange-200 bg-orange-50/70 p-4 text-sm text-orange-900">
+                    <p className="flex items-center gap-2 font-semibold">
+                      <Megaphone size={16} className="shrink-0" />
+                      Laporan Insiden
+                    </p>
+                    <p className="mt-1 text-orange-800">
+                      Untuk kejadian yang mungkin menjadi bencana (contoh: banjir kilat). PKOP akan menilai sama ada
+                      insiden ini diisytiharkan sebagai bencana.
+                    </p>
+                  </div>
+                  <Bahagian tajuk="Masa / Tarikh">{renderMedan(INSIDEN_MASA_FIELD)}</Bahagian>
+                  <Bahagian tajuk="Insiden">{renderMedan(INSIDEN_RINGKASAN_FIELD)}</Bahagian>
+                  <Bahagian tajuk="Lokasi">{INSIDEN_LOKASI_FIELDS.map(renderMedan)}</Bahagian>
+                  <Bahagian tajuk="Sumber Laporan">{renderMedan(INSIDEN_SUMBER_FIELD)}</Bahagian>
+                </>
+              )}
 
               {/* Laporan Awal step 1: fill the form or upload the Word file */}
               {jenis === 'awal' && !fail && cara === '' && <PilihCara onPilih={pilihCara} />}
@@ -986,6 +1099,9 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
                   />
                   <Bahagian tajuk="Hal-hal Lain">{renderMedan(HAL_LAIN_FIELD)}</Bahagian>
                   <Bahagian tajuk="Disediakan Oleh">{PENYEDIA_FIELDS.map(renderMedan)}</Bahagian>
+                  <Bahagian tajuk="Disahkan Oleh (Telah Diberi Perhatian)">
+                    {AWAL_PERHATIAN_FIELDS.map(renderMedan)}
+                  </Bahagian>
                 </>
               )}
 

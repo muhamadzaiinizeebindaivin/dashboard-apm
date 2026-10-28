@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
-import { FileText, FileClock, FileDown, FileSpreadsheet, Home, ChevronRight, Tent, Flag, Inbox, CheckCircle2, CalendarRange } from 'lucide-react'
+import { FileText, FileClock, FileDown, FileSpreadsheet, Home, ChevronRight, Tent, Flag, Inbox, CheckCircle2, CalendarRange, Megaphone } from 'lucide-react'
 import { janaExcelNasional } from '../lib/eksportExcel'
 import { supabase } from '../lib/supabase'
 import { useRealtime } from '../lib/realtime'
@@ -68,6 +68,13 @@ function masaMuatTurun(iso: string) {
 }
 
 const PILIHAN = [
+  {
+    to: 'laporan-insiden',
+    label: 'Laporan Insiden',
+    desc: 'Nilai insiden daripada PKOD dan putuskan sama ada ia bencana.',
+    icon: Megaphone,
+    pkopSahaja: true, // PKOP only (route guarded by RequireRole too)
+  },
   {
     to: 'laporan-awal',
     label: 'Laporan Awal',
@@ -138,6 +145,7 @@ export function Sekretariat() {
   const [dataGraf, setDataGraf] = useState<{ duaJam: TitikGraf[]; harian: TitikGraf[] } | null>(null)
   const [bilCadangan, setBilCadangan] = useState(0)
   const [bilSenyap, setBilSenyap] = useState(0)
+  const [bilInsiden, setBilInsiden] = useState(0)
   // Jana Excel status, shared by all staff: green = a report arrived after the last full download
   const [muatTurunTerakhir, setMuatTurunTerakhir] = useState<{ pada: string; laporanHingga: string | null } | null>(null)
   const [laporanTerakhir, setLaporanTerakhir] = useState<string | null>(null)
@@ -148,17 +156,20 @@ export function Sekretariat() {
   // and open PPS with no report for more than HAD_TIADA_KEMASKINI_JAM hours
   const kiraBadge = useCallback(async () => {
     const had = new Date(Date.now() - HAD_TIADA_KEMASKINI_JAM * 3_600_000).toISOString()
-    const [cadangan, senyap] = await Promise.all([
+    const [cadangan, senyap, insiden] = await Promise.all([
       supabase.from('pps_pusat').select('id', { count: 'exact', head: true }).eq('status', 'cadangan_tutup'),
       supabase
         .from('pps_pusat')
         .select('id', { count: 'exact', head: true })
         .eq('status', 'dibuka')
         .lt('dilapor_pada', had),
+      // Laporan Insiden waiting for a decision (RLS: always 0 for a PKON)
+      supabase.from('laporan_insiden').select('id', { count: 'exact', head: true }).eq('status', 'baharu'),
     ])
     if (cadangan.error || senyap.error) return // keep the last counts
     setBilCadangan(cadangan.count ?? 0)
     setBilSenyap(senyap.count ?? 0)
+    if (!insiden.error) setBilInsiden(insiden.count ?? 0)
   }, [])
 
   useEffect(() => {
@@ -168,7 +179,7 @@ export function Sekretariat() {
     const t = setInterval(kiraBadge, 5 * 60 * 1000)
     return () => clearInterval(t)
   }, [onLanding, kiraBadge])
-  useRealtime('pps-badge', ['pps_pusat'], kiraBadge, { aktif: onLanding })
+  useRealtime('pps-badge', ['pps_pusat', 'laporan_insiden'], kiraBadge, { aktif: onLanding })
 
   const muatStatusExcel = useCallback(async () => {
     // Download status per state: PKOP = national downloads, PKON = their state's
@@ -441,7 +452,7 @@ export function Sekretariat() {
 
       {onLanding && (
         <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {PILIHAN.map(({ to, label, desc, icon: Icon }) => (
+          {PILIHAN.filter((p) => !p.pkopSahaja || profile?.role === 'pkop').map(({ to, label, desc, icon: Icon }) => (
             <Link
               key={to}
               to={to}
@@ -453,6 +464,14 @@ export function Sekretariat() {
               <div>
                 <h2 className="flex items-center gap-2 font-medium text-neutral-900">
                   {label}
+                  {to === 'laporan-insiden' && bilInsiden > 0 && (
+                    <span
+                      title="Laporan insiden menunggu keputusan"
+                      className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-semibold text-white"
+                    >
+                      {bilInsiden}
+                    </span>
+                  )}
                   {to === 'pps' && bilCadangan > 0 && (
                     <span
                       title="Cadangan tutup menunggu tindakan"

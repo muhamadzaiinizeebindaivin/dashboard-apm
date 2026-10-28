@@ -22,6 +22,7 @@ import { Logistik } from './pages/Logistik'
 import { SenaraiSumbangan } from './pages/SenaraiSumbangan'
 import { SenaraiSumbanganNegeri } from './pages/SenaraiSumbanganNegeri'
 import { Admin } from './pages/Admin'
+import { LaporanInsiden } from './pages/LaporanInsiden'
 import { SetPassword } from './pages/SetPassword'
 import { Daftar } from './pages/Daftar'
 import { ProfilSaya } from './pages/ProfilSaya'
@@ -76,6 +77,10 @@ function App() {
               <Route path="hantar-laporan" element={<LaporanAwam dalaman />} />
               <Route element={<Layout />}>
                 <Route path="sekretariat" element={<Sekretariat />}>
+                  {/* PKOP only: a PKON is sent back to /sekretariat */}
+                  <Route element={<RequireRole allow={['pkop']} />}>
+                    <Route path="laporan-insiden" element={<LaporanInsiden />} />
+                  </Route>
                   <Route path="laporan-awal" element={<LaporanAwal />} />
                   <Route path="laporan-semasa" element={<LaporanSemasa />} />
                   <Route path="pps" element={<PengurusanPps />} />

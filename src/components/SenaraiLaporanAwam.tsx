@@ -17,6 +17,8 @@ import {
   Minus,
   Inbox,
   AlertTriangle,
+  Search,
+  Loader2,
 } from 'lucide-react'
 import { DashboardCard } from './DashboardCard'
 import { ConfirmModal } from './ConfirmModal'
@@ -33,6 +35,7 @@ import { SENARAI_KUMPULAN_NEGERI, ahliKumpulan } from '../lib/kumpulanNegeri'
 import { useNegeriTetap } from '../hooks/useNegeriTetap'
 import { janaRekodKejadian } from '../lib/janaRekodKejadian'
 import { useBencanaTamat } from '../lib/bencanaTamat'
+import { useJenisBencana } from '../lib/jenisBencana'
 import { Memuat, PemuatSebaris, SkeletonBaris } from './Memuatkan'
 import { PaparanLampiran } from './PaparanLampiran'
 import { ambilLampiranLaporan } from '../lib/lampiranPaparan'
@@ -45,6 +48,45 @@ type SenaraiLaporanAwamProps = {
 
 // Reports per batch ("Muat lagi" loads the next one)
 const SAIZ_KUMPULAN = 50
+
+// Filters other than Negeri (applied on the server: list, count, "Muat lagi" and PDF)
+type Tapisan = {
+  cari: string
+  jenisBencana: string
+  dari: string // YYYY-MM-DD, date received
+  hingga: string
+  pengesahan: '' | 'disahkan' | 'belum'
+  ringkasanStatus: '' | 'ada_perubahan' | 'tiada_perubahan' // Laporan Semasa only
+}
+const TAPISAN_KOSONG: Tapisan = {
+  cari: '',
+  jenisBencana: '',
+  dari: '',
+  hingga: '',
+  pengesahan: '',
+  ringkasanStatus: '',
+}
+
+const kelasPilih =
+  'h-9 rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-700 outline-none focus:border-emerald-600'
+
+// Characters with a meaning in PostgREST's or() / ilike syntax are replaced by spaces
+const bersihCari = (s: string) => s.replace(/[%,()*\\:"_]/g, ' ').trim()
+
+// Does a report (e.g. one arriving by realtime) match the active filters?
+function padanTapisan(r: LaporanBencanaRow, negeri: string, t: Tapisan) {
+  if (negeri && !ahliKumpulan(negeri).includes(r.negeri ?? '')) return false
+  if (t.jenisBencana && r.jenis_bencana !== t.jenisBencana) return false
+  const diterima = new Date(r.created_at).getTime()
+  if (t.dari && diterima < new Date(`${t.dari}T00:00:00`).getTime()) return false
+  if (t.hingga && diterima > new Date(`${t.hingga}T23:59:59.999`).getTime()) return false
+  if (t.pengesahan === 'disahkan' && !r.perhatian_nama) return false
+  if (t.pengesahan === 'belum' && r.perhatian_nama) return false
+  if (t.ringkasanStatus && r.ringkasan_status !== t.ringkasanStatus) return false
+  const c = bersihCari(t.cari).toLowerCase()
+  if (c && ![r.nama_bencana, r.daerah, r.penyedia_nama].some((v) => (v ?? '').toLowerCase().includes(c))) return false
+  return true
+}
 
 function formatNilai(def: FieldDef, v: string | null) {
   if (!v) return '—'
@@ -108,6 +150,9 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
   // Other Excel sheets stored with each Laporan Semasa (loaded on expand)
   const [lampiranMap, setLampiranMap] = useState<Record<string, DataLampiran>>({})
   const [tapisNegeri, setTapisNegeri] = useState('')
+  const [tapisan, setTapisan] = useState<Tapisan>(TAPISAN_KOSONG)
+  const [cariInput, setCariInput] = useState('') // typed text, applied after a short pause
+  const senaraiJenis = useJenisBencana()
   const negeriTetap = useNegeriTetap()
   const [pendingDelete, setPendingDelete] = useState<LaporanBencanaRow | null>(null)
   const [sahkanId, setSahkanId] = useState<string | null>(null)
@@ -118,26 +163,67 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
   const [deleteError, setDeleteError] = useState('')
   const [fadingId, setFadingId] = useState<string | null>(null)
   const [toast, setToast] = useState<ToastState>(null)
+  // Laporan Awal: id of the report whose PDF is being generated
+  const [menjanaSatu, setMenjanaSatu] = useState<string | null>(null)
   const namaTamat = new Set(useBencanaTamat().map((t) => t.nama_bencana))
 
   // Answers that arrive after the filter changed are ignored
   const permintaan = useRef(0)
 
-  // Same type + negeri filter for the list, "Muat lagi" and the PDF
-  const asas = useCallback(() => {
-    const q = supabase.from('laporan_bencana').select('*').eq('jenis_laporan', jenis)
-    // "Wilayah Persekutuan" = KL, Putrajaya and Labuan
-    return tapisNegeri ? q.in('negeri', ahliKumpulan(tapisNegeri)) : q
-  }, [jenis, tapisNegeri])
+  // Search: applied after a short pause in typing
+  useEffect(() => {
+    const t = setTimeout(
+      () => setTapisan((f) => (f.cari === cariInput.trim() ? f : { ...f, cari: cariInput.trim() })),
+      300,
+    )
+    return () => clearTimeout(t)
+  }, [cariInput])
+
+  const adaTapisan = !!(
+    (!negeriTetap && tapisNegeri) ||
+    cariInput ||
+    tapisan.cari ||
+    tapisan.jenisBencana ||
+    tapisan.dari ||
+    tapisan.hingga ||
+    tapisan.pengesahan ||
+    tapisan.ringkasanStatus
+  )
+
+  // All filters, added to any laporan_bencana query (list, count, "Muat lagi", PDF)
+  const terapkan = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (q: any) => {
+      // "Wilayah Persekutuan" = KL, Putrajaya and Labuan
+      if (tapisNegeri) q = q.in('negeri', ahliKumpulan(tapisNegeri))
+      if (tapisan.jenisBencana) q = q.eq('jenis_bencana', tapisan.jenisBencana)
+      if (tapisan.dari) q = q.gte('created_at', new Date(`${tapisan.dari}T00:00:00`).toISOString())
+      if (tapisan.hingga) q = q.lte('created_at', new Date(`${tapisan.hingga}T23:59:59.999`).toISOString())
+      if (tapisan.pengesahan === 'disahkan') q = q.not('perhatian_nama', 'is', null)
+      if (tapisan.pengesahan === 'belum') q = q.is('perhatian_nama', null)
+      if (jenis === 'semasa' && tapisan.ringkasanStatus) q = q.eq('ringkasan_status', tapisan.ringkasanStatus)
+      const c = bersihCari(tapisan.cari)
+      if (c) q = q.or(`nama_bencana.ilike.%${c}%,daerah.ilike.%${c}%,penyedia_nama.ilike.%${c}%`)
+      return q
+    },
+    [jenis, tapisNegeri, tapisan],
+  )
+
+  // Same type + filters for the list, "Muat lagi" and the PDF
+  const asas = useCallback(
+    () => terapkan(supabase.from('laporan_bencana').select('*').eq('jenis_laporan', jenis)),
+    [jenis, terapkan],
+  )
 
   const kiraJumlah = useCallback(async () => {
     const id = permintaan.current
-    let q = supabase.from('laporan_bencana').select('id', { count: 'exact', head: true }).eq('jenis_laporan', jenis)
-    if (tapisNegeri) q = q.in('negeri', ahliKumpulan(tapisNegeri))
+    const q = terapkan(
+      supabase.from('laporan_bencana').select('id', { count: 'exact', head: true }).eq('jenis_laporan', jenis),
+    )
     const { count, error } = await q
     if (id !== permintaan.current) return
     if (!error && count !== null) setJumlah(count)
-  }, [jenis, tapisNegeri])
+  }, [jenis, terapkan])
 
   // First batch: on opening the page and whenever the filter changes
   const muatPertama = useCallback(async () => {
@@ -192,9 +278,11 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
 
   // Latest filter and counter for the realtime handlers (subscribed once per type)
   const tapisRef = useRef(tapisNegeri)
+  const tapisanRef = useRef(tapisan)
   const kiraRef = useRef(kiraJumlah)
   useEffect(() => {
     tapisRef.current = tapisNegeri
+    tapisanRef.current = tapisan
     kiraRef.current = kiraJumlah
   })
 
@@ -208,21 +296,17 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
           const baru = payload.new as LaporanBencanaRow
           setToast({ type: 'success', message: 'Laporan baru diterima.' })
           kiraRef.current()
-          // Added to the list only if it matches the negeri filter
-          if (tapisRef.current && baru.negeri !== tapisRef.current) return
+          // Added to the list only if it matches the active filters
+          if (!padanTapisan(baru, tapisRef.current, tapisanRef.current)) return
           setRows((prev) => (prev.some((r) => r.id === baru.id) ? prev : [baru, ...prev]))
         },
       )
-      .on(
-        'postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'laporan_bencana' },
-        (payload) => {
-          const id = (payload.old as { id?: string }).id
-          if (!id) return
-          setRows((prev) => prev.filter((r) => r.id !== id))
-          kiraRef.current()
-        },
-      )
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'laporan_bencana' }, (payload) => {
+        const id = (payload.old as { id?: string }).id
+        if (!id) return
+        setRows((prev) => prev.filter((r) => r.id !== id))
+        kiraRef.current()
+      })
       .subscribe()
 
     return () => {
@@ -244,6 +328,19 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
       setToast({ type: 'error', message: 'Gagal menjana PDF. Sila cuba lagi.' })
     } finally {
       setMenjanaPdf(false)
+    }
+  }
+
+  // Laporan Awal: one report as a PDF in the NDCC Appendix B-1 layout (module loaded on first use)
+  async function janaPdfSatu(row: LaporanBencanaRow) {
+    setMenjanaSatu(row.id)
+    try {
+      const { janaLaporanAwalPdf } = await import('../lib/janaLaporanAwalPdf')
+      await janaLaporanAwalPdf(row)
+    } catch {
+      setToast({ type: 'error', message: 'Gagal menjana PDF. Sila cuba lagi.' })
+    } finally {
+      setMenjanaSatu(null)
     }
   }
 
@@ -440,21 +537,6 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {/* PKON: no state choice, the database only returns their state */}
-            {!negeriTetap && (
-              <select
-                value={tapisNegeri}
-                onChange={(e) => setTapisNegeri(e.target.value)}
-                className="h-9 rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-700 outline-none focus:border-emerald-600"
-              >
-                <option value="">Semua negeri</option>
-                {SENARAI_KUMPULAN_NEGERI.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-            )}
             <button
               onClick={handleJanaPdf}
               disabled={menjanaPdf || loading || rows.length === 0}
@@ -464,6 +546,111 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
               {menjanaPdf ? 'Menjana...' : 'Jana PDF'}
             </button>
           </div>
+        </div>
+
+        {/* Filters: server-side, also used by "Muat lagi" and Jana PDF */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100 py-3">
+          <div className="relative">
+            <Search
+              size={15}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400"
+            />
+            <input
+              type="search"
+              value={cariInput}
+              onChange={(e) => setCariInput(e.target.value)}
+              placeholder="Cari laporan..."
+              aria-label="Cari nama bencana, daerah atau penyedia"
+              className={`${kelasPilih} w-48 pl-9`}
+            />
+          </div>
+          {/* PKON: no state choice, the database only returns their state */}
+          {!negeriTetap && (
+            <select
+              value={tapisNegeri}
+              onChange={(e) => setTapisNegeri(e.target.value)}
+              aria-label="Negeri"
+              className={kelasPilih}
+            >
+              <option value="">Semua negeri</option>
+              {SENARAI_KUMPULAN_NEGERI.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          )}
+          <select
+            value={tapisan.jenisBencana}
+            onChange={(e) => setTapisan((f) => ({ ...f, jenisBencana: e.target.value }))}
+            aria-label="Jenis bencana"
+            className={kelasPilih}
+          >
+            <option value="">Semua jenis bencana</option>
+            {senaraiJenis.map((j) => (
+              <option key={j.key} value={j.label}>
+                {j.label}
+              </option>
+            ))}
+          </select>
+          <select
+            value={tapisan.pengesahan}
+            onChange={(e) => setTapisan((f) => ({ ...f, pengesahan: e.target.value as Tapisan['pengesahan'] }))}
+            aria-label="Pengesahan"
+            className={kelasPilih}
+          >
+            <option value="">Semua pengesahan</option>
+            <option value="disahkan">Disahkan</option>
+            <option value="belum">Belum Disahkan</option>
+          </select>
+          {jenis === 'semasa' && (
+            <select
+              value={tapisan.ringkasanStatus}
+              onChange={(e) =>
+                setTapisan((f) => ({ ...f, ringkasanStatus: e.target.value as Tapisan['ringkasanStatus'] }))
+              }
+              aria-label="Status laporan"
+              className={kelasPilih}
+            >
+              <option value="">Semua status laporan</option>
+              <option value="ada_perubahan">Ada Perubahan</option>
+              <option value="tiada_perubahan">Tiada Perubahan</option>
+            </select>
+          )}
+          <div className="flex items-center gap-1.5">
+            <input
+              type="date"
+              value={tapisan.dari}
+              max={tapisan.hingga || undefined}
+              onChange={(e) => setTapisan((f) => ({ ...f, dari: e.target.value }))}
+              title="Diterima dari tarikh"
+              aria-label="Diterima dari tarikh"
+              className={`${kelasPilih} px-2`}
+            />
+            <span className="text-sm text-neutral-400">–</span>
+            <input
+              type="date"
+              value={tapisan.hingga}
+              min={tapisan.dari || undefined}
+              onChange={(e) => setTapisan((f) => ({ ...f, hingga: e.target.value }))}
+              title="Diterima hingga tarikh"
+              aria-label="Diterima hingga tarikh"
+              className={`${kelasPilih} px-2`}
+            />
+          </div>
+          {adaTapisan && (
+            <button
+              type="button"
+              onClick={() => {
+                setCariInput('')
+                setTapisan(TAPISAN_KOSONG)
+                if (!negeriTetap) setTapisNegeri('')
+              }}
+              className="text-sm font-medium text-neutral-500 hover:text-emerald-700"
+            >
+              Kosongkan tapisan
+            </button>
+          )}
         </div>
 
         {loading ? (
@@ -487,7 +674,7 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
           <div className="mt-6 flex flex-col items-center gap-2 py-8 text-center">
             <Inbox size={28} className="text-neutral-300" />
             <p className="text-sm text-neutral-400">
-              {tapisNegeri ? 'Tiada laporan untuk negeri ini.' : 'Tiada laporan diterima lagi.'}
+              {adaTapisan ? 'Tiada laporan yang sepadan dengan tapisan.' : 'Tiada laporan diterima lagi.'}
             </p>
           </div>
         ) : (
@@ -504,7 +691,8 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
                       fadingId === row.id ? 'opacity-0' : 'opacity-100'
                     }`}
                   >
-                    <div className="flex items-center gap-3 p-4">
+                    {/* Phone: badge / button and delete wrap to their own line under the text */}
+                    <div className="flex flex-wrap items-center gap-3 p-4 sm:flex-nowrap">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800">
                         <FileText size={18} />
                       </div>
@@ -541,31 +729,52 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
                         />
                       </button>
 
-                      {row.perhatian_nama ? (
-                        <span className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">
-                          <CheckCircle2 size={12} />
-                          Disahkan
-                        </span>
-                      ) : (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            bukaSahkan(row)
-                          }}
-                          className="flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-200"
-                        >
-                          <Clock3 size={12} />
-                          Belum Disahkan
-                        </button>
-                      )}
+                      <div className="flex w-full items-center justify-between gap-2 pl-[52px] sm:w-auto sm:justify-end sm:pl-0">
+                        {jenis === 'awal' ? (
+                          // Laporan Awal is verified on sending: the PDF replaces the status here
+                          // (older unverified reports can still be verified in the expanded view)
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              janaPdfSatu(row)
+                            }}
+                            disabled={menjanaSatu === row.id}
+                            className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-200 disabled:opacity-60"
+                          >
+                            {menjanaSatu === row.id ? (
+                              <Loader2 size={12} className="animate-spin" />
+                            ) : (
+                              <FileDown size={12} />
+                            )}
+                            {menjanaSatu === row.id ? 'Menjana...' : 'Jana PDF'}
+                          </button>
+                        ) : row.perhatian_nama ? (
+                          <span className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                            <CheckCircle2 size={12} />
+                            Disahkan
+                          </span>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              bukaSahkan(row)
+                            }}
+                            className="flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-200"
+                          >
+                            <Clock3 size={12} />
+                            Belum Disahkan
+                          </button>
+                        )}
 
-                      <button
-                        onClick={() => setPendingDelete(row)}
-                        title="Padam"
-                        className="shrink-0 rounded-lg border border-transparent p-2 text-neutral-400 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
-                      >
-                        <Trash2 size={15} />
-                      </button>
+                        <button
+                          onClick={() => setPendingDelete(row)}
+                          title="Padam"
+                          aria-label="Padam"
+                          className="shrink-0 rounded-lg border border-transparent p-2 text-neutral-400 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
                     </div>
 
                     {buka && jenis === 'semasa' && (
@@ -577,7 +786,11 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
                           </p>
                         )}
 
-                        <Bahagian tajuk="Maklumat Bencana" fields={[...SEMASA_MAKLUMAT_FIELDS, TARIKH_MASA_FIELD]} row={row} />
+                        <Bahagian
+                          tajuk="Maklumat Bencana"
+                          fields={[...SEMASA_MAKLUMAT_FIELDS, TARIKH_MASA_FIELD]}
+                          row={row}
+                        />
                         {row.kandungan && (
                           <Bahagian
                             tajuk="Ringkasan Laporan"
@@ -590,9 +803,12 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
                           <Seksyen tajuk="Trend">
                             {(() => {
                               const t = TREND_LABEL[row.trend] ?? TREND_LABEL.kekal
-                              const Ikon = row.trend === 'naik' ? TrendingUp : row.trend === 'turun' ? TrendingDown : Minus
+                              const Ikon =
+                                row.trend === 'naik' ? TrendingUp : row.trend === 'turun' ? TrendingDown : Minus
                               return (
-                                <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${t.className}`}>
+                                <span
+                                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${t.className}`}
+                                >
                                   <Ikon size={12} />
                                   {t.label}
                                 </span>
@@ -622,7 +838,10 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
                             ) : (
                               <div className="space-y-2">
                                 {ppsMap[row.id].map((p) => (
-                                  <div key={p.id} className="rounded-lg border border-white/60 bg-white/50 p-3 text-sm backdrop-blur-sm">
+                                  <div
+                                    key={p.id}
+                                    className="rounded-lg border border-white/60 bg-white/50 p-3 text-sm backdrop-blur-sm"
+                                  >
                                     <p className="whitespace-pre-wrap font-medium text-neutral-800">
                                       {p.pps} <span className="text-xs text-neutral-400">({p.zon})</span>
                                     </p>
