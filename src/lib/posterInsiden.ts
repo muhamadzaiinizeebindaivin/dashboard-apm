@@ -9,6 +9,7 @@ export type DataPoster = {
   tempat: string
   daerah: string
   negeri: string
+  sumber_laporan?: string // printed as "SUMBER: ..." above the footer
 }
 
 const W = 1240
@@ -380,6 +381,23 @@ export async function lukisPosterInsiden(data: DataPoster): Promise<HTMLCanvasEl
   bingkai(ctx, y3, 250, BIRU, 'LOKASI', (cx, cy) => ikonPin(ctx, cx, cy))
   baris(ctx, y3 + 120, 'Lokasi', data.tempat.toUpperCase(), (cx, cy) => ikonPin(ctx, cx, cy, BIRU_GELAP, 0.55))
   baris(ctx, y3 + 195, 'Daerah / Negeri', `${data.daerah.toUpperCase()} / ${data.negeri.toUpperCase()}`)
+
+  // --- Source of the report (required on every poster) ---
+  if (data.sumber_laporan?.trim()) {
+    ctx.save()
+    ctx.fillStyle = TEKS
+    ctx.textAlign = 'right'
+    ctx.textBaseline = 'alphabetic'
+    let saizSumber = 28
+    const teksSumber = `SUMBER: ${data.sumber_laporan.trim().toUpperCase()}`
+    ctx.font = `bold ${saizSumber}px ${FON}`
+    while (ctx.measureText(teksSumber).width > W - 160 && saizSumber > 18) {
+      saizSumber -= 2
+      ctx.font = `bold ${saizSumber}px ${FON}`
+    }
+    ctx.fillText(teksSumber, W - 80, 1496)
+    ctx.restore()
+  }
 
   // --- Stripes above the footer ---
   serong(ctx, -40, 1505, 330, 22, 40, OREN)
