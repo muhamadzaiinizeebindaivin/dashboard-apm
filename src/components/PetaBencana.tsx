@@ -5,6 +5,8 @@ import { LapisanAsasPeta } from './LapisanAsasPeta'
 import L from 'leaflet'
 import { Construction } from 'lucide-react'
 import 'leaflet/dist/leaflet.css'
+import 'leaflet.markercluster/dist/MarkerCluster.css'
+import MarkerClusterGroup from 'react-leaflet-cluster'
 import { NEGERI_PUSAT } from '../lib/negeriVisual'
 import { formatTarikh, ikonKategori, nomborRingkas, warnaSelamat } from '../lib/titikBencana'
 import { TREND_LABEL } from '../lib/laporanBencana'
@@ -95,6 +97,34 @@ function ikonTitik(k?: KategoriBencana, bil?: number): L.DivIcon {
   })
   cacheIkon.set(kunci, ikon)
   return ikon
+}
+
+// Lets each bencana marker carry its victim count, so a cluster bubble can sum it
+declare module 'leaflet' {
+  interface MarkerOptions {
+    mangsa?: number
+  }
+}
+
+// Cluster bubble (zoomed out): neutral circle with the number of bencana,
+// plus the group's total victims as a small badge (same style as single markers)
+// Only what we use from the cluster object (avoids depending on @types/leaflet.markercluster)
+type Kelompok = { getChildCount(): number; getAllChildMarkers(): L.Marker[] }
+
+function ikonKelompok(kelompok: Kelompok): L.DivIcon {
+  const bil = kelompok.getChildCount()
+  const mangsa = kelompok.getAllChildMarkers().reduce((s, m) => s + (m.options.mangsa ?? 0), 0)
+  const saiz = bil < 10 ? 36 : bil < 50 ? 42 : 48
+  const htmlLencana =
+    mangsa > 0
+      ? `<span style="position:absolute;top:-8px;right:-12px;min-width:20px;height:18px;padding:0 5px;border-radius:9999px;background:#111827;color:#fff;border:2px solid #fff;font:700 10px/14px system-ui,sans-serif;text-align:center;box-shadow:0 1px 4px rgba(15,23,42,.35)">${nomborRingkas(mangsa)}</span>`
+      : ''
+  return L.divIcon({
+    className: '',
+    html: `<div style="position:relative;display:flex;align-items:center;justify-content:center;width:${saiz}px;height:${saiz}px;border-radius:9999px;background:#475569;border:3px solid #fff;box-shadow:0 0 0 5px rgba(71,85,105,.25),0 2px 8px rgba(15,23,42,.35);color:#fff;font:700 13px/1 system-ui,sans-serif">${bil}${htmlLencana}</div>`,
+    iconSize: [saiz, saiz],
+    iconAnchor: [saiz / 2, saiz / 2],
+  })
 }
 
 function Fokus({ negeri }: { negeri: string }) {
@@ -360,18 +390,33 @@ export function PetaBencana({
           </Marker>
         ))}
 
-      {lapisan.titik &&
-        titik.map((t) => (
-          <Marker
-            key={t.id}
-            position={[t.latitude, t.longitude]}
-            icon={ikonTitik(kategori[t.kategori], terkini[t.id]?.mangsa ?? t.jumlah_mangsa ?? undefined)}
-          >
-            <Popup>
-              <KandunganPopupTitik t={t} k={kategori[t.kategori]} terkini={terkini[t.id]} onTindakan={onTindakan} />
-            </Popup>
-          </Marker>
-        ))}
+      {lapisan.titik && (
+        <MarkerClusterGroup
+          chunkedLoading
+          iconCreateFunction={ikonKelompok}
+          // Group widely when zoomed out; at district level only near-identical points still merge
+          maxClusterRadius={(zoom: number) => (zoom >= 11 ? 25 : 60)}
+          showCoverageOnHover={false}
+          spiderfyOnMaxZoom
+        >
+          {titik.map((t) => {
+            const mangsa = terkini[t.id]?.mangsa ?? t.jumlah_mangsa ?? undefined
+            return (
+              // mangsa in the key: remounts the marker when the figure changes, so the cluster total refreshes
+              <Marker
+                key={`${t.id}-${mangsa ?? 0}`}
+                position={[t.latitude, t.longitude]}
+                icon={ikonTitik(kategori[t.kategori], mangsa)}
+                mangsa={mangsa ?? 0}
+              >
+                <Popup>
+                  <KandunganPopupTitik t={t} k={kategori[t.kategori]} terkini={terkini[t.id]} onTindakan={onTindakan} />
+                </Popup>
+              </Marker>
+            )
+          })}
+        </MarkerClusterGroup>
+      )}
     </MapContainer>
   )
 }

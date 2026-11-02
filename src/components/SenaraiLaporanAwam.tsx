@@ -19,6 +19,7 @@ import {
   AlertTriangle,
   Search,
   Loader2,
+  ImageDown,
 } from 'lucide-react'
 import { DashboardCard } from './DashboardCard'
 import { ConfirmModal } from './ConfirmModal'
@@ -40,6 +41,7 @@ import { Memuat, PemuatSebaris, SkeletonBaris } from './Memuatkan'
 import { PaparanLampiran } from './PaparanLampiran'
 import { ambilLampiranLaporan } from '../lib/lampiranPaparan'
 import type { DataLampiran } from '../lib/bacaLampiranSemasa'
+import { PosterSemasaModal } from './PosterSemasaModal'
 
 type SenaraiLaporanAwamProps = {
   jenis: 'awal' | 'semasa'
@@ -165,6 +167,8 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
   const [toast, setToast] = useState<ToastState>(null)
   // Laporan Awal: id of the report whose PDF is being generated
   const [menjanaSatu, setMenjanaSatu] = useState<string | null>(null)
+  // Laporan Semasa: report whose "Maklumat Semasa Insiden" poster is open
+  const [posterSemasa, setPosterSemasa] = useState<LaporanBencanaRow | null>(null)
   const namaTamat = new Set(useBencanaTamat().map((t) => t.nama_bencana))
 
   // Answers that arrive after the filter changed are ignored
@@ -766,6 +770,20 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
                           </button>
                         )}
 
+                        {jenis === 'semasa' && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setPosterSemasa(row)
+                            }}
+                            title="Poster Maklumat Semasa"
+                            className="flex shrink-0 items-center gap-1 rounded-full bg-sky-100 px-2.5 py-1 text-xs font-medium text-sky-700 transition-colors hover:bg-sky-200"
+                          >
+                            <ImageDown size={12} />
+                            Poster
+                          </button>
+                        )}
+
                         <button
                           onClick={() => setPendingDelete(row)}
                           title="Padam"
@@ -966,6 +984,17 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
           </div>
         </div>
       )}
+
+      <PosterSemasaModal
+        laporan={posterSemasa}
+        onClose={() => setPosterSemasa(null)}
+        onEmelDihantar={(id, bil) => {
+          const kini = new Date().toISOString()
+          setRows((prev) => prev.map((r) => (r.id === id ? { ...r, emel_dihantar_pada: kini } : r)))
+          setPosterSemasa(null)
+          setToast({ type: 'success', message: `Emel Maklumat Semasa dihantar kepada ${bil} akaun PKON.` })
+        }}
+      />
 
       <Toast toast={toast} onDismiss={() => setToast(null)} />
     </div>
