@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Home,
   ChevronRight,
@@ -86,9 +86,10 @@ type KadPpsProps = {
   kini: number
   onTindakan: (pps: PpsPusat, jenis: Tindakan) => void
   onKemaskini: (pps: PpsPusat) => void
+  sorot?: boolean // opened from the Laman Utama: highlighted for a few seconds
 }
 
-function KadPps({ pps, kini, onTindakan, onKemaskini }: KadPpsProps) {
+function KadPps({ pps, kini, onTindakan, onKemaskini, sorot = false }: KadPpsProps) {
   const status = STATUS_PPS[pps.status]
   const gaya = GAYA_KAD[pps.status]
   const adaLokasi = pps.latitude != null && pps.longitude != null
@@ -103,7 +104,10 @@ function KadPps({ pps, kini, onTindakan, onKemaskini }: KadPpsProps) {
 
   return (
     <div
-      className={`rounded-2xl border p-5 shadow-[0_8px_30px_rgba(15,23,42,0.06)] backdrop-blur-md transition-colors ${gaya.kad}`}
+      id={`pps-${pps.id}`}
+      className={`scroll-mt-24 rounded-2xl border p-5 shadow-[0_8px_30px_rgba(15,23,42,0.06)] backdrop-blur-md transition-all ${gaya.kad} ${
+        sorot ? 'ring-2 ring-emerald-500 ring-offset-2' : ''
+      }`}
     >
       {/* Identity */}
       <div className="flex items-start justify-between gap-3">
@@ -311,6 +315,33 @@ export function PengurusanPps() {
     muat()
   }, [muat])
   useRealtime('pps-pusat-urus', ['pps_pusat'], muat)
+
+  // "Buka" from the Laman Utama: /sekretariat/pps?id=<pps id>
+  const [searchParams, setSearchParams] = useSearchParams()
+  const idDariLaman = searchParams.get('id')
+  const [sorot, setSorot] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!idDariLaman || loading) return
+    setSearchParams({}, { replace: true }) // one-shot: a refresh doesn't jump again
+    const pps = senarai.find((p) => p.id === idDariLaman)
+    if (!pps) {
+      setToast({ type: 'error', message: 'PPS tidak dijumpai.' })
+      return
+    }
+    setCarian('')
+    setTapisNegeri('')
+    setTapisBencana('')
+    setTapisStatus(pps.status === 'ditutup' ? 'semua' : 'aktif')
+    setSorot(pps.id)
+  }, [idDariLaman, loading, senarai, setSearchParams])
+
+  useEffect(() => {
+    if (!sorot) return
+    document.getElementById(`pps-${sorot}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    const t = setTimeout(() => setSorot(null), 4000)
+    return () => clearTimeout(t)
+  }, [sorot])
 
   const bilDibuka = senarai.filter((p) => p.status === 'dibuka').length
   const bilCadangan = senarai.filter((p) => p.status === 'cadangan_tutup').length
@@ -524,7 +555,7 @@ export function PengurusanPps() {
                 {perluTindakan.map((p) => (
                   <div key={p.id}>
                     <p className="mb-1 text-xs font-medium text-neutral-500">{p.nama_bencana}</p>
-                    <KadPps pps={p} kini={kini} onTindakan={bukaTindakan} onKemaskini={setDisunting} />
+                    <KadPps pps={p} kini={kini} onTindakan={bukaTindakan} onKemaskini={setDisunting} sorot={sorot === p.id} />
                   </div>
                 ))}
               </div>
@@ -542,7 +573,7 @@ export function PengurusanPps() {
               </h2>
               <div className="grid gap-3 lg:grid-cols-2">
                 {arr.map((p) => (
-                  <KadPps key={p.id} pps={p} kini={kini} onTindakan={bukaTindakan} onKemaskini={setDisunting} />
+                  <KadPps key={p.id} pps={p} kini={kini} onTindakan={bukaTindakan} onKemaskini={setDisunting} sorot={sorot === p.id} />
                 ))}
               </div>
             </div>

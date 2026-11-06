@@ -9,6 +9,7 @@ import { AppShell } from '../components/AppShell'
 import { DokumenAwamCard } from '../components/DokumenAwamCard'
 import { AmaranBanner } from '../components/AmaranBanner'
 import { PapanUtama } from '../components/PapanUtama'
+import { SenaraiPpsAwam } from '../components/SenaraiPpsAwam'
 import { useAuth } from '../hooks/useAuth'
 import apmLogo from '../assets/apm-logo.png'
 
@@ -53,6 +54,10 @@ function KandunganAwam() {
       {/* Situation at a glance: map (display only) + figures */}
       <div className="mt-8 text-left">
         <PapanUtama />
+      </div>
+
+      <div className="mt-6 text-left">
+        <SenaraiPpsAwam />
       </div>
 
       <div className="mx-auto mt-10 max-w-5xl text-left">
@@ -101,6 +106,10 @@ function KandunganLogMasuk() {
       {/* Situation at a glance: map (display only, editing stays in the Bencana tab) + figures */}
       <div className="mt-6">
         <PapanUtama />
+      </div>
+
+      <div className="mt-6">
+        <SenaraiPpsAwam dalaman />
       </div>
 
       <div className="mt-8">
