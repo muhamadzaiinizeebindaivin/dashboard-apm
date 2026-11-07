@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { Loader2 } from 'lucide-react'
-import apmLogo from '../assets/apm-logo.png'
+import logoBo from '../assets/logo-bo.png'
 
 // ---------------------------------------------------------------------------
 // Shared loading primitives. Rules:
@@ -61,7 +61,7 @@ export function PemuatHalaman({ latar = false, penuh = true }: PemuatHalamanProp
       }`}
     >
       <Memuat label="Memuatkan halaman" className="flex flex-col items-center gap-4">
-        <img src={apmLogo} alt="" className="h-14 w-14 object-contain" />
+        <img src={logoBo} alt="" className="h-14 w-14 object-contain" />
         <div className="h-1 w-40 overflow-hidden rounded-full bg-neutral-200/80">
           <span className="pemuat-bar block h-full w-1/3 rounded-full bg-emerald-600" />
         </div>

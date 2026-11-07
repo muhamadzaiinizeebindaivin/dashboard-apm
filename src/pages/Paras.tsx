@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft } from 'lucide-react'
-import apmLogo from '../assets/apm-logo.png'
+import { LogoLaman } from '../components/LogoLaman'
 import { NEGERI_FLAG } from '../lib/negeriVisual'
 import { SENARAI_KUMPULAN_NEGERI } from '../lib/kumpulanNegeri'
 
@@ -21,7 +21,7 @@ export function Paras() {
       <div className="relative mx-auto max-w-4xl">
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/60 bg-white/40 px-5 py-4 shadow-lg backdrop-blur-md">
           <div className="flex items-center gap-3">
-            <img src={apmLogo} alt="Logo APM" className="h-11 w-11 object-contain" />
+            <LogoLaman className="h-11 w-11" />
             <div>
               <h1 className="text-base font-semibold text-neutral-900 sm:text-xl">Pasukan Respon Sokongan Bencana</h1>
               <p className="text-xs text-neutral-600">Pilih negeri untuk mula menjejak</p>

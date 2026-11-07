@@ -3,7 +3,7 @@ import { X, ArrowLeft } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { LoginForm } from './LoginForm'
 import { AccessCodeForm } from './AccessCodeForm'
-import apmLogo from '../assets/apm-logo.png'
+import logoBo from '../assets/logo-bo.png'
 
 export type PautanAwam = { page: string; to: string; label: string; withPetugas?: boolean }
 
@@ -58,7 +58,7 @@ export function LoginModal({ open, onClose, onSuccess, pending, setPending }: Lo
 
             <div className="mb-6 flex flex-col items-center">
               <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-emerald-50 to-sky-50 shadow-inner">
-                <img src={apmLogo} alt="Logo APM" className="h-14 w-14 object-contain" />
+                <img src={logoBo} alt="Logo BO" className="h-14 w-14 object-contain" />
               </div>
               <h2 className="mt-4 text-center text-sm font-semibold leading-snug text-neutral-900">
                 APM Bahagian Pengurusan

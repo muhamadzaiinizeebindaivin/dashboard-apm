@@ -1,11 +1,13 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { DashboardCard } from '../components/DashboardCard'
 import { SumbanganForm } from '../components/SumbanganForm'
-import apmLogo from '../assets/apm-logo.png'
+import { LogoLaman } from '../components/LogoLaman'
 
 export function Sumbangan() {
   const navigate = useNavigate()
+  const [adaDraf, setAdaDraf] = useState(false)
 
   return (
     <div className="relative min-h-[100dvh] overflow-hidden bg-gradient-to-br from-sky-100 via-sky-50 to-white px-4 py-10">
@@ -16,7 +18,10 @@ export function Sumbangan() {
       <div className="relative mx-auto max-w-xl">
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/60 bg-white/40 px-5 py-4 shadow-lg backdrop-blur-md">
           <div className="flex items-center gap-3">
-            <img src={apmLogo} alt="Logo APM" className="h-10 w-10 object-contain" />
+            <LogoLaman
+              className="h-10 w-10"
+              amaran={adaDraf ? 'Borang sumbangan belum dihantar. Maklumat yang telah diisi akan hilang.' : undefined}
+            />
             <h1 className="text-xl font-semibold text-neutral-900">Sumbangan</h1>
           </div>
 
@@ -30,7 +35,7 @@ export function Sumbangan() {
         </div>
 
         <DashboardCard className="mt-6">
-          <SumbanganForm />
+          <SumbanganForm onDrafChange={setAdaDraf} />
         </DashboardCard>
       </div>
     </div>

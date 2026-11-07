@@ -28,6 +28,10 @@ import { useNegeriTetap } from '../hooks/useNegeriTetap'
 // Logistik is kept per state: one document per state + that state's vehicles.
 // PKON: only their state (enforced by the database). PKOP: every state, with a filter.
 
+// "Rekod logistik" document upload, hidden for now (logistics data is entered manually).
+// Set to true to bring the card back; the table and bucket are kept in Supabase.
+const DOKUMEN_LOGISTIK_AKTIF: boolean = false
+
 type DokumenRow = {
   id: string
   file_name: string
@@ -37,7 +41,7 @@ type DokumenRow = {
 }
 
 const selectNegeriClass =
-  'h-9 rounded-full border border-white/60 bg-white/60 px-3 text-sm text-neutral-700 outline-none backdrop-blur-md focus:border-emerald-600'
+  'h-8 rounded-full border border-white/60 bg-white/60 px-3 text-xs font-medium text-neutral-700 outline-none backdrop-blur-md focus:border-emerald-600'
 
 export function Logistik() {
   const negeriTetap = useNegeriTetap()
@@ -123,6 +127,7 @@ export function Logistik() {
 
   // One document per state: reload when the state changes
   useEffect(() => {
+    if (!DOKUMEN_LOGISTIK_AKTIF) return
     muatSemulaDokumen()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [negeriAktif])
@@ -269,23 +274,10 @@ export function Logistik() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* PKOP: choose the state; a PKON is fixed to theirs */}
-          {!negeriTetap && (
-            <select value={tapisNegeri} onChange={(e) => setTapisNegeri(e.target.value)} className={selectNegeriClass}>
-              <option value="">Semua negeri</option>
-              {SENARAI_KUMPULAN_NEGERI.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-          )}
           <motion.button
             whileTap={{ scale: 0.97 }}
             onClick={() => setModalKenderaanOpen(true)}
-            disabled={!negeriAktif}
-            title={negeriAktif ? undefined : 'Pilih negeri dahulu untuk menambah kenderaan'}
-            className="flex items-center gap-1.5 rounded-full bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-full bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
           >
             <Plus size={16} />
             Tambah Kenderaan
@@ -316,7 +308,8 @@ export function Logistik() {
         )}
       </AnimatePresence>
 
-      {/* Rekod logistik (dokumen) — on top */}
+      {/* Rekod logistik (dokumen) — on top, hidden while DOKUMEN_LOGISTIK_AKTIF is false */}
+      {DOKUMEN_LOGISTIK_AKTIF && (
       <DashboardCard className="mt-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-base font-medium text-neutral-900">
@@ -423,6 +416,7 @@ export function Logistik() {
           )}
         </div>
       </DashboardCard>
+      )}
 
       {/* Kenderaan */}
       <div className="mt-6">
@@ -486,6 +480,21 @@ export function Logistik() {
               </button>
             ))}
           </div>
+
+          {/* PKOP: filter by state; a PKON is fixed to theirs */}
+          {!negeriTetap && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-neutral-500">Negeri:</span>
+              <select value={tapisNegeri} onChange={(e) => setTapisNegeri(e.target.value)} className={selectNegeriClass}>
+                <option value="">Semua negeri</option>
+                {SENARAI_KUMPULAN_NEGERI.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {loadingKenderaan ? (
@@ -618,7 +627,8 @@ export function Logistik() {
 
       <TambahKenderaanModal
         open={modalKenderaanOpen}
-        negeri={negeriAktif}
+        negeriAwal={negeriAktif}
+        negeriTetap={negeriTetap}
         onClose={() => setModalKenderaanOpen(false)}
         onSuccess={() => {
           setModalKenderaanOpen(false)

@@ -13,6 +13,7 @@ import type { StatusAkaun, UserRole } from '../hooks/useAuth'
 import { SkeletonBarisJadual } from '../components/Memuatkan'
 import { SENARAI_KUMPULAN_NEGERI } from '../lib/kumpulanNegeri'
 import { KodAksesSection } from '../components/KodAksesSection'
+import { SandaranSection } from '../components/SandaranSection'
 
 // Accounts are created by self-registration (/daftar) only. Here the Super Admin
 // approves or rejects new registrations and manages existing accounts.
@@ -366,6 +367,8 @@ export function Admin() {
       )}
 
       <KodAksesSection />
+
+      <SandaranSection onToast={setToast} />
 
       {/* Accounts */}
       <div className="mt-6 overflow-x-auto rounded-2xl border border-white/60 bg-white/40 shadow-lg backdrop-blur-md">

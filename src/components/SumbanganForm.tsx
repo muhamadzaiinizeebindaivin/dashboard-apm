@@ -20,12 +20,13 @@ export type ExistingSumbangan = {
 }
 
 type SumbanganFormProps = {
+  onDrafChange?: (adaDraf: boolean) => void // something filled in and not sent yet
   onSuccess?: () => void
   negeriTetap?: string
   existing?: ExistingSumbangan
 }
 
-export function SumbanganForm({ onSuccess, negeriTetap, existing }: SumbanganFormProps) {
+export function SumbanganForm({ onSuccess, onDrafChange, negeriTetap, existing }: SumbanganFormProps) {
   const [jenisKumpulan, setJenisKumpulan] = useState(existing?.jenis_kumpulan ?? '')
   const [namaKumpulan, setNamaKumpulan] = useState(existing?.nama_kumpulan ?? '')
   const [noTel, setNoTel] = useState(existing?.no_tel ?? '')
@@ -38,6 +39,14 @@ export function SumbanganForm({ onSuccess, negeriTetap, existing }: SumbanganFor
   const [menghantar, setMenghantar] = useState(false)
   const [ralat, setRalat] = useState('')
 
+  // Reset to false by itself after a successful send (the fields are emptied)
+  const adaDraf =
+    !!(jenisKumpulan || namaKumpulan.trim() || noTel.trim() || jenisSumbangan || lokasiBantuan) ||
+    items.some((it) => it.nama.trim() || it.kuantiti)
+  useEffect(() => {
+    onDrafChange?.(adaDraf)
+  }, [adaDraf, onDrafChange])
+  
   useEffect(() => {
     if (!existing) return
     supabase

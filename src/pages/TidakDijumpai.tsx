@@ -1,12 +1,12 @@
 import { Link } from 'react-router-dom'
 import { Compass, ArrowLeft } from 'lucide-react'
-import apmLogo from '../assets/apm-logo.png'
+import { LogoLaman } from '../components/LogoLaman'
 
 export function TidakDijumpai() {
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-gradient-to-br from-sky-100 via-sky-50 to-white px-4">
       <div className="w-full max-w-md rounded-2xl border border-white/60 bg-white/60 p-8 text-center shadow-xl backdrop-blur-md sm:p-10">
-        <img src={apmLogo} alt="Logo APM" className="mx-auto h-14 w-14 object-contain" />
+        <LogoLaman className="h-14 w-14" />
         <div className="mx-auto mt-6 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
           <Compass size={24} />
         </div>

@@ -1,4 +1,4 @@
-import apmLogo from '../assets/apm-logo.png'
+import logoBo from '../assets/logo-bo.png'
 import { formatTarikh } from './titikBencana'
 import type { KategoriBencana, TitikBencana } from './titikBencana'
 
@@ -26,7 +26,7 @@ export async function janaRingkasanBencana(
 ) {
   const { default: JsPDF } = await import('jspdf')
   const { default: autoTable } = await import('jspdf-autotable')
-  const logo = await muatGambar(apmLogo)
+  const logo = await muatGambar(logoBo)
 
   const doc = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' })
   const lebar = doc.internal.pageSize.getWidth()

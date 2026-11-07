@@ -18,7 +18,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { ambilKod, padamKod } from '../lib/accessCode'
-import apmLogo from '../assets/apm-logo.png'
+import { LogoLaman } from '../components/LogoLaman'
 import {
   JENIS_LAPORAN,
   TARIKH_MASA_FIELD,
@@ -934,6 +934,14 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
 
   const zonPps = nilai.negeri ? cariZon(nilai.negeri) : ''
 
+  // Something typed or uploaded and not sent yet: confirm before leaving through the logo
+  const adaDraf =
+    jenis !== '' &&
+    !berjaya &&
+    (fail !== null ||
+      !!ringkasan.trim() ||
+      Object.entries(nilai).some(([k, v]) => k !== 'tarikh_masa' && !!v?.trim()))
+
   return (
     <div className="relative min-h-[100dvh] overflow-hidden bg-gradient-to-br from-sky-100 via-sky-50 to-white px-4 py-10">
       <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-sky-300/40 blur-3xl" />
@@ -943,7 +951,10 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
       <div className="relative mx-auto max-w-2xl">
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/60 bg-white/40 px-5 py-4 shadow-lg backdrop-blur-md">
           <div className="flex items-center gap-3">
-            <img src={apmLogo} alt="Logo APM" className="h-10 w-10 object-contain" />
+            <LogoLaman
+              className="h-10 w-10"
+              amaran={adaDraf ? 'Laporan ini belum dihantar. Maklumat yang telah diisi akan hilang.' : undefined}
+            />
             <div>
               <h1 className="text-xl font-semibold leading-tight text-neutral-900">Laporan Bencana</h1>
               <p className="text-xs text-neutral-500">Appendix B-1 · National Disaster Command Centre</p>

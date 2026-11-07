@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { NavLink } from 'react-router-dom'
 import { LogOut, UserCircle } from 'lucide-react'
 import { PemilihTema } from './PemilihTema'
-import apmLogo from '../assets/apm-logo.png'
+import { LogoLaman } from './LogoLaman'
 import { useAuth } from '../hooks/useAuth'
 import { NAV_TABS } from '../lib/navTabs'
 import { ROLE_LABEL } from '../lib/roles'
@@ -52,7 +52,7 @@ export function SidebarContent({ onNavigate, kecil = false }: SidebarContentProp
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <div className="flex items-center gap-3 px-4 pb-6 pt-6">
-        <img src={apmLogo} alt="Logo APM" className="h-12 w-12 shrink-0 object-contain" />
+        <LogoLaman className="h-12 w-12" onNavigate={onNavigate} />
         <span className={`text-sm font-semibold leading-tight text-neutral-900 ${label}`} aria-hidden={kecil}>
           APM
           <br />

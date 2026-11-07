@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Clock, XCircle, RefreshCw, LogOut, Loader2, UserPlus, AlertTriangle } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
-import apmLogo from '../assets/apm-logo.png'
+import logoBo from '../assets/logo-bo.png'
 
 // Shown instead of the dashboard to an account that isn't approved (or was rejected),
 // whose profile no longer exists, or whose profile couldn't be loaded (Supabase down).
@@ -38,7 +38,7 @@ export function StatusAkaun() {
       <div className="pointer-events-none absolute bottom-0 right-0 h-72 w-72 rounded-full bg-emerald-200/40 blur-3xl" />
 
       <div className="relative w-full max-w-md rounded-3xl border border-white/60 bg-white/60 p-8 text-center shadow-2xl backdrop-blur-xl">
-        <img src={apmLogo} alt="Logo APM" className="mx-auto h-16 w-16 object-contain" />
+        <img src={logoBo} alt="Logo BO" className="mx-auto h-16 w-16 object-contain" />
 
         <div
           className={`mx-auto mt-5 flex h-12 w-12 items-center justify-center rounded-full ${

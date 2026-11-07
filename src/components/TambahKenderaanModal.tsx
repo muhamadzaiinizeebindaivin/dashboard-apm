@@ -1,18 +1,21 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Camera } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { JENIS_KENDERAAN, JENIS_DEFAULT_PHOTO } from '../lib/kenderaanVisual'
+import { SENARAI_KUMPULAN_NEGERI } from '../lib/kumpulanNegeri'
 
 type TambahKenderaanModalProps = {
   open: boolean
-  negeri: string // state the new vehicle belongs to (chosen on the Logistik page)
+  negeriAwal: string // pre-fill: the state chosen in the Logistik filter ('' = none)
+  negeriTetap: string | null // PKON: their own state, not changeable; PKOP: null
   onClose: () => void
   onSuccess: () => void
 }
 
-export function TambahKenderaanModal({ open, negeri, onClose, onSuccess }: TambahKenderaanModalProps) {
+export function TambahKenderaanModal({ open, negeriAwal, negeriTetap, onClose, onSuccess }: TambahKenderaanModalProps) {
+  const [pilihanNegeri, setPilihanNegeri] = useState('')
   const [namaKenderaan, setNamaKenderaan] = useState('')
   const [nomborPlat, setNomborPlat] = useState('')
   const [jenisKenderaan, setJenisKenderaan] = useState('')
@@ -23,6 +26,11 @@ export function TambahKenderaanModal({ open, negeri, onClose, onSuccess }: Tamba
   const [menghantar, setMenghantar] = useState(false)
   const [ralat, setRalat] = useState('')
   const fotoInputRef = useRef<HTMLInputElement>(null)
+
+  // Each opening starts from the current filter (or the PKON's state), not the last choice
+  useEffect(() => {
+    if (open) setPilihanNegeri(negeriTetap ?? negeriAwal)
+  }, [open, negeriTetap, negeriAwal])
 
   function reset() {
     setNamaKenderaan('')
@@ -51,6 +59,10 @@ export function TambahKenderaanModal({ open, negeri, onClose, onSuccess }: Tamba
   async function handleHantar() {
     setRalat('')
 
+    if (!pilihanNegeri) {
+      setRalat('Sila pilih negeri.')
+      return
+    }
     if (!namaKenderaan || !nomborPlat || !jenisKenderaan || !keadaan) {
       setRalat('Sila lengkapkan semua medan.')
       return
@@ -82,7 +94,7 @@ export function TambahKenderaanModal({ open, negeri, onClose, onSuccess }: Tamba
       keadaan,
       keterangan_kerosakan: keadaan === 'rosak' ? keteranganKerosakan : null,
       foto_url: fotoUrl,
-      negeri,
+      negeri: pilihanNegeri,
     })
 
     setMenghantar(false)
@@ -126,6 +138,28 @@ export function TambahKenderaanModal({ open, negeri, onClose, onSuccess }: Tamba
             <h2 className="mb-5 text-base font-semibold text-neutral-900">Tambah Kenderaan</h2>
 
             <div className="space-y-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-neutral-700">Negeri</label>
+                {negeriTetap ? (
+                  <p className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
+                    {negeriTetap}
+                  </p>
+                ) : (
+                  <select
+                    value={pilihanNegeri}
+                    onChange={(e) => setPilihanNegeri(e.target.value)}
+                    className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-emerald-600"
+                  >
+                    <option value="">Pilih negeri…</option>
+                    {SENARAI_KUMPULAN_NEGERI.map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
               <div>
                 <label className="mb-2 block text-sm font-medium text-neutral-700">
                   Foto <span className="font-normal text-neutral-400">(Pilihan)</span>

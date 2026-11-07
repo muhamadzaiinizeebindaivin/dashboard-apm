@@ -21,14 +21,16 @@ import type { PpsAwam } from '../lib/petaAwam'
 import { kumpulanNegeri } from '../lib/kumpulanNegeri'
 import { formatTarikhMasa, HAD_TIADA_KEMASKINI_JAM, pautanTelefon } from '../lib/ppsPusat'
 
-// Laman Utama: open PPS (dibuka + cadangan_tutup) grouped by state, with victims and families.
+// Laman Utama: open PPS (dibuka + cadangan_tutup) grouped by state, then by daerah
+// (highest number of victims first at every level), with victims and families.
 // Public data comes from peta_awam (same cache as the map: no extra request).
 // Logged in (`dalaman`): every PPS the user can read in pps_pusat (RLS: PKON = own state)
 // also gets Parlimen/ADUN, zone, manager + call button, the "no update" badge and a link
 // to Pengurusan PPS. PPS outside their scope keep the public view.
 
 const NAVY = 'var(--warna-navy)'
-const HAD_RINGKAS = 5 // rows per state before "Lihat semua", when no state / search is chosen
+const TIADA_DAERAH = 'Daerah tidak dinyatakan'
+const HAD_DAERAH = 20 // PPS shown per opened daerah, then "Lihat lagi" adds 20 more
 const SEMINIT = 60_000
 const HAD_SENYAP = HAD_TIADA_KEMASKINI_JAM * 3_600_000
 
@@ -58,6 +60,15 @@ const masaLalu = (iso: string, kini: number) => {
   if (jam < 24) return `${jam} jam lalu`
   return `${Math.round(jam / 24)} hari lalu`
 }
+
+// Daerah are stored in capitals (NDCC style); a PPS without one goes to its own group, listed last
+const namaDaerah = (p: PpsAwam) => (p.daerah ?? '').trim().toUpperCase() || TIADA_DAERAH
+const jumlah = (arr: PpsAwam[], k: 'jumlah_mangsa' | 'jumlah_keluarga') => arr.reduce((n, p) => n + (p[k] ?? 0), 0)
+const ikutMangsa = (a: PpsAwam, b: PpsAwam) => (b.jumlah_mangsa ?? 0) - (a.jumlah_mangsa ?? 0) || a.nama.localeCompare(b.nama)
+const kunciDaerah = (negeri: string, daerah: string) => `${negeri}::${daerah}`
+
+type KumpulanDaerah = { nama: string; senarai: PpsAwam[]; mangsa: number; keluarga: number }
+type KumpulanNegeri = { negeri: string; daerah: KumpulanDaerah[]; bilPps: number; mangsa: number; keluarga: number }
 
 const terakhir = (p: PpsAwam) => p.dilapor_pada ?? p.dibuka_pada
 const senyap = (p: PpsAwam, kini: number) => p.status === 'dibuka' && kini - new Date(terakhir(p)).getTime() > HAD_SENYAP
@@ -191,12 +202,14 @@ export function SenaraiPpsAwam({ dalaman = false }: { dalaman?: boolean }) {
   const { pps, loading } = usePetaAwam()
   const staf = useMaklumatStaf(dalaman)
   const [tapisNegeri, setTapisNegeri] = useState('')
+  const [tapisDaerah, setTapisDaerah] = useState('')
   const [tapisStatus, setTapisStatus] = useState<TapisStatus>('semua')
   const [carian, setCarian] = useState('')
-  const [dikembang, setDikembang] = useState<Set<string>>(() => new Set())
+  const [dikembang, setDikembang] = useState<Set<string>>(() => new Set()) // opened daerah ("negeri::daerah")
+  const [bilPapar, setBilPapar] = useState<Record<string, number>>({}) // PPS shown per daerah ("negeri::daerah")
+
   // "No update" depends on the clock, not only on data changes
   const [kini, setKini] = useState(() => Date.now())
-
   useEffect(() => {
     const t = setInterval(() => setKini(Date.now()), SEMINIT)
     return () => clearInterval(t)
@@ -214,10 +227,25 @@ export function SenaraiPpsAwam({ dalaman = false }: { dalaman?: boolean }) {
     return Array.from(bil.entries()).sort((a, b) => a[0].localeCompare(b[0]))
   }, [dibuka])
 
+  // Daerah choices of the chosen state, with their count
+  const pilihanDaerah = useMemo(() => {
+    if (!tapisNegeri) return []
+    const bil = new Map<string, number>()
+    for (const p of dibuka) {
+      if (kumpulanNegeri(p.negeri) !== tapisNegeri) continue
+      const d = namaDaerah(p)
+      bil.set(d, (bil.get(d) ?? 0) + 1)
+    }
+    return Array.from(bil.entries()).sort((a, b) =>
+      a[0] === TIADA_DAERAH ? 1 : b[0] === TIADA_DAERAH ? -1 : a[0].localeCompare(b[0]),
+    )
+  }, [dibuka, tapisNegeri])
+
   const q = carian.trim().toLowerCase()
   const ditapis = dibuka.filter(
     (p) =>
       (!tapisNegeri || kumpulanNegeri(p.negeri) === tapisNegeri) &&
+      (!tapisDaerah || namaDaerah(p) === tapisDaerah) &&
       (!q ||
         p.nama.toLowerCase().includes(q) ||
         (p.daerah ?? '').toLowerCase().includes(q) ||
@@ -226,34 +254,67 @@ export function SenaraiPpsAwam({ dalaman = false }: { dalaman?: boolean }) {
         (tapisStatus === 'senyap' ? senyap(p, kini) : p.status === tapisStatus)),
   )
 
-  // Grouped by state; states and PPS sorted by victims, highest first
-  const kumpulan = useMemo(() => {
-    const m = new Map<string, PpsAwam[]>()
+  // State -> daerah -> PPS; at every level the highest number of victims comes first
+  const kumpulan = useMemo<KumpulanNegeri[]>(() => {
+    const ikutNegeri = new Map<string, Map<string, PpsAwam[]>>()
     for (const p of ditapis) {
       const n = kumpulanNegeri(p.negeri)
-      if (!m.has(n)) m.set(n, [])
-      m.get(n)!.push(p)
+      const d = namaDaerah(p)
+      if (!ikutNegeri.has(n)) ikutNegeri.set(n, new Map())
+      const m = ikutNegeri.get(n)!
+      if (!m.has(d)) m.set(d, [])
+      m.get(d)!.push(p)
     }
-    return Array.from(m.entries())
-      .map(([negeri, arr]) => ({
-        negeri,
-        senarai: [...arr].sort((a, b) => (b.jumlah_mangsa ?? 0) - (a.jumlah_mangsa ?? 0)),
-        mangsa: arr.reduce((n, p) => n + (p.jumlah_mangsa ?? 0), 0),
-        keluarga: arr.reduce((n, p) => n + (p.jumlah_keluarga ?? 0), 0),
-      }))
+
+    return Array.from(ikutNegeri.entries())
+      .map(([negeri, m]) => {
+        const daerah = Array.from(m.entries())
+          .map(([nama, arr]) => ({
+            nama,
+            senarai: [...arr].sort(ikutMangsa),
+            mangsa: jumlah(arr, 'jumlah_mangsa'),
+            keluarga: jumlah(arr, 'jumlah_keluarga'),
+          }))
+          .sort(
+            (a, b) =>
+              (a.nama === TIADA_DAERAH ? 1 : 0) - (b.nama === TIADA_DAERAH ? 1 : 0) ||
+              b.mangsa - a.mangsa ||
+              a.nama.localeCompare(b.nama),
+          )
+        return {
+          negeri,
+          daerah,
+          bilPps: daerah.reduce((n, d) => n + d.senarai.length, 0),
+          mangsa: daerah.reduce((n, d) => n + d.mangsa, 0),
+          keluarga: daerah.reduce((n, d) => n + d.keluarga, 0),
+        }
+      })
       .sort((a, b) => b.mangsa - a.mangsa)
   }, [ditapis])
 
   const jumlahMangsa = kumpulan.reduce((n, k) => n + k.mangsa, 0)
   const jumlahKeluarga = kumpulan.reduce((n, k) => n + k.keluarga, 0)
-  const ringkas = !tapisNegeri && !q // long lists only when browsing everything
-  const adaTapisan = !!(tapisNegeri || q || tapisStatus !== 'semua')
+  // Searching or choosing a daerah opens the matching daerah by itself
+  const bukaAuto = !!(q || tapisDaerah)
+  const adaTapisan = !!(tapisNegeri || tapisDaerah || q || tapisStatus !== 'semua')
 
-  function togol(negeri: string) {
+  function togol(kunci: string) {
     setDikembang((s) => {
       const baru = new Set(s)
-      if (baru.has(negeri)) baru.delete(negeri)
-      else baru.add(negeri)
+      if (baru.has(kunci)) baru.delete(kunci)
+      else baru.add(kunci)
+      return baru
+    })
+  }
+
+  function togolNegeri(k: KumpulanNegeri, buka: boolean) {
+    setDikembang((s) => {
+      const baru = new Set(s)
+      for (const d of k.daerah) {
+        const kunci = kunciDaerah(k.negeri, d.nama)
+        if (buka) baru.add(kunci)
+        else baru.delete(kunci)
+      }
       return baru
     })
   }
@@ -266,7 +327,9 @@ export function SenaraiPpsAwam({ dalaman = false }: { dalaman?: boolean }) {
           <h3 className="text-sm font-semibold" style={{ color: NAVY }}>
             PPS Dibuka
           </h3>
-          <p className="text-xs text-neutral-500">Pusat pemindahan sementara yang masih beroperasi, mengikut negeri</p>
+          <p className="text-xs text-neutral-500">
+            Pusat pemindahan sementara yang masih beroperasi, mengikut negeri dan daerah
+          </p>
         </div>
         <p className="text-xs text-neutral-500">
           <span className="font-semibold tabular-nums" style={{ color: NAVY }}>
@@ -295,7 +358,14 @@ export function SenaraiPpsAwam({ dalaman = false }: { dalaman?: boolean }) {
             className={`${selectClass} w-full pl-8`}
           />
         </div>
-        <select value={tapisNegeri} onChange={(e) => setTapisNegeri(e.target.value)} className={selectClass}>
+        <select
+          value={tapisNegeri}
+          onChange={(e) => {
+            setTapisNegeri(e.target.value)
+            setTapisDaerah('') // a daerah belongs to one state
+          }}
+          className={selectClass}
+        >
           <option value="">Semua Negeri</option>
           {pilihanNegeri.map(([n, bil]) => (
             <option key={n} value={n}>
@@ -303,6 +373,16 @@ export function SenaraiPpsAwam({ dalaman = false }: { dalaman?: boolean }) {
             </option>
           ))}
         </select>
+        {tapisNegeri && pilihanDaerah.length > 1 && (
+          <select value={tapisDaerah} onChange={(e) => setTapisDaerah(e.target.value)} className={selectClass}>
+            <option value="">Semua Daerah</option>
+            {pilihanDaerah.map(([d, bil]) => (
+              <option key={d} value={d}>
+                {d} ({bil})
+              </option>
+            ))}
+          </select>
+        )}
         {dalaman && (
           <select
             value={tapisStatus}
@@ -319,6 +399,7 @@ export function SenaraiPpsAwam({ dalaman = false }: { dalaman?: boolean }) {
           <button
             onClick={() => {
               setTapisNegeri('')
+              setTapisDaerah('')
               setCarian('')
               setTapisStatus('semua')
             }}
@@ -343,15 +424,18 @@ export function SenaraiPpsAwam({ dalaman = false }: { dalaman?: boolean }) {
       ) : (
         <div className="mt-4 space-y-4">
           {kumpulan.map((k) => {
-            const kembang = !ringkas || dikembang.has(k.negeri)
-            const papar = kembang ? k.senarai : k.senarai.slice(0, HAD_RINGKAS)
-            const baki = k.senarai.length - HAD_RINGKAS
+            // Every daerah starts closed; only a search or a daerah filter opens them by itself
+            const autoNegeri = bukaAuto
+            const semuaTerbuka = k.daerah.every((d) => dikembang.has(kunciDaerah(k.negeri, d.nama)))
 
             return (
-              <section key={k.negeri} className="rounded-2xl border border-neutral-100 bg-white/60 px-4 pt-3">
+              <section key={k.negeri} className="rounded-2xl border border-neutral-100 bg-white/60 px-4 pb-1 pt-3">
                 <h4 className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 border-b border-neutral-100 pb-2">
                   <span className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
-                    {k.negeri} <span className="font-normal text-neutral-400">· {k.senarai.length} PPS</span>
+                    {k.negeri}{' '}
+                    <span className="font-normal normal-case text-neutral-400">
+                      · {k.bilPps} PPS · {k.daerah.length} daerah
+                    </span>
                   </span>
                   <span className="text-xs text-neutral-500">
                     <span className="font-semibold tabular-nums text-neutral-700">{nombor(k.mangsa)}</span> mangsa ·{' '}
@@ -359,27 +443,90 @@ export function SenaraiPpsAwam({ dalaman = false }: { dalaman?: boolean }) {
                   </span>
                 </h4>
 
-                <ul className="divide-y divide-neutral-100">
-                  {papar.map((p) => (
-                    <BarisPps key={p.id} pps={p} staf={staf.get(p.id)} kini={kini} />
-                  ))}
-                </ul>
-
-                {ringkas && baki > 0 && (
-                  <button
-                    onClick={() => togol(k.negeri)}
-                    className="flex w-full items-center justify-center gap-1 border-t border-neutral-100 py-2.5 text-xs font-semibold text-emerald-700 hover:text-emerald-800"
-                  >
-                    <ChevronDown size={14} className={kembang ? 'rotate-180' : ''} />
-                    {kembang ? 'Tunjuk kurang' : `Lihat semua (${baki} lagi)`}
-                  </button>
+                {!autoNegeri && k.daerah.length > 1 && (
+                  <div className="flex justify-end pt-1.5">
+                    <button
+                      onClick={() => togolNegeri(k, !semuaTerbuka)}
+                      className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800"
+                    >
+                      {semuaTerbuka ? 'Tutup semua daerah' : 'Buka semua daerah'}
+                    </button>
+                  </div>
                 )}
-                {!(ringkas && baki > 0) && <div className="pb-1" />}
+
+                <div className="divide-y divide-neutral-100">
+                  {k.daerah.map((d) => {
+                    const kunci = kunciDaerah(k.negeri, d.nama)
+                    const buka = autoNegeri || dikembang.has(kunci)
+                    // Highest victims first, so the first rows are the ones that matter most
+                    const had = bilPapar[kunci] ?? HAD_DAERAH
+                    const papar = d.senarai.slice(0, had)
+                    const baki = d.senarai.length - papar.length
+
+                    return (
+                      <div key={kunci}>
+                        {autoNegeri ? (
+                          <div className="flex items-center gap-2 py-2.5">
+                            <BarisTajukDaerah d={d} />
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => togol(kunci)}
+                            aria-expanded={buka}
+                            className="flex w-full items-center gap-2 py-2.5 text-left hover:bg-white/60"
+                          >
+                            <ChevronDown
+                              size={14}
+                              className={`shrink-0 text-neutral-400 transition-transform ${buka ? '' : '-rotate-90'}`}
+                            />
+                            <BarisTajukDaerah d={d} />
+                          </button>
+                        )}
+
+                        {buka && (
+                          <>
+                            <ul className="mb-2 ml-1.5 divide-y divide-neutral-100 border-l-2 border-emerald-100 pl-3">
+                              {papar.map((p) => (
+                                <BarisPps key={p.id} pps={p} staf={staf.get(p.id)} kini={kini} />
+                              ))}
+                            </ul>
+                            {baki > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => setBilPapar((s) => ({ ...s, [kunci]: had + HAD_DAERAH }))}
+                                className="mb-2 ml-1.5 flex w-[calc(100%-0.375rem)] items-center justify-center gap-1 rounded-lg border border-dashed border-emerald-200 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                              >
+                                <ChevronDown size={14} />
+                                Lihat {Math.min(HAD_DAERAH, baki)} lagi ({baki} belum dipapar)
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
               </section>
             )
           })}
         </div>
       )}
     </div>
+  )
+}
+
+// One daerah line: name, PPS count, victims and families
+function BarisTajukDaerah({ d }: { d: KumpulanDaerah }) {
+  return (
+    <>
+      <span className="min-w-0 flex-1 truncate text-xs font-semibold uppercase tracking-wide text-neutral-700">
+        {d.nama} <span className="font-normal normal-case text-neutral-400">· {d.senarai.length} PPS</span>
+      </span>
+      <span className="shrink-0 text-xs text-neutral-500">
+        <span className="font-semibold tabular-nums text-neutral-700">{nombor(d.mangsa)}</span> mangsa ·{' '}
+        <span className="font-semibold tabular-nums text-neutral-700">{nombor(d.keluarga)}</span> keluarga
+      </span>
+    </>
   )
 }

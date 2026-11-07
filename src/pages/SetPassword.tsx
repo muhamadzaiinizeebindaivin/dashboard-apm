@@ -3,7 +3,7 @@ import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import apmLogo from '../assets/apm-logo.png'
+import logoBo from '../assets/logo-bo.png'
 
 const RULES: { label: string; test: (pw: string) => boolean }[] = [
   { label: 'Sekurang-kurangnya 8 aksara', test: (pw) => pw.length >= 8 },
@@ -59,7 +59,7 @@ export function SetPassword() {
         className="w-full max-w-sm rounded-2xl border border-neutral-200 bg-white p-8 shadow-sm"
       >
         <div className="mb-6 flex flex-col items-center">
-          <img src={apmLogo} alt="Logo APM" className="h-16 w-16 object-contain" />
+          <img src={logoBo} alt="Logo BO" className="h-16 w-16 object-contain" />
           <h1 className="mt-3 text-center text-base font-semibold text-neutral-900">
             Tetapkan Kata Laluan
           </h1>

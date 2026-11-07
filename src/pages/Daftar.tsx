@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { MailCheck, ArrowLeft } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import apmLogo from '../assets/apm-logo.png'
+import { LogoLaman } from '../components/LogoLaman'
 
 // Public self-registration. The account starts "Menunggu Kelulusan" (profile created by a
 // trigger on the server, never by the browser) until a Super Admin approves it and picks a role.
@@ -110,7 +110,7 @@ export function Daftar() {
         className="relative w-full max-w-md rounded-3xl border border-white/60 bg-white/60 p-8 shadow-2xl backdrop-blur-xl"
       >
         <div className="mb-6 flex flex-col items-center">
-          <img src={apmLogo} alt="Logo APM" className="h-16 w-16 object-contain" />
+          <LogoLaman className="h-16 w-16" />
           <h1 className="mt-3 text-center text-base font-semibold text-neutral-900">Daftar Akaun</h1>
           <p className="mt-1 text-center text-xs text-neutral-500">APM Bahagian Pengurusan Bencana Operasi</p>
         </div>

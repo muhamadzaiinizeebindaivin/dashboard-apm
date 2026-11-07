@@ -7,7 +7,7 @@ import { ambilKod, ambilPetugas } from '../lib/accessCode'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { ParasMap } from '../components/ParasMap'
 import type { LokasiPoint } from '../components/ParasMap'
-import apmLogo from '../assets/apm-logo.png'
+import { LogoLaman } from '../components/LogoLaman'
 
 const STORAGE_KEY = 'paras_jejak_active'
 
@@ -244,7 +244,14 @@ export function ParasJejak() {
       <div className="relative mx-auto max-w-2xl">
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/60 bg-white/40 px-5 py-4 shadow-lg backdrop-blur-md">
           <div className="flex items-center gap-3">
-            <img src={apmLogo} alt="Logo APM" className="h-10 w-10 object-contain" />
+            <LogoLaman
+              className="h-10 w-10"
+              amaran={
+                sedangJejak
+                  ? 'Penjejakan sedang aktif. Lokasi anda akan berhenti dihantar sehingga anda kembali ke halaman ini.'
+                  : undefined
+              }
+            />
             <h1 className="text-xl font-semibold text-neutral-900">{negeri}</h1>
           </div>
 

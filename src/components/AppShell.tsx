@@ -6,7 +6,7 @@ import { SidebarContent } from './Sidebar'
 import { StatusAkaun } from './StatusAkaun'
 import { useAuth } from '../hooks/useAuth'
 import { PemuatHalaman } from './Memuatkan'
-import apmLogo from '../assets/apm-logo.png'
+import { LogoLaman } from './LogoLaman'
 
 type AppShellProps = {
   children: ReactNode
@@ -87,7 +87,7 @@ export function AppShell({ children }: AppShellProps) {
             >
               <Menu size={20} />
             </button>
-            <img src={apmLogo} alt="Logo APM" className="h-11 w-11 object-contain" />
+            <LogoLaman className="h-11 w-11" />
           </header>
 
           <motion.main
