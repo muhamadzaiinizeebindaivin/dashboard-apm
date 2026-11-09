@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import { dalamKepingan } from './ambilSemua'
-import logoBo from '../assets/logo-bo.png'
+import apmLogo from '../assets/apm-logo.png'
 import type { LaporanBencanaRow } from './laporanBencana'
 
 async function muatGambar(src: string): Promise<string | null> {
@@ -30,7 +30,7 @@ export async function janaRekodKejadian(
 ) {
   const { default: JsPDF } = await import('jspdf')
   const { default: autoTable } = await import('jspdf-autotable')
-  const logo = await muatGambar(logoBo)
+  const logo = await muatGambar(apmLogo)
 
   // For Semasa reports, pull each report's own PPS entries (not carried
   // forward from earlier reports) — this is a log of what each submission

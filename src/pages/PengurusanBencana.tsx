@@ -22,7 +22,7 @@ import { pastikan } from '../lib/pastikan'
 import { TREND_LABEL } from '../lib/laporanBencana'
 import { formatTarikh } from '../lib/titikBencana'
 import { HAD_TIADA_KEMASKINI_JAM } from '../lib/ppsPusat'
-import { HAD_TAMAT_AUTO_JAM, useBencanaTamat } from '../lib/bencanaTamat'
+import { HAD_TINDAKAN_JAM, useBencanaTamat } from '../lib/bencanaTamat'
 import type { BencanaTamat } from '../lib/bencanaTamat'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { Toast } from '../components/Toast'
@@ -152,9 +152,9 @@ function KadBencana({ b, bolehTamat, onTamat, onAktif, onLokasi }: KadBencanaPro
         <span>Laporan terakhir {formatTarikh(b.laporanTerakhir)}</span>
         {b.tamat && <span>· Ditamatkan {formatTarikh(b.tamat.ditamatkan_pada)}</span>}
         {!b.tamat && (
-          <span title={`Ditamatkan secara automatik jika tiada laporan baharu dalam ${HAD_TAMAT_AUTO_JAM} jam`}>
-            · Tamat automatik{' '}
-            {formatTarikh(new Date(new Date(b.laporanTerakhir).getTime() + HAD_TAMAT_AUTO_JAM * 3_600_000).toISOString())}
+          <span title={`Perlu tindakan (laporan atau pengesahan) jika tiada laporan baharu dalam ${HAD_TINDAKAN_JAM} jam`}>
+            · Perlu tindakan{' '}
+            {formatTarikh(new Date(new Date(b.laporanTerakhir).getTime() + HAD_TINDAKAN_JAM * 3_600_000).toISOString())}
           </span>
         )}
       </p>
@@ -213,6 +213,7 @@ export function PengurusanBencana() {
   const [tapisStatus, setTapisStatus] = useState<TapisStatus>('semua')
   const [dipilih, setDipilih] = useState<{ b: RingkasanBencana; jenis: 'tamat' | 'aktif' } | null>(null)
   const [catatan, setCatatan] = useState('')
+  const [bukaSemula, setBukaSemula] = useState(true) // reactivation: reopen PPS and map points closed by the end
   const [memproses, setMemproses] = useState(false)
   const [ralat, setRalat] = useState('')
   const [toast, setToast] = useState<ToastState>(null)
@@ -329,17 +330,26 @@ export function PengurusanBencana() {
   function buka(b: RingkasanBencana, jenis: 'tamat' | 'aktif') {
     setDipilih({ b, jenis })
     setCatatan('')
+    setBukaSemula(true)
     setRalat('')
   }
 
   async function jalankan() {
     if (!dipilih) return
+    if (dipilih.jenis === 'tamat' && !catatan.trim()) {
+      setRalat('Sila nyatakan sebab bencana ini ditamatkan.')
+      return
+    }
     setMemproses(true)
     setRalat('')
-    const { error } =
+    const { data, error } =
       dipilih.jenis === 'tamat'
-        ? await supabase.rpc('tamatkan_bencana', { p_nama: dipilih.b.nama, p_catatan: catatan.trim() || null })
-        : await supabase.rpc('aktifkan_semula_bencana', { p_nama: dipilih.b.nama, p_catatan: catatan.trim() || null })
+        ? await supabase.rpc('tamatkan_bencana', { p_nama: dipilih.b.nama, p_catatan: catatan.trim() })
+        : await supabase.rpc('aktifkan_semula_bencana', {
+            p_nama: dipilih.b.nama,
+            p_catatan: catatan.trim() || null,
+            p_buka_semula: bukaSemula,
+          })
     setMemproses(false)
 
     if (error) {
@@ -350,9 +360,15 @@ export function PengurusanBencana() {
       )
       return
     }
+    const dibuka = dipilih.jenis === 'aktif' ? (data as { pps: number; titik: number } | null) : null
     setToast({
       type: 'success',
-      message: dipilih.jenis === 'tamat' ? 'Bencana telah ditamatkan.' : 'Bencana diaktifkan semula.',
+      message:
+        dipilih.jenis === 'tamat'
+          ? 'Bencana telah ditamatkan.'
+          : dibuka && (dibuka.pps > 0 || dibuka.titik > 0)
+            ? `Bencana diaktifkan semula: ${dibuka.pps} PPS dan ${dibuka.titik} titik dibuka semula.`
+            : 'Bencana diaktifkan semula.',
     })
     setDipilih(null)
   }
@@ -485,7 +501,7 @@ export function PengurusanBencana() {
           dipilih
             ? dipilih.jenis === 'tamat'
               ? mesejTamat(dipilih.b)
-              : `Bencana "${dipilih.b.nama}" akan diaktifkan semula. PPS dan titik bencana yang telah ditutup tidak dibuka semula secara automatik.`
+              : `Bencana "${dipilih.b.nama}" akan diaktifkan semula.`
             : ''
         }
         confirmLabel={dipilih?.jenis === 'tamat' ? 'Tamatkan' : 'Aktifkan Semula'}
@@ -497,7 +513,20 @@ export function PengurusanBencana() {
         onCancel={() => setDipilih(null)}
       >
         <div className="mt-3">
-          <label className="mb-1 block text-xs font-medium text-neutral-600">Catatan (pilihan)</label>
+          {dipilih?.jenis === 'aktif' && (
+            <label className="mb-3 flex items-start gap-2 text-xs text-neutral-700">
+              <input
+                type="checkbox"
+                checked={bukaSemula}
+                onChange={(e) => setBukaSemula(e.target.checked)}
+                className="mt-0.5"
+              />
+              Buka semula PPS dan titik bencana yang ditutup semasa bencana ini ditamatkan
+            </label>
+          )}
+          <label className="mb-1 block text-xs font-medium text-neutral-600">
+            {dipilih?.jenis === 'tamat' ? 'Sebab (wajib)' : 'Catatan (pilihan)'}
+          </label>
           <textarea
             rows={2}
             value={catatan}

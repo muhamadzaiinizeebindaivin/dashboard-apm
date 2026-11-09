@@ -1,4 +1,4 @@
-import logoBo from '../assets/logo-bo.png'
+import apmLogo from '../assets/apm-logo.png'
 import { KEJADIAN_FIELDS } from './laporanBencana'
 import type { LaporanBencanaRow } from './laporanBencana'
 import type { CellDef } from 'jspdf-autotable'
@@ -59,7 +59,7 @@ const nilai = (v: string | null | undefined) => (v ?? '').toString().trim()
 export async function janaLaporanAwalPdf(row: LaporanBencanaRow) {
   const { default: JsPDF } = await import('jspdf')
   const { default: autoTable } = await import('jspdf-autotable')
-  const logo = await muatGambar(logoBo)
+  const logo = await muatGambar(apmLogo)
 
   const doc = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
   const lebar = doc.internal.pageSize.getWidth()

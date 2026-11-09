@@ -1,5 +1,5 @@
 import type { Workbook } from 'exceljs'
-import logoBo from '../assets/logo-bo.png'
+import apmLogo from '../assets/apm-logo.png'
 import type { StatistikMusimData } from './statistikMusim'
 import type { Musim } from '../pages/StatistikMusim'
 
@@ -54,7 +54,7 @@ export async function janaPdfStatistikMusim(musim: Musim, d: StatistikMusimData)
   const [{ default: JsPDF }, { default: autoTable }, logo] = await Promise.all([
     import('jspdf'),
     import('jspdf-autotable'),
-    muatGambar(logoBo),
+    muatGambar(apmLogo),
   ])
 
   const doc = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' })

@@ -1,6 +1,6 @@
 import latarAwal from '../assets/poster/latar-makluman-awal.jpg'
 import latarSemasa from '../assets/poster/latar-maklumat-semasa.jpg'
-import logoBo from '../assets/logo-bo.png'
+import apmLogo from '../assets/apm-logo.png'
 
 // Incident posters (A4 portrait, 2480 × 3508 px = 300 dpi; positions below are in a 1240 × 1754 grid, scaled ×2):
 //   'awal'   = "Makluman Awal Insiden"   (Laporan Insiden)
@@ -29,8 +29,8 @@ const W = 1240
 const H = 1754
 const SKALA = 2 // 300 dpi output
 
-// BO logo: crop of logo-bo.png (its transparent margins removed), where the template has its logo
-const LOGO_SUMBER = { x: 29, y: 15, w: 431, h: 480 }
+// APM logo: crop of apm-logo.png (its transparent margins removed), where the template has its logo
+const LOGO_SUMBER = { x: 86, y: 30, w: 357, h: 419 }
 const LOGO = { x: 133, y: 12, tinggi: 126 }
 
 const TEKS = '#0f1f4f' // navy, same as the template's labels
@@ -134,7 +134,7 @@ export async function lukisPosterInsiden(
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
 
-  const [latar, logo] = await Promise.all([muatImej(POSTER[jenis].latar), muatImej(logoBo)])
+  const [latar, logo] = await Promise.all([muatImej(POSTER[jenis].latar), muatImej(apmLogo)])
   ctx.drawImage(latar, 0, 0, W, H)
   const s = LOGO_SUMBER
   ctx.drawImage(logo, s.x, s.y, s.w, s.h, LOGO.x, LOGO.y, (s.w / s.h) * LOGO.tinggi, LOGO.tinggi)

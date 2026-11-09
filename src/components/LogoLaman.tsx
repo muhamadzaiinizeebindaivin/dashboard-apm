@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import logoBo from '../assets/logo-bo.png'
+import apmLogo from '../assets/apm-logo.png'
 import { ConfirmModal } from './ConfirmModal'
 
 type LogoLamanProps = {
@@ -30,7 +30,7 @@ export function LogoLaman({ className = 'h-10 w-10', onNavigate, amaran }: LogoL
         }}
         className="inline-flex shrink-0 rounded-xl transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
       >
-        <img src={logoBo} alt="Logo BO" className={`object-contain ${className}`} />
+        <img src={apmLogo} alt="Logo APM" className={`object-contain ${className}`} />
       </Link>
 
       <ConfirmModal

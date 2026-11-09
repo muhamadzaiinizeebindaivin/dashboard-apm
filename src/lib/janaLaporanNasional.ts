@@ -1,4 +1,4 @@
-import logoBo from '../assets/logo-bo.png'
+import apmLogo from '../assets/apm-logo.png'
 import petaMalaysia from '../assets/peta-malaysia.png'
 import { NEGERI_NORM } from './negeriVisual'
 import { ambilJenisBencana, susunJenis, warnaJenisRgb } from './jenisBencana'
@@ -262,7 +262,7 @@ export async function bangunLaporanNasionalDoc(
   const { default: JsPDF } = await import('jspdf')
   const { default: autoTable } = await import('jspdf-autotable')
   // ambilJenisBencana: latest category colours and order before drawing
-  const [logo, peta] = await Promise.all([muatGambar(logoBo), muatGambar(petaMalaysia), ambilJenisBencana()])
+  const [logo, peta] = await Promise.all([muatGambar(apmLogo), muatGambar(petaMalaysia), ambilJenisBencana()])
 
   const doc = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' })
   const lebar = doc.internal.pageSize.getWidth()

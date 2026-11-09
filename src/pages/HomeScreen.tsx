@@ -8,10 +8,11 @@ import { PemilihTema } from '../components/PemilihTema'
 import { AppShell } from '../components/AppShell'
 import { DokumenAwamCard } from '../components/DokumenAwamCard'
 import { AmaranBanner } from '../components/AmaranBanner'
+import { PerluTindakanBencana } from '../components/PerluTindakanBencana'
 import { PapanUtama } from '../components/PapanUtama'
 import { SenaraiPpsAwam } from '../components/SenaraiPpsAwam'
 import { useAuth } from '../hooks/useAuth'
-import logoBo from '../assets/logo-bo.png'
+import apmLogo from '../assets/apm-logo.png'
 
 const QUICK_LINKS = [
   { page: 'sumbangan', to: '/sumbangan', label: 'Sumbangan', icon: HandCoins },
@@ -32,7 +33,7 @@ function KandunganAwam() {
   return (
     <>
       <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-emerald-50 to-sky-50 shadow-inner">
-        <img src={logoBo} alt="Logo BO" className="h-16 w-16 object-contain" />
+        <img src={apmLogo} alt="Logo APM" className="h-16 w-16 object-contain" />
       </div>
 
       <div className="mx-auto mt-5 flex items-center justify-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-emerald-700">
@@ -76,6 +77,7 @@ function KandunganLogMasuk() {
   return (
     <>
       <AmaranBanner />
+      <PerluTindakanBencana />
 
       <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/60 bg-white/40 px-5 py-4 shadow-lg backdrop-blur-md">
         <div>
@@ -141,7 +143,7 @@ export function HomeScreen() {
 
       <div className="relative">
         <header className="flex items-center justify-between px-4 py-4 sm:px-8 sm:py-5">
-          <img src={logoBo} alt="Logo BO" className="h-11 w-11 object-contain sm:h-14 sm:w-14" />
+          <img src={apmLogo} alt="Logo APM" className="h-11 w-11 object-contain sm:h-14 sm:w-14" />
           <div className="flex items-center gap-2">
             <PemilihTema />
             {QUICK_LINKS.map(({ to, label, page, icon: Icon, withPetugas }) => (

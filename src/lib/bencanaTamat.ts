@@ -2,8 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabase'
 import { useRealtime } from './realtime'
 
-// A disaster with no new report for this long is ended automatically (pg_cron job)
-export const HAD_TAMAT_AUTO_JAM = 24
+// No new report (or "Masih aktif" confirmation) for this long: the disaster needs action.
+// Nothing is ended automatically any more: a person decides (popup on the Laman Utama).
+export const HAD_TINDAKAN_JAM = 24
+export const HAD_AMARAN_JAM = 20 // early warning: a report is due soon
 
 export type BencanaTamat = {
   nama_bencana: string

@@ -1,4 +1,4 @@
-import logoBo from '../assets/logo-bo.png'
+import apmLogo from '../assets/apm-logo.png'
 import {
   formatMasa,
   formatTempoh,
@@ -43,7 +43,7 @@ export async function janaRekodParas(
 ) {
   const { default: JsPDF } = await import('jspdf')
   const { default: autoTable } = await import('jspdf-autotable')
-  const logo = await muatGambar(logoBo)
+  const logo = await muatGambar(apmLogo)
 
   const doc = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' })
   const lebar = doc.internal.pageSize.getWidth()
