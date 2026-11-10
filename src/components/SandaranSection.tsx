@@ -3,7 +3,7 @@ import { Database, Download, Loader2, ShieldAlert } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useRealtime } from '../lib/realtime'
 import { useAuth } from '../hooks/useAuth'
-import { eksportSandaran } from '../lib/eksportSandaran'
+import { adaKunciSandaran, eksportSandaran } from '../lib/eksportSandaran'
 import type { ToastState } from './Toast'
 
 type LogSandaran = { masa: string; nama: string | null; bil_baris: number }
@@ -44,7 +44,7 @@ export function SandaranSection({ onToast }: { onToast: (t: ToastState) => void 
       const { bilJadual, bilBaris } = await eksportSandaran(profile?.full_name)
       onToast({
         type: 'success',
-        message: `Sandaran dimuat turun: ${bilJadual} jadual, ${bilBaris.toLocaleString('ms-MY')} baris.`,
+        message: `Sandaran tersulit dimuat turun: ${bilJadual} jadual, ${bilBaris.toLocaleString('ms-MY')} baris.`,
       })
       muatLog()
     } catch (e) {
@@ -63,7 +63,8 @@ export function SandaranSection({ onToast }: { onToast: (t: ToastState) => void 
             Sandaran Data
           </h2>
           <p className="mt-1 text-sm text-neutral-600">
-            Salinan semua data sistem dalam satu fail Excel, untuk rujukan.
+            Salinan semua data sistem dalam satu fail Excel tersulit (.xlsx.age). Hanya pemegang kunci boleh
+            membukanya.
           </p>
           <p className="mt-2 text-xs text-neutral-500">
             {akhir
@@ -74,7 +75,8 @@ export function SandaranSection({ onToast }: { onToast: (t: ToastState) => void 
 
         <button
           onClick={muatTurun}
-          disabled={memuat}
+          disabled={memuat || !adaKunciSandaran}
+          title={adaKunciSandaran ? undefined : 'Kunci sandaran belum ditetapkan'}
           className="flex items-center gap-2 rounded-full bg-emerald-700 px-5 py-2 text-sm font-semibold text-white shadow-md transition-colors hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {memuat ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
@@ -84,8 +86,8 @@ export function SandaranSection({ onToast }: { onToast: (t: ToastState) => void 
 
       <p className="mt-4 flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
         <ShieldAlert size={14} className="mt-0.5 shrink-0" />
-        Fail ini mengandungi data peribadi (mangsa, nombor telefon, akaun pengguna). Simpan di tempat selamat dan
-        jangan kongsi melalui WhatsApp atau e-mel peribadi.
+        Fail ini mengandungi data peribadi (mangsa, nombor telefon, akaun pengguna) dan disulitkan dengan age.
+        Tanpa kunci peribadi, kandungannya tidak boleh dibaca walaupun fail tersebar.
       </p>
     </div>
   )

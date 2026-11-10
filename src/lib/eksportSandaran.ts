@@ -1,8 +1,18 @@
 import { supabase } from './supabase'
 
 // "Muat Turun Sandaran" (Admin, PKOP only): every table returned by the database
-// function eksport_sandaran() in one Excel file, one sheet per table.
-// A readable copy for reference — full recovery uses the nightly encrypted backup.
+// function eksport_sandaran() in one Excel file, one sheet per table, encrypted with
+// age in the browser before it is saved (.xlsx.age). Only the holders of the private
+// keys listed in VITE_SANDARAN_PENERIMA can open it:
+//   age -d -i kunci-sandaran.txt Sandaran_APM_BO_<tarikh>.xlsx.age > Sandaran.xlsx
+
+// Public keys (age1…), comma-separated; public keys are not secret
+const PENERIMA = (import.meta.env.VITE_SANDARAN_PENERIMA ?? '')
+  .split(',')
+  .map((k: string) => k.trim())
+  .filter((k: string) => k.startsWith('age1'))
+
+export const adaKunciSandaran = PENERIMA.length > 0
 
 type ModulExcel = typeof import('exceljs')
 type Jadual = Record<string, Record<string, unknown>[]>
@@ -63,6 +73,11 @@ const GAYA_TAJUK = {
 }
 
 export async function eksportSandaran(namaPengguna?: string | null) {
+  // Never produce a readable copy: no key, no download
+  if (!adaKunciSandaran) {
+    throw new Error('Kunci sandaran belum ditetapkan. Hubungi pentadbir sistem.')
+  }
+
   const { data, error } = await supabase.rpc('eksport_sandaran')
   if (error) {
     throw new Error(
@@ -143,9 +158,17 @@ export async function eksportSandaran(namaPengguna?: string | null) {
 
   const buf = await wb.xlsx.writeBuffer()
   const tarikh = sekarang.toLocaleDateString('sv-SE', ZON) // YYYY-MM-DD in Malaysian time
+
+  // Encrypt in the browser: the readable Excel never leaves memory
+  const { Encrypter } = await import('age-encryption')
+  const e = new Encrypter()
+  for (const kunci of PENERIMA) e.addRecipient(kunci)
+  const tersulit = await e.encrypt(new Uint8Array(buf as ArrayBuffer))
+
+  // age returns a plain ArrayBuffer-backed array; the cast only satisfies TS 5.7+ typings
   simpanFail(
-    new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
-    `Sandaran_APM_BO_${tarikh}.xlsx`,
+    new Blob([tersulit as Uint8Array<ArrayBuffer>], { type: 'application/octet-stream' }),
+    `Sandaran_APM_BO_${tarikh}.xlsx.age`,
   )
 
   return { bilJadual: namaJadual.length, bilBaris }
