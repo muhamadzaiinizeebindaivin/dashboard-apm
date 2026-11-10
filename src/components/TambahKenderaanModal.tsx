@@ -3,23 +3,34 @@ import type { ChangeEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Camera } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { JENIS_KENDERAAN, JENIS_DEFAULT_PHOTO } from '../lib/kenderaanVisual'
+import { JENIS_KENDERAAN, JENIS_DEFAULT_PHOTO, KEADAAN_LIST, KEADAAN_AKTIF } from '../lib/kenderaanVisual'
+import type { Keadaan } from '../lib/kenderaanVisual'
 import { SENARAI_KUMPULAN_NEGERI } from '../lib/kumpulanNegeri'
+import { hurufBesar } from '../lib/normalisasi'
 
 type TambahKenderaanModalProps = {
   open: boolean
   negeriAwal: string // pre-fill: the state chosen in the Logistik filter ('' = none)
   negeriTetap: string | null // PKON: their own state, not changeable; PKOP: null
+  cadanganDaerah: (negeri: string) => string[] // districts already used in that state (suggestions)
   onClose: () => void
   onSuccess: () => void
 }
 
-export function TambahKenderaanModal({ open, negeriAwal, negeriTetap, onClose, onSuccess }: TambahKenderaanModalProps) {
+export function TambahKenderaanModal({
+  open,
+  negeriAwal,
+  negeriTetap,
+  cadanganDaerah,
+  onClose,
+  onSuccess,
+}: TambahKenderaanModalProps) {
   const [pilihanNegeri, setPilihanNegeri] = useState('')
+  const [daerah, setDaerah] = useState('')
   const [namaKenderaan, setNamaKenderaan] = useState('')
   const [nomborPlat, setNomborPlat] = useState('')
   const [jenisKenderaan, setJenisKenderaan] = useState('')
-  const [keadaan, setKeadaan] = useState<'baik' | 'rosak' | ''>('')
+  const [keadaan, setKeadaan] = useState<Keadaan | ''>('')
   const [keteranganKerosakan, setKeteranganKerosakan] = useState('')
   const [foto, setFoto] = useState<File | null>(null)
   const [fotoPreview, setFotoPreview] = useState<string | null>(null)
@@ -33,6 +44,7 @@ export function TambahKenderaanModal({ open, negeriAwal, negeriTetap, onClose, o
   }, [open, negeriTetap, negeriAwal])
 
   function reset() {
+    setDaerah('')
     setNamaKenderaan('')
     setNomborPlat('')
     setJenisKenderaan('')
@@ -61,6 +73,10 @@ export function TambahKenderaanModal({ open, negeriAwal, negeriTetap, onClose, o
 
     if (!pilihanNegeri) {
       setRalat('Sila pilih negeri.')
+      return
+    }
+    if (!daerah.trim()) {
+      setRalat('Sila isi daerah.')
       return
     }
     if (!namaKenderaan || !nomborPlat || !jenisKenderaan || !keadaan) {
@@ -92,9 +108,11 @@ export function TambahKenderaanModal({ open, negeriAwal, negeriTetap, onClose, o
       nombor_plat: nomborPlat,
       jenis_kenderaan: jenisKenderaan,
       keadaan,
-      keterangan_kerosakan: keadaan === 'rosak' ? keteranganKerosakan : null,
+      // Rosak: reason (required); Selenggara: details (optional)
+      keterangan_kerosakan: keadaan === 'baik' ? null : keteranganKerosakan.trim() || null,
       foto_url: fotoUrl,
       negeri: pilihanNegeri,
+      daerah: hurufBesar(daerah),
     })
 
     setMenghantar(false)
@@ -158,6 +176,22 @@ export function TambahKenderaanModal({ open, negeriAwal, negeriTetap, onClose, o
                     ))}
                   </select>
                 )}
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-neutral-700">Daerah</label>
+                <input
+                  value={daerah}
+                  onChange={(e) => setDaerah(e.target.value)}
+                  list="cadangan-daerah-tambah"
+                  placeholder="Contoh: KINTA"
+                  className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm uppercase text-neutral-900 outline-none focus:border-emerald-600"
+                />
+                <datalist id="cadangan-daerah-tambah">
+                  {cadanganDaerah(pilihanNegeri).map((d) => (
+                    <option key={d} value={d} />
+                  ))}
+                </datalist>
               </div>
 
               <div>
@@ -248,29 +282,27 @@ export function TambahKenderaanModal({ open, negeriAwal, negeriTetap, onClose, o
                 <label className="mb-2 block text-sm font-medium text-neutral-700">
                   Keadaan
                 </label>
-                <div className="flex gap-2">
-                  {(['baik', 'rosak'] as const).map((k) => {
-                    const active = keadaan === k
+                <div className="flex flex-wrap gap-2">
+                  {KEADAAN_LIST.map(({ value, label }) => {
+                    const active = keadaan === value
                     return (
                       <button
-                        key={k}
+                        key={value}
                         type="button"
-                        onClick={() => setKeadaan(k)}
+                        onClick={() => setKeadaan(value)}
                         className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
                           active
-                            ? k === 'baik'
-                              ? 'border-emerald-700 bg-emerald-700 text-white'
-                              : 'border-red-600 bg-red-600 text-white'
+                            ? KEADAAN_AKTIF[value]
                             : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'
                         }`}
                       >
-                        {k === 'baik' ? 'BAIK' : 'ROSAK'}
+                        {label.toUpperCase()}
                       </button>
                     )
                   })}
                 </div>
 
-                {keadaan === 'rosak' && (
+                {(keadaan === 'rosak' || keadaan === 'selenggara') && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
@@ -280,7 +312,11 @@ export function TambahKenderaanModal({ open, negeriAwal, negeriTetap, onClose, o
                     <textarea
                       value={keteranganKerosakan}
                       onChange={(e) => setKeteranganKerosakan(e.target.value)}
-                      placeholder="Nyatakan jenis kerosakan / sebab (contoh: enjin gagal semasa operasi)"
+                      placeholder={
+                        keadaan === 'rosak'
+                          ? 'Nyatakan jenis kerosakan / sebab (contoh: enjin gagal semasa operasi)'
+                          : 'Butiran selenggara (pilihan) — contoh: servis berkala, jangka siap 15/11'
+                      }
                       rows={3}
                       className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-900 outline-none focus:border-emerald-600"
                     />

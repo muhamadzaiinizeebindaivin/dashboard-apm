@@ -3,7 +3,19 @@ import type { ChangeEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Pencil, Trash2, Camera } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { JENIS_KENDERAAN, JENIS_LABEL, JENIS_DEFAULT_PHOTO } from '../lib/kenderaanVisual'
+import {
+  JENIS_KENDERAAN,
+  JENIS_LABEL,
+  JENIS_DEFAULT_PHOTO,
+  KEADAAN_LIST,
+  KEADAAN_LABEL,
+  KEADAAN_BADGE,
+  KEADAAN_TITIK,
+  KEADAAN_AKTIF,
+  normalKeadaan,
+} from '../lib/kenderaanVisual'
+import type { Keadaan } from '../lib/kenderaanVisual'
+import { hurufBesar } from '../lib/normalisasi'
 
 export type KenderaanRow = {
   id: string
@@ -14,11 +26,13 @@ export type KenderaanRow = {
   keterangan_kerosakan: string | null
   foto_url: string | null
   negeri?: string | null // state the vehicle belongs to (null = not assigned yet, PKOP only)
+  daerah?: string | null // district (null = recorded before the Daerah field)
   created_at: string
 }
 
 type KenderaanDetailPanelProps = {
   kenderaan: KenderaanRow | null
+  cadanganDaerah: (negeri: string) => string[]
   onClose: () => void
   onUpdated: () => void
   onRequestDelete: (row: KenderaanRow) => void
@@ -26,6 +40,7 @@ type KenderaanDetailPanelProps = {
 
 export function KenderaanDetailPanel({
   kenderaan,
+  cadanganDaerah,
   onClose,
   onUpdated,
   onRequestDelete,
@@ -33,8 +48,9 @@ export function KenderaanDetailPanel({
   const [editing, setEditing] = useState(false)
   const [namaKenderaan, setNamaKenderaan] = useState('')
   const [nomborPlat, setNomborPlat] = useState('')
+  const [daerah, setDaerah] = useState('')
   const [jenisKenderaan, setJenisKenderaan] = useState('')
-  const [keadaan, setKeadaan] = useState<'baik' | 'rosak' | ''>('')
+  const [keadaan, setKeadaan] = useState<Keadaan | ''>('')
   const [keteranganKerosakan, setKeteranganKerosakan] = useState('')
   const [fotoBaru, setFotoBaru] = useState<File | null>(null)
   const [fotoPreview, setFotoPreview] = useState<string | null>(null)
@@ -49,8 +65,9 @@ export function KenderaanDetailPanel({
     setRalat('')
     setNamaKenderaan(kenderaan.nama_kenderaan)
     setNomborPlat(kenderaan.nombor_plat)
+    setDaerah(kenderaan.daerah ?? '')
     setJenisKenderaan(kenderaan.jenis_kenderaan)
-    setKeadaan(kenderaan.keadaan as 'baik' | 'rosak')
+    setKeadaan(normalKeadaan(kenderaan.keadaan))
     setKeteranganKerosakan(kenderaan.keterangan_kerosakan ?? '')
     setFotoBaru(null)
     setFotoPreview(null)
@@ -75,6 +92,10 @@ export function KenderaanDetailPanel({
     if (!kenderaan) return
     setRalat('')
 
+    if (!daerah.trim()) {
+      setRalat('Sila isi daerah.')
+      return
+    }
     if (!namaKenderaan || !nomborPlat || !jenisKenderaan || !keadaan) {
       setRalat('Sila lengkapkan semua medan.')
       return
@@ -108,9 +129,10 @@ export function KenderaanDetailPanel({
       .update({
         nama_kenderaan: namaKenderaan,
         nombor_plat: nomborPlat,
+        daerah: hurufBesar(daerah),
         jenis_kenderaan: jenisKenderaan,
         keadaan,
-        keterangan_kerosakan: keadaan === 'rosak' ? keteranganKerosakan : null,
+        keterangan_kerosakan: keadaan === 'baik' ? null : keteranganKerosakan.trim() || null,
         foto_url: fotoUrl,
       })
       .eq('id', kenderaan.id)
@@ -129,7 +151,7 @@ export function KenderaanDetailPanel({
   const gambarDefault = kenderaan
     ? JENIS_DEFAULT_PHOTO[kenderaan.jenis_kenderaan] ?? JENIS_DEFAULT_PHOTO['4wd']
     : JENIS_DEFAULT_PHOTO['4wd']
-  const baik = kenderaan?.keadaan === 'baik'
+  const keadaanSemasa = normalKeadaan(kenderaan?.keadaan)
   const fotoTunjuk = fotoDipadam
     ? gambarDefault
     : fotoPreview ?? kenderaan?.foto_url ?? gambarDefault
@@ -161,14 +183,10 @@ export function KenderaanDetailPanel({
                     {kenderaan.nombor_plat}
                   </h2>
                   <span
-                    className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                      baik ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
-                    }`}
+                    className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${KEADAAN_BADGE[keadaanSemasa]}`}
                   >
-                    <span
-                      className={`h-1.5 w-1.5 rounded-full ${baik ? 'bg-emerald-600' : 'bg-red-600'}`}
-                    />
-                    {baik ? 'Baik' : 'Rosak'}
+                    <span className={`h-1.5 w-1.5 rounded-full ${KEADAAN_TITIK[keadaanSemasa]}`} />
+                    {KEADAAN_LABEL[keadaanSemasa]}
                   </span>
                 </div>
                 <p className="mt-0.5 text-sm text-neutral-500">{kenderaan.nama_kenderaan}</p>
@@ -223,16 +241,32 @@ export function KenderaanDetailPanel({
 
               {!editing ? (
                 <>
-                  <div className="mt-5 flex items-center gap-2">
+                  <div className="mt-5 flex flex-wrap items-center gap-2">
                     <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-medium text-neutral-600">
                       {JENIS_LABEL[kenderaan.jenis_kenderaan] ?? kenderaan.jenis_kenderaan}
                     </span>
+                    {kenderaan.daerah ? (
+                      <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-medium text-sky-800">
+                        {kenderaan.daerah}
+                        {kenderaan.negeri ? `, ${kenderaan.negeri}` : ''}
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">
+                        Tiada daerah — sila kemas kini
+                      </span>
+                    )}
                   </div>
 
-                  {!baik && kenderaan.keterangan_kerosakan && (
+                  {keadaanSemasa === 'rosak' && kenderaan.keterangan_kerosakan && (
                     <div className="mt-4 rounded-lg bg-red-50 p-3">
                       <p className="text-xs font-medium text-red-700">Sebab kerosakan</p>
                       <p className="mt-1 text-sm text-red-800">{kenderaan.keterangan_kerosakan}</p>
+                    </div>
+                  )}
+                  {keadaanSemasa === 'selenggara' && kenderaan.keterangan_kerosakan && (
+                    <div className="mt-4 rounded-lg bg-amber-50 p-3">
+                      <p className="text-xs font-medium text-amber-700">Butiran selenggara</p>
+                      <p className="mt-1 text-sm text-amber-800">{kenderaan.keterangan_kerosakan}</p>
                     </div>
                   )}
 
@@ -282,6 +316,22 @@ export function KenderaanDetailPanel({
                   </div>
 
                   <div>
+                    <label className="mb-1 block text-sm font-medium text-neutral-700">Daerah</label>
+                    <input
+                      value={daerah}
+                      onChange={(e) => setDaerah(e.target.value)}
+                      list="cadangan-daerah-edit"
+                      placeholder="Contoh: KINTA"
+                      className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm uppercase text-neutral-900 outline-none focus:border-emerald-600"
+                    />
+                    <datalist id="cadangan-daerah-edit">
+                      {cadanganDaerah(kenderaan.negeri ?? '').map((d) => (
+                        <option key={d} value={d} />
+                      ))}
+                    </datalist>
+                  </div>
+
+                  <div>
                     <label className="mb-2 block text-sm font-medium text-neutral-700">
                       Jenis kenderaan
                     </label>
@@ -310,33 +360,35 @@ export function KenderaanDetailPanel({
                     <label className="mb-2 block text-sm font-medium text-neutral-700">
                       Keadaan
                     </label>
-                    <div className="flex gap-2">
-                      {(['baik', 'rosak'] as const).map((k) => {
-                        const active = keadaan === k
+                    <div className="flex flex-wrap gap-2">
+                      {KEADAAN_LIST.map(({ value, label }) => {
+                        const active = keadaan === value
                         return (
                           <button
-                            key={k}
+                            key={value}
                             type="button"
-                            onClick={() => setKeadaan(k)}
+                            onClick={() => setKeadaan(value)}
                             className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
                               active
-                                ? k === 'baik'
-                                  ? 'border-emerald-700 bg-emerald-700 text-white'
-                                  : 'border-red-600 bg-red-600 text-white'
+                                ? KEADAAN_AKTIF[value]
                                 : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'
                             }`}
                           >
-                            {k === 'baik' ? 'BAIK' : 'ROSAK'}
+                            {label.toUpperCase()}
                           </button>
                         )
                       })}
                     </div>
 
-                    {keadaan === 'rosak' && (
+                    {(keadaan === 'rosak' || keadaan === 'selenggara') && (
                       <textarea
                         value={keteranganKerosakan}
                         onChange={(e) => setKeteranganKerosakan(e.target.value)}
-                        placeholder="Nyatakan jenis kerosakan / sebab"
+                        placeholder={
+                          keadaan === 'rosak'
+                            ? 'Nyatakan jenis kerosakan / sebab'
+                            : 'Butiran selenggara (pilihan)'
+                        }
                         rows={3}
                         className="mt-2 w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-900 outline-none focus:border-emerald-600"
                       />

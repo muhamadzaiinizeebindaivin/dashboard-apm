@@ -19,7 +19,15 @@ import { DashboardCard } from '../components/DashboardCard'
 import { TambahKenderaanModal } from '../components/TambahKenderaanModal'
 import { KenderaanDetailPanel } from '../components/KenderaanDetailPanel'
 import type { KenderaanRow } from '../components/KenderaanDetailPanel'
-import { JENIS_KENDERAAN, JENIS_LABEL, JENIS_DEFAULT_PHOTO } from '../lib/kenderaanVisual'
+import {
+  JENIS_KENDERAAN,
+  JENIS_LABEL,
+  JENIS_DEFAULT_PHOTO,
+  KEADAAN_LIST,
+  KEADAAN_LABEL,
+  KEADAAN_BADGE,
+  normalKeadaan,
+} from '../lib/kenderaanVisual'
 import { supabase } from '../lib/supabase'
 import { Memuat, SkeletonDokumen, SkeletonKenderaan } from '../components/Memuatkan'
 import { SENARAI_KUMPULAN_NEGERI, ahliKumpulan, samaKumpulan } from '../lib/kumpulanNegeri'
@@ -106,7 +114,7 @@ export function Logistik() {
     setLoadingKenderaan(true)
     const { data, error } = await supabase
       .from('logistik_kenderaan')
-      .select('id, nama_kenderaan, nombor_plat, jenis_kenderaan, keadaan, keterangan_kerosakan, foto_url, negeri, created_at')
+      .select('id, nama_kenderaan, nombor_plat, jenis_kenderaan, keadaan, keterangan_kerosakan, foto_url, negeri, daerah, created_at')
       .order('created_at', { ascending: false })
 
     setLoadingKenderaan(false)
@@ -245,13 +253,24 @@ export function Logistik() {
     const cocokCarian =
       carian.trim() === '' ||
       k.nama_kenderaan.toLowerCase().includes(carian.toLowerCase()) ||
-      k.nombor_plat.toLowerCase().includes(carian.toLowerCase())
+      k.nombor_plat.toLowerCase().includes(carian.toLowerCase()) ||
+      (k.daerah ?? '').toLowerCase().includes(carian.toLowerCase())
     const cocokJenis = tapisJenis === '' || k.jenis_kenderaan === tapisJenis
     const cocokKeadaan = tapisKeadaan === '' || k.keadaan === tapisKeadaan
     // PKOP filter (a PKON only receives their state anyway)
     const cocokNegeri = negeriTetap !== null || tapisNegeri === '' || samaKumpulan(k.negeri, tapisNegeri)
     return cocokCarian && cocokJenis && cocokKeadaan && cocokNegeri
   })
+
+  // Districts already used for a state's vehicles (suggestions in the Daerah field)
+  const cadanganDaerah = (negeri: string) =>
+    [
+      ...new Set(
+        kenderaan
+          .filter((k) => negeri && k.daerah && samaKumpulan(k.negeri, negeri))
+          .map((k) => k.daerah as string),
+      ),
+    ].sort((a, b) => a.localeCompare(b))
 
   const jumlahHalaman = Math.max(1, Math.ceil(kenderaanTertapis.length / SAIZ_HALAMAN))
   const kenderaanHalamanIni = kenderaanTertapis.slice(
@@ -428,7 +447,7 @@ export function Logistik() {
             <input
               value={carian}
               onChange={(e) => setCarian(e.target.value)}
-              placeholder="Cari nama atau nombor plat..."
+              placeholder="Cari nama, nombor plat atau daerah..."
               className="w-full rounded-full border border-white/60 bg-white/60 py-2.5 pl-9 pr-4 text-sm text-neutral-900 outline-none backdrop-blur-md focus:border-emerald-600"
             />
           </div>
@@ -462,11 +481,7 @@ export function Logistik() {
 
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-medium text-neutral-500">Keadaan:</span>
-            {[
-              { value: '', label: 'Semua' },
-              { value: 'baik', label: 'Baik' },
-              { value: 'rosak', label: 'Rosak' },
-            ].map(({ value, label }) => (
+            {[{ value: '', label: 'Semua' }, ...KEADAAN_LIST].map(({ value, label }) => (
               <button
                 key={value}
                 onClick={() => setTapisKeadaan(value)}
@@ -527,7 +542,7 @@ export function Logistik() {
             >
               {kenderaanHalamanIni.map((k) => {
                 const gambar = k.foto_url ?? JENIS_DEFAULT_PHOTO[k.jenis_kenderaan] ?? JENIS_DEFAULT_PHOTO['4wd']
-                const baik = k.keadaan === 'baik'
+                const keadaanK = normalKeadaan(k.keadaan)
                 return (
                   <motion.div
                     key={k.id}
@@ -550,18 +565,17 @@ export function Logistik() {
 
                     <div className="p-4">
                       <p className="truncate font-medium text-neutral-900">{k.nama_kenderaan}</p>
-                      <p className="text-xs text-neutral-500">{k.nombor_plat}</p>
+                      <p className="text-xs text-neutral-500">
+                        {k.nombor_plat}
+                        {k.daerah ? ` · ${k.daerah}` : ''}
+                      </p>
 
                       <div className="mt-3 flex items-center gap-2">
                         <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-medium text-neutral-600">
                           {JENIS_LABEL[k.jenis_kenderaan] ?? k.jenis_kenderaan}
                         </span>
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                            baik ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
-                          }`}
-                        >
-                          {baik ? 'BAIK' : 'ROSAK'}
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${KEADAAN_BADGE[keadaanK]}`}>
+                          {KEADAAN_LABEL[keadaanK].toUpperCase()}
                         </span>
                         {/* PKOP: which state the vehicle belongs to */}
                         {!negeriTetap && k.negeri && (
@@ -629,6 +643,7 @@ export function Logistik() {
         open={modalKenderaanOpen}
         negeriAwal={negeriAktif}
         negeriTetap={negeriTetap}
+        cadanganDaerah={cadanganDaerah}
         onClose={() => setModalKenderaanOpen(false)}
         onSuccess={() => {
           setModalKenderaanOpen(false)
@@ -646,6 +661,7 @@ export function Logistik() {
           beriNotifikasi('success', 'Kenderaan berjaya dikemas kini.')
         }}
         onRequestDelete={(row) => setPendingDeleteKenderaan(row)}
+        cadanganDaerah={cadanganDaerah}
       />
 
       {/* Confirm delete: dokumen */}

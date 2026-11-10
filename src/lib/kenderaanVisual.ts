@@ -13,6 +13,45 @@ export const JENIS_KENDERAAN = [
   { value: 'marin', label: 'Marin' },
 ] as const
 
+// Vehicle condition: Baik (ready), Selenggara (under maintenance), Rosak (out of service)
+export type Keadaan = 'baik' | 'selenggara' | 'rosak'
+
+export const KEADAAN_LIST: { value: Keadaan; label: string }[] = [
+  { value: 'baik', label: 'Baik' },
+  { value: 'selenggara', label: 'Selenggara' },
+  { value: 'rosak', label: 'Rosak' },
+]
+
+export const KEADAAN_LABEL: Record<Keadaan, string> = {
+  baik: 'Baik',
+  selenggara: 'Selenggara',
+  rosak: 'Rosak',
+}
+
+// Badge (card, detail panel)
+export const KEADAAN_BADGE: Record<Keadaan, string> = {
+  baik: 'bg-emerald-100 text-emerald-800',
+  selenggara: 'bg-amber-100 text-amber-800',
+  rosak: 'bg-red-100 text-red-800',
+}
+
+export const KEADAAN_TITIK: Record<Keadaan, string> = {
+  baik: 'bg-emerald-600',
+  selenggara: 'bg-amber-500',
+  rosak: 'bg-red-600',
+}
+
+// Selected choice button
+export const KEADAAN_AKTIF: Record<Keadaan, string> = {
+  baik: 'border-emerald-700 bg-emerald-700 text-white',
+  selenggara: 'border-amber-500 bg-amber-500 text-white',
+  rosak: 'border-red-600 bg-red-600 text-white',
+}
+
+export function normalKeadaan(s: string | null | undefined): Keadaan {
+  return s === 'baik' || s === 'selenggara' ? s : 'rosak'
+}
+
 export const JENIS_ICON: Record<string, typeof Car> = {
   '4wd': Car,
   ambulans: Siren,
