@@ -169,6 +169,79 @@ function KeputusanModal({ keputusan, onClose, onSelesai }: { keputusan: Keputusa
   )
 }
 
+// PKOP -> PKON: the state is required, saved together with the role
+function TukarPkonModal({
+  pengguna,
+  onClose,
+  onSimpan,
+}: {
+  pengguna: ProfileRow
+  onClose: () => void
+  onSimpan: (negeri: string) => Promise<boolean>
+}) {
+  const [negeri, setNegeri] = useState('')
+  const [menyimpan, setMenyimpan] = useState(false)
+
+  async function sahkan() {
+    if (!negeri) return
+    setMenyimpan(true)
+    const berjaya = await onSimpan(negeri)
+    setMenyimpan(false)
+    if (berjaya) onClose()
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-[1250] flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        <h2 className="text-lg font-semibold text-neutral-900">Tukar kepada Admin (PKON)</h2>
+        <div className="mt-3 rounded-lg bg-neutral-50 px-3 py-2 text-sm">
+          <p className="font-medium text-neutral-800">{pengguna.full_name ?? '—'}</p>
+          <p className="text-neutral-500">{pengguna.email}</p>
+        </div>
+
+        <div className="mt-4">
+          <label className="mb-1 block text-sm font-medium text-neutral-700">
+            Negeri <span className="text-red-500">*</span>
+          </label>
+          <select
+            value={negeri}
+            onChange={(e) => setNegeri(e.target.value)}
+            className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-600"
+          >
+            <option value="">— Pilih negeri —</option>
+            {SENARAI_KUMPULAN_NEGERI.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-neutral-400">
+            Admin hanya boleh melihat data negeri ini, dan tidak lagi melihat negeri lain.
+          </p>
+        </div>
+
+        <div className="mt-6 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="rounded-lg border border-neutral-200 px-4 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-50"
+          >
+            Batal
+          </button>
+          <button
+            onClick={sahkan}
+            disabled={!negeri || menyimpan}
+            className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-60"
+          >
+            {menyimpan && <Loader2 size={15} className="animate-spin" />}
+            Simpan
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
 // Error message sent back by an Edge Function ({ error: "..." }), or a generic one
 // 401 from our edge functions = the login session no longer exists on the server
 // (signed out elsewhere, password changed…) even though the browser still holds a token.
@@ -195,6 +268,7 @@ export function Admin() {
   const [deleteError, setDeleteError] = useState('')
   const [fadingId, setFadingId] = useState<string | null>(null)
   const [toast, setToast] = useState<ToastState>(null)
+  const [tukarPkon, setTukarPkon] = useState<ProfileRow | null>(null)
 
   const muatSemula = useCallback(async () => {
     const { data, error } = await supabase
@@ -225,17 +299,32 @@ export function Admin() {
   const halamanSemasa = Math.min(halaman, jumlahHalaman) // e.g. after deleting the last row of the last page
   const akaunHalaman = akaun.slice((halamanSemasa - 1) * SAIZ_HALAMAN, halamanSemasa * SAIZ_HALAMAN)
 
-  async function handleRoleChange(userId: string, role: UserRole) {
+  // A PKON needs a state: switching to PKON goes through TukarPkonModal first
+  async function handleRoleChange(user: ProfileRow, role: UserRole) {
+    if (role === 'pkon') {
+      setTukarPkon(user)
+      return
+    }
+    await simpanPeranan(user.id, role, null)
+  }
+
+  // Role and state saved in one update: a PKON never exists without a state,
+  // and a PKOP keeps no leftover state
+  async function simpanPeranan(userId: string, role: UserRole, negeri: string | null): Promise<boolean> {
     setUpdatingId(userId)
     // .select() returns the updated row: an empty result means RLS refused it silently
-    const { data, error } = await supabase.from('profiles').update({ role }).eq('id', userId).select('id')
+    const { data, error } = await supabase.from('profiles').update({ role, negeri }).eq('id', userId).select('id')
     setUpdatingId(null)
     if (error || !data || data.length === 0) {
       setToast({ type: 'error', message: 'Gagal menukar peranan. Anda mungkin tiada kebenaran untuk tindakan ini.' })
-      return
+      return false
     }
-    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role } : u)))
-    setToast({ type: 'success', message: 'Peranan dikemas kini.' })
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role, negeri } : u)))
+    setToast({
+      type: 'success',
+      message: role === 'pkon' ? `Peranan dikemas kini: Admin (PKON), ${negeri}.` : 'Peranan dikemas kini: Super Admin (PKOP).',
+    })
+    return true
   }
 
   async function handleNegeriChange(userId: string, negeri: string) {
@@ -419,7 +508,7 @@ export function Admin() {
                       <select
                         value={user.role}
                         disabled={updatingId === user.id}
-                        onChange={(e) => handleRoleChange(user.id, e.target.value as UserRole)}
+                        onChange={(e) => handleRoleChange(user, e.target.value as UserRole)}
                         className="rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-xs font-medium text-neutral-600 outline-none focus:border-emerald-500 disabled:opacity-60"
                       >
                         <option value="pkon">Admin (PKON)</option>
@@ -527,6 +616,14 @@ export function Admin() {
             setToast({ type: 'success', message: mesej })
             muatSemula()
           }}
+        />
+      )}
+
+      {tukarPkon && (
+        <TukarPkonModal
+          pengguna={tukarPkon}
+          onClose={() => setTukarPkon(null)}
+          onSimpan={(negeri) => simpanPeranan(tukarPkon.id, 'pkon', negeri)}
         />
       )}
 
