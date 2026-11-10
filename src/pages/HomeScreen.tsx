@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
-import { ShieldCheck, FileText, FileSpreadsheet, HandCoins, MapPin, FileWarning } from 'lucide-react'
+import { ShieldCheck, FileText, FileSpreadsheet, HandCoins, MapPin, FileWarning, ClipboardList } from 'lucide-react'
 import { LoginModal } from '../components/LoginModal'
 import type { PautanAwam } from '../components/LoginModal'
 import { PemilihTema } from '../components/PemilihTema'
@@ -102,6 +102,15 @@ function KandunganLogMasuk() {
             <FileSpreadsheet size={15} />
             Hantar Laporan Semasa
           </Link>
+          {profile?.role && (
+            <Link
+              to="/pocket-data"
+              className="flex items-center gap-1.5 rounded-full bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-md transition-colors hover:bg-emerald-800"
+            >
+              <ClipboardList size={15} />
+              Jana Pocket Data
+            </Link>
+          )}
         </div>
       </div>
 

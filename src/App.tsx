@@ -19,6 +19,7 @@ import { PengurusanPps } from './pages/PengurusanPps'
 import { PengurusanBencana } from './pages/PengurusanBencana'
 import { StatistikMusim } from './pages/StatistikMusim'
 import { Logistik } from './pages/Logistik'
+import { JanaPocketData } from './pages/PocketData'
 import { SenaraiSumbangan } from './pages/SenaraiSumbangan'
 import { SenaraiSumbanganNegeri } from './pages/SenaraiSumbanganNegeri'
 import { Admin } from './pages/Admin'
@@ -88,6 +89,7 @@ function App() {
                   <Route path="statistik" element={<StatistikMusim />} />
                 </Route>
                 <Route path="logistik" element={<Logistik />} />
+                <Route path="pocket-data" element={<JanaPocketData />} />
                 <Route path="profil" element={<ProfilSaya />} />
                 <Route path="bencana" element={<Bencana />} />
 
