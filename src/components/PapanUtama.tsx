@@ -4,12 +4,12 @@ import { AlertTriangle, Users, Tent, Home, MapPin, Activity, FileText, Inbox } f
 import { PetaBencana } from './PetaBencana'
 import type { PpsPeta } from './PetaBencana'
 import { dataTerkiniTitik, ikonKategori, warnaSelamat } from '../lib/titikBencana'
-import { useLaporanTerkini, usePetaAwam, usePpsDitutup, useTrendMangsa } from '../lib/petaAwam'
+import { useLaporanTerkini, usePetaAwam, useTrendMangsa } from '../lib/petaAwam'
 import type { PpsAwam, TitikTrend } from '../lib/petaAwam'
 import { kumpulanNegeri } from '../lib/kumpulanNegeri'
 
 // Laman Utama dashboard (public page and logged-in home): the Peta Bencana in
-// display-only mode with floating figures, and three cards underneath.
+// display-only mode with floating figures, and two cards underneath.
 // Palette of this page: white glass, blue / navy, orange highlights.
 // Editing stays in the Bencana tab.
 
@@ -17,7 +17,7 @@ import { kumpulanNegeri } from '../lib/kumpulanNegeri'
 const NAVY = 'var(--warna-navy)'
 const BIRU = '#2563eb'
 const OREN = '#f97316'
-const KELABU = '#94a3b8'
+
 
 const nombor = (n: number) => n.toLocaleString('ms-MY')
 
@@ -195,96 +195,6 @@ function KadTrend() {
 }
 
 // ---------------------------------------------------------------------------
-// Card 2: status of the open PPS, as a ring
-// ---------------------------------------------------------------------------
-// A PPS opened less than this many hours ago counts as "Baru dibuka"
-const HAD_BARU_DIBUKA_JAM = 8
-// "Ditutup" slice: PPS closed in this many past hours (same window as the Laporan Nasional)
-const TEMPOH_DITUTUP_JAM = 24
-
-function KadStatusPps({ pps, ditutup }: { pps: PpsAwam[]; ditutup: number }) {
-  const had = HAD_BARU_DIBUKA_JAM * 3_600_000
-  const kini = Date.now()
-  // Still open: "dibuka" and "cadangan_tutup" (a proposal to close is not a closure)
-  const terbuka = pps.filter((p) => p.status !== 'ditutup')
-  const baru = (p: PpsAwam) => kini - new Date(p.dibuka_pada).getTime() < had
-
-  const bahagian = [
-    { label: `Baru dibuka (< ${HAD_BARU_DIBUKA_JAM} j)`, nilai: terbuka.filter(baru).length, warna: OREN },
-    { label: 'Dibuka', nilai: terbuka.filter((p) => !baru(p)).length, warna: BIRU },
-    { label: `Ditutup (${TEMPOH_DITUTUP_JAM} j lepas)`, nilai: ditutup, warna: KELABU },
-  ]
-  const jumlah = bahagian.reduce((n, b) => n + b.nilai, 0)
-
-  const r = 52
-  const lilitan = 2 * Math.PI * r
-  let ofset = 0
-
-  return (
-    <div className={kad}>
-      <h3 className="text-sm font-semibold" style={{ color: NAVY }}>
-        Status PPS
-      </h3>
-      <p className="text-xs text-neutral-500">PPS semasa dan yang ditutup dalam 24 jam lepas</p>
-
-      <div className="mt-4 flex items-center gap-5">
-        <svg viewBox="0 0 140 140" className="h-36 w-36 shrink-0 -rotate-90" role="img" aria-label="Status PPS">
-          <circle cx="70" cy="70" r={r} fill="none" className="stroke-neutral-100" strokeWidth="14" />
-          {jumlah > 0 &&
-            bahagian.map((b) => {
-              const panjang = (b.nilai / jumlah) * lilitan
-              const el = (
-                <circle
-                  key={b.label}
-                  cx="70"
-                  cy="70"
-                  r={r}
-                  fill="none"
-                  stroke={b.warna}
-                  strokeWidth="14"
-                  strokeDasharray={`${panjang} ${lilitan - panjang}`}
-                  strokeDashoffset={-ofset}
-                />
-              )
-              ofset += panjang
-              return el
-            })}
-          <text
-            x="70"
-            y="70"
-            transform="rotate(90 70 70)"
-            textAnchor="middle"
-            dominantBaseline="central"
-            fontSize="28"
-            fontWeight="700"
-            style={{ fill: NAVY }}
-          >
-            {jumlah}
-          </text>
-          <text x="70" y="94" transform="rotate(90 70 70)" textAnchor="middle" fontSize="10" fill="#94a3b8">
-            PPS
-          </text>
-        </svg>
-
-        <ul className="min-w-0 flex-1 space-y-2.5">
-          {bahagian.map((b) => (
-            <li key={b.label} className="flex items-center justify-between gap-2 text-xs">
-              <span className="flex min-w-0 items-center gap-2 text-neutral-600">
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: b.warna }} />
-                <span className="truncate">{b.label}</span>
-              </span>
-              <span className="font-semibold tabular-nums" style={{ color: NAVY }}>
-                {b.nilai}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
 // Card 3: latest reports received
 // ---------------------------------------------------------------------------
 function KadLaporanTerkini() {
@@ -338,7 +248,7 @@ function KadLaporanTerkini() {
 // ---------------------------------------------------------------------------
 export function PapanUtama() {
   const { kategori, titik, pps, jalan, ringkasan, bencana, loading } = usePetaAwam()
-  const ppsDitutup = usePpsDitutup(TEMPOH_DITUTUP_JAM)
+
 
   const petaKategori = Object.fromEntries(kategori.map((k) => [k.key, k]))
   const terkini = Object.fromEntries(
@@ -451,9 +361,8 @@ export function PapanUtama() {
       </div>
 
       {/* Cards */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-2">
         <KadTrend />
-        <KadStatusPps pps={pps} ditutup={ppsDitutup} />
         <KadLaporanTerkini />
       </div>
     </div>
