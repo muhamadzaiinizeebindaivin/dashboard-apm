@@ -173,6 +173,8 @@ function KandunganPopupTitik({ t, k, terkini, onTindakan }: PopupTitikProps) {
     onTindakan?.(t, jenis)
   }
   const angka = (n: number | null) => (n == null ? '—' : n)
+  // No area typed (point without a Laporan Awal): use the district of its PPS
+  const daerah = t.daerah || terkini?.daerah || null
 
   return (
     <div className="w-60 space-y-2 text-sm">
@@ -180,8 +182,8 @@ function KandunganPopupTitik({ t, k, terkini, onTindakan }: PopupTitikProps) {
         <div className="font-semibold" style={{ color: warnaSelamat(k?.warna) }}>
           {k?.label ?? t.kategori}
         </div>
-        <div className="text-neutral-800">{t.lokasi || 'Tiada nama kawasan'}</div>
-        <div className="text-xs text-neutral-500">{[t.daerah, t.negeri].filter(Boolean).join(', ')}</div>
+        <div className="text-neutral-800">{t.lokasi || daerah || 'Tiada nama kawasan'}</div>
+        <div className="text-xs text-neutral-500">{[t.lokasi ? daerah : null, t.negeri].filter(Boolean).join(', ')}</div>
       </div>
 
       {terkini ? (

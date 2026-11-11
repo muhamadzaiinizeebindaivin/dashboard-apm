@@ -4,8 +4,7 @@ import { AlertTriangle, Users, Tent, Home, MapPin, Activity, FileText, Inbox } f
 import { PetaBencana } from './PetaBencana'
 import type { PpsPeta } from './PetaBencana'
 import { dataTerkiniTitik, ikonKategori, warnaSelamat } from '../lib/titikBencana'
-import { HAD_TIADA_KEMASKINI_JAM } from '../lib/ppsPusat'
-import { useLaporanTerkini, usePetaAwam, useTrendMangsa } from '../lib/petaAwam'
+import { useLaporanTerkini, usePetaAwam, usePpsDitutup, useTrendMangsa } from '../lib/petaAwam'
 import type { PpsAwam, TitikTrend } from '../lib/petaAwam'
 import { kumpulanNegeri } from '../lib/kumpulanNegeri'
 
@@ -198,15 +197,22 @@ function KadTrend() {
 // ---------------------------------------------------------------------------
 // Card 2: status of the open PPS, as a ring
 // ---------------------------------------------------------------------------
-function KadStatusPps({ pps }: { pps: PpsAwam[] }) {
-  const had = HAD_TIADA_KEMASKINI_JAM * 3_600_000
+// A PPS opened less than this many hours ago counts as "Baru dibuka"
+const HAD_BARU_DIBUKA_JAM = 8
+// "Ditutup" slice: PPS closed in this many past hours (same window as the Laporan Nasional)
+const TEMPOH_DITUTUP_JAM = 24
+
+function KadStatusPps({ pps, ditutup }: { pps: PpsAwam[]; ditutup: number }) {
+  const had = HAD_BARU_DIBUKA_JAM * 3_600_000
   const kini = Date.now()
-  const senyap = (p: PpsAwam) => p.status === 'dibuka' && kini - new Date(p.dilapor_pada ?? p.dibuka_pada).getTime() > had
+  // Still open: "dibuka" and "cadangan_tutup" (a proposal to close is not a closure)
+  const terbuka = pps.filter((p) => p.status !== 'ditutup')
+  const baru = (p: PpsAwam) => kini - new Date(p.dibuka_pada).getTime() < had
 
   const bahagian = [
-    { label: 'Dibuka', nilai: pps.filter((p) => p.status === 'dibuka' && !senyap(p)).length, warna: BIRU },
-    { label: 'Cadangan tutup', nilai: pps.filter((p) => p.status === 'cadangan_tutup').length, warna: OREN },
-    { label: `Tiada kemas kini (> ${HAD_TIADA_KEMASKINI_JAM} j)`, nilai: pps.filter(senyap).length, warna: KELABU },
+    { label: `Baru dibuka (< ${HAD_BARU_DIBUKA_JAM} j)`, nilai: terbuka.filter(baru).length, warna: OREN },
+    { label: 'Dibuka', nilai: terbuka.filter((p) => !baru(p)).length, warna: BIRU },
+    { label: `Ditutup (${TEMPOH_DITUTUP_JAM} j lepas)`, nilai: ditutup, warna: KELABU },
   ]
   const jumlah = bahagian.reduce((n, b) => n + b.nilai, 0)
 
@@ -219,7 +225,7 @@ function KadStatusPps({ pps }: { pps: PpsAwam[] }) {
       <h3 className="text-sm font-semibold" style={{ color: NAVY }}>
         Status PPS
       </h3>
-      <p className="text-xs text-neutral-500">Pusat pemindahan yang belum ditutup</p>
+      <p className="text-xs text-neutral-500">PPS semasa dan yang ditutup dalam 24 jam lepas</p>
 
       <div className="mt-4 flex items-center gap-5">
         <svg viewBox="0 0 140 140" className="h-36 w-36 shrink-0 -rotate-90" role="img" aria-label="Status PPS">
@@ -332,11 +338,12 @@ function KadLaporanTerkini() {
 // ---------------------------------------------------------------------------
 export function PapanUtama() {
   const { kategori, titik, pps, jalan, ringkasan, bencana, loading } = usePetaAwam()
+  const ppsDitutup = usePpsDitutup(TEMPOH_DITUTUP_JAM)
 
   const petaKategori = Object.fromEntries(kategori.map((k) => [k.key, k]))
   const terkini = Object.fromEntries(
     titik.flatMap((t) => {
-      const d = dataTerkiniTitik(t, ringkasan)
+      const d = dataTerkiniTitik(t, ringkasan, pps)
       return d ? [[t.id, d] as const] : []
     }),
   )
@@ -446,7 +453,7 @@ export function PapanUtama() {
       {/* Cards */}
       <div className="grid gap-4 lg:grid-cols-3">
         <KadTrend />
-        <KadStatusPps pps={pps} />
+        <KadStatusPps pps={pps} ditutup={ppsDitutup} />
         <KadLaporanTerkini />
       </div>
     </div>

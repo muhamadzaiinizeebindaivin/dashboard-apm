@@ -45,6 +45,8 @@ function singkatan(negeri: string) {
   return perkataan.length > 1 ? perkataan.map((p) => p[0]).join('').slice(0, 2) : negeri[0]
 }
 
+type PpsMuat = Omit<PpsPeta, 'latitude' | 'longitude'> & { latitude: number | null; longitude: number | null }
+
 type BukaModal = { mod: ModTitik; koordinat: [number, number]; titik?: TitikBencana; awal: BorangTitik }
 
 export function Bencana() {
@@ -54,7 +56,8 @@ export function Bencana() {
   // Live figures from Laporan Semasa, so a point follows its disaster's reports
   const ringkasan = useRingkasanBencana()
 
-  const [pps, setPps] = useState<PpsPeta[]>([])
+  // Open PPS, with or without a location (those without one still name the area of a point)
+  const [pps, setPps] = useState<PpsMuat[]>([])
   const [paras, setParas] = useState<(ParasPeta & { created_at: string })[]>([])
 
   const [negeriFokus, setNegeriFokus] = useState('')
@@ -87,16 +90,14 @@ export function Bencana() {
     if (ralatTitik) laporRalat()
   }, [ralatTitik, laporRalat])
 
-  // Open PPS with a location (pps_pusat)
+  // Open PPS (pps_pusat); only those with a location go on the map
   const muatPps = useCallback(async () => {
     const { data, error } = await supabase
       .from('pps_pusat')
       .select('id, nama, nama_bencana, negeri, daerah, latitude, longitude, status, jumlah_mangsa')
       .neq('status', 'ditutup')
-      .not('latitude', 'is', null)
-      .not('longitude', 'is', null)
     if (error) return laporRalat()
-    setPps((data as PpsPeta[]) ?? [])
+    setPps((data as PpsMuat[]) ?? [])
   }, [laporRalat])
 
   // Active PARAS sessions (same freshness rules as the PARAS page)
@@ -141,18 +142,19 @@ export function Bencana() {
   )
   const terkini = Object.fromEntries(
     titikPapar.flatMap((t) => {
-      const d = dataTerkiniTitik(t, ringkasan)
+      const d = dataTerkiniTitik(t, ringkasan, pps)
       return d ? [[t.id, d] as const] : []
     }),
   )
   // "Wilayah Persekutuan" covers KL, Putrajaya and Labuan
-  const ppsPapar = pps.filter((p) => !negeriFokus || samaKumpulan(p.negeri, negeriFokus))
+  const ppsPeta = pps.filter((p): p is PpsPeta => p.latitude != null && p.longitude != null)
+  const ppsPapar = ppsPeta.filter((p) => !negeriFokus || samaKumpulan(p.negeri, negeriFokus))
   const parasPapar = parasSegar.filter((p) => !negeriFokus || samaKumpulan(p.negeri, negeriFokus))
   const jalanPapar = jalan.filter((j) => !negeriFokus || samaKumpulan(j.negeri, negeriFokus))
 
   // Per-state activity for the cards (not affected by the category filter)
   const bilTitik = (n: string) => titik.filter((t) => samaKumpulan(t.negeri, n)).length
-  const bilPps = (n: string) => pps.filter((p) => samaKumpulan(p.negeri, n)).length
+  const bilPps = (n: string) => ppsPeta.filter((p) => samaKumpulan(p.negeri, n)).length
 
   function tindakan(t: TitikBencana, jenis: TindakanTitik) {
     if (jenis === 'padam') {
@@ -160,8 +162,11 @@ export function Bencana() {
       return
     }
     // "Lengkapkan" keeps the final figures: start from the latest Laporan Semasa ones
-    const d = dataTerkiniTitik(t, ringkasan)
-    const awal = jenis === 'lengkapkan' && d ? denganDataTerkini(borangDaripada(t), d) : borangDaripada(t)
+    const d = dataTerkiniTitik(t, ringkasan, pps)
+    const asas = borangDaripada(t)
+    // An empty Daerah is pre-filled with the district of the disaster's PPS
+    if (d && !asas.daerah.trim()) asas.daerah = d.daerah ?? ''
+    const awal = jenis === 'lengkapkan' && d ? denganDataTerkini(asas, d) : asas
     setModal({ mod: jenis, koordinat: [t.latitude, t.longitude], titik: t, awal })
   }
 
@@ -172,7 +177,7 @@ export function Bencana() {
     if (!modal) return null
     // A point that follows its Laporan Semasa stores the live figures, so the
     // database matches what the map shows (old hand-typed numbers are replaced)
-    const d = modal.mod === 'kemaskini' && modal.titik ? dataTerkiniTitik(modal.titik, ringkasan) : null
+    const d = modal.mod === 'kemaskini' && modal.titik ? dataTerkiniTitik(modal.titik, ringkasan, pps) : null
     const rekod = keRekod(d ? denganDataTerkini(borang, d) : borang)
 
     // New disasters only come from Laporan Awal / Semasa: here a point is only edited or completed
@@ -414,7 +419,7 @@ export function Bencana() {
           awal={modal.awal}
           koordinat={modal.koordinat}
           kategori={kategori}
-          terkini={modal.titik ? dataTerkiniTitik(modal.titik, ringkasan) : null}
+          terkini={modal.titik ? dataTerkiniTitik(modal.titik, ringkasan, pps) : null}
           onSimpan={simpan}
           onClose={() => setModal(null)}
         />

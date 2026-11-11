@@ -114,3 +114,19 @@ export function useLaporanTerkini(had = 5) {
   useSegarkan(muat, 'papan-utama-laporan', JADUAL_LAPORAN)
   return senarai
 }
+
+const JADUAL_DITUTUP = ['pps_pusat']
+
+// Number of PPS closed in the last `jam` hours (Status PPS card)
+export function usePpsDitutup(jam = 24) {
+  const [bil, setBil] = useState(0)
+
+  const muat = useCallback(async () => {
+    const { data, error } = await supabase.rpc('pps_ditutup_awam', { p_jam: jam })
+    if (error) return
+    setBil((data as number) ?? 0)
+  }, [jam])
+
+  useSegarkan(muat, `papan-utama-pps-ditutup-${jam}`, JADUAL_DITUTUP)
+  return bil
+}

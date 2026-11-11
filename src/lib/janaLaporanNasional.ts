@@ -1,6 +1,6 @@
 import apmLogo from '../assets/apm-logo.png'
 import petaMalaysia from '../assets/peta-malaysia.png'
-import { NEGERI_NORM } from './negeriVisual'
+import { BARIS_KOTAK, kotakPetaLaporan } from './kotakPetaLaporan'
 import { ambilJenisBencana, susunJenis, warnaJenisRgb } from './jenisBencana'
 import type { ItemLaporanNasional, KorbanNegeri, PpsDitutup } from './laporanNasional'
 import { ambilDataGraf } from './laporanNasionalGraf'
@@ -356,13 +356,14 @@ export async function bangunLaporanNasionalDoc(
   const petaTinggi = petaLebar / nisbahPeta
   const petaX = margin + kotakLebar + jarakLuar
 
-  const negeriAktif = [...new Set(aktif.map((i) => kumpulanNegeri(i.negeri)).filter((n): n is string => !!n))]
+  // One box per state + disaster type (a state with two types gets two boxes)
+  const kotak = kotakPetaLaporan(aktif)
   const kotakTinggi = 5
   const lineTinggi = 2.6
-  const langkah = kotakTinggi + 3 + 5 * lineTinggi + 2
+  const langkah = kotakTinggi + 3 + BARIS_KOTAK * lineTinggi + 2
 
-  const kiriCount = negeriAktif.filter((n) => NEGERI_NORM[n] && NEGERI_NORM[n].x < 0.5).length
-  const kananCount = negeriAktif.length - kiriCount
+  const kiriCount = kotak.filter((k) => k.kiri).length
+  const kananCount = kotak.length - kiriCount
   const kiriLuarKotak = Math.ceil(kiriCount / 2)
   const kananLuarKotak = Math.ceil(kananCount / 2)
   const tengahKotak = Math.floor(kiriCount / 2) + Math.floor(kananCount / 2)
@@ -386,35 +387,14 @@ export async function bangunLaporanNasionalDoc(
   let kiriGiliran = 0
   let kananGiliran = 0
 
-  for (const negeri of negeriAktif) {
-    const norm = NEGERI_NORM[negeri]
-    if (!norm) continue
-    const mx = petaX + norm.x * petaLebar
-    const my = petaY + norm.y * petaTinggi
+  for (const k of kotak) {
+    const mx = petaX + k.x * petaLebar
+    const my = petaY + k.y * petaTinggi
 
-    // KL, Putrajaya and Labuan: one Wilayah Persekutuan box
-    const punyaNegeri = aktif.filter((i) => kumpulanNegeri(i.negeri) === negeri)
-    const jenisUtama = punyaNegeri[0]?.jenisBencana ?? ''
-    lukisIkon(doc, jenisUtama, mx, my, 1.9)
-
-    const daerahNegeri = new Set(punyaNegeri.filter((i) => i.daerah).map((i) => i.daerah))
-    const ppsNegeri = punyaNegeri.reduce(
-      (n, i) => n + (i.pps ? i.pps.split('\n').filter((s) => s.trim()).length : 0),
-      0,
-    )
-    const keluargaNegeri = punyaNegeri.reduce((n, i) => n + i.jumlahKeluarga, 0)
-    const mangsaNegeri = punyaNegeri.reduce((n, i) => n + i.jumlahMangsa, 0)
-    const trendNegeri = punyaNegeri.some((i) => i.trend === 'naik')
-      ? 'NAIK'
-      : punyaNegeri.some((i) => i.trend === 'turun')
-        ? 'TURUN'
-        : 'KEKAL'
-
-    const kiri = norm.x < 0.5
     let cx: number
     let cy: number
     let sisiKanan: boolean // does the box sit to the RIGHT of its marker (leader line points left into it)?
-    if (kiri) {
+    if (k.kiri) {
       const guna = kiriGiliran % 2 === 0 ? 'luar' : 'tengah'
       kiriGiliran++
       cx = guna === 'luar' ? xLuarKiri : xTengah
@@ -435,25 +415,20 @@ export async function bangunLaporanNasionalDoc(
     doc.setDrawColor(150, 150, 150)
     doc.setLineWidth(0.3)
     doc.line(mx, my, sisiKanan ? cx : cx + kotakLebar, cy + kotakTinggi / 2)
+    // Marker drawn after its line, so the line doesn't cross the icon
+    lukisIkon(doc, k.jenis, mx, my, 1.9)
 
     doc.setFillColor(11, 42, 92)
     doc.roundedRect(cx, cy, kotakLebar, kotakTinggi, 1.2, 1.2, 'F')
     doc.setTextColor(255, 255, 255)
     doc.setFontSize(6)
     doc.setFont('helvetica', 'bold')
-    doc.text(negeri.toUpperCase(), cx + kotakLebar / 2, cy + 3.6, { align: 'center' })
+    doc.text(k.negeri.toUpperCase(), cx + kotakLebar / 2, cy + 3.6, { align: 'center' })
 
     doc.setTextColor(30, 30, 30)
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(5.5)
-    const baris = [
-      `TREND : ${trendNegeri}`,
-      `DAERAH : ${daerahNegeri.size}`,
-      `PPS : ${ppsNegeri}`,
-      `KELUARGA : ${keluargaNegeri}`,
-      `MANGSA : ${mangsaNegeri}`,
-    ]
-    baris.forEach((t, i) => doc.text(t, cx, cy + kotakTinggi + 3 + i * lineTinggi))
+    k.baris.forEach((t, i) => doc.text(t, cx, cy + kotakTinggi + 3 + i * lineTinggi))
   }
 
   // --- Legend — its Y adapts to however tall the tallest column actually ended up.

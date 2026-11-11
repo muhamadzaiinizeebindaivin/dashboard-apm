@@ -5,6 +5,7 @@ import { MapPin, Droplets, Waves, Mountain, Flame, Wind, CloudRain, Zap, Siren, 
 import { supabase } from './supabase'
 import { useRealtime } from './realtime'
 import { ambilSemua } from './ambilSemua'
+import { kemasNamaTempat, kunci } from './normalisasi'
 
 export type KategoriBencana = {
   id: string
@@ -123,6 +124,8 @@ export function denganDataTerkini(b: BorangTitik, d: DataTerkini): BorangTitik {
     jumlah_kir: String(d.keluarga),
     jumlah_mangsa: String(d.mangsa),
     jumlah_rumah_terjejas: d.rumahTerjejas != null ? String(d.rumahTerjejas) : b.jumlah_rumah_terjejas,
+    // An empty Daerah takes the district(s) of the disaster's PPS
+    daerah: b.daerah.trim() ? b.daerah : (d.daerah ?? ''),
   }
 }
 
@@ -287,7 +290,12 @@ export type DataTerkini = {
   laporanTerakhir: string | null
   trend: string | null
   seluruhBencana: boolean // no figures for the point's own state: totals of the whole disaster
+  daerah: string | null // district(s) of the disaster's open PPS, e.g. "LABUAN" (for points with no area)
 }
+
+// PPS fields used to name the area of a point created without one
+// (no Laporan Awal: only the Laporan Semasa PPS know the district)
+export type PpsKawasan = { nama_bencana: string; negeri: string; daerah: string | null }
 
 export function useRingkasanBencana() {
   const [ringkasan, setRingkasan] = useState<RingkasanBencanaNegeri[]>([])
@@ -308,7 +316,11 @@ export function useRingkasanBencana() {
 }
 
 // Figures for one map point: its disaster in its state, else the whole disaster
-export function dataTerkiniTitik(t: TitikBencana, ringkasan: RingkasanBencanaNegeri[]): DataTerkini | null {
+export function dataTerkiniTitik(
+  t: TitikBencana,
+  ringkasan: RingkasanBencanaNegeri[],
+  pps: PpsKawasan[] = [],
+): DataTerkini | null {
   if (!t.nama_bencana) return null
   const baris = ringkasan.filter((r) => r.nama_bencana === t.nama_bencana)
   if (baris.length === 0) return null
@@ -321,6 +333,15 @@ export function dataTerkiniTitik(t: TitikBencana, ringkasan: RingkasanBencanaNeg
   )[0]
   const rumah = pilih.filter((r) => r.rumah_terjejas != null)
 
+  // Districts of this disaster's PPS: same state if any, like the figures
+  const ppsBencana = pps.filter((p) => p.nama_bencana === t.nama_bencana && p.daerah?.trim())
+  const ppsSama = ppsBencana.filter((p) => samaKumpulan(p.negeri, kumpulanNegeri(t.negeri)))
+  const daerah = new Map<string, string>()
+  for (const p of ppsSama.length ? ppsSama : ppsBencana) {
+    const nama = kemasNamaTempat(p.daerah ?? '')
+    daerah.set(kunci(nama), nama)
+  }
+
   return {
     mangsa: pilih.reduce((n, r) => n + r.mangsa, 0),
     keluarga: pilih.reduce((n, r) => n + r.keluarga, 0),
@@ -329,6 +350,7 @@ export function dataTerkiniTitik(t: TitikBencana, ringkasan: RingkasanBencanaNeg
     laporanTerakhir: terkini.laporan_terakhir,
     trend: terkini.trend,
     seluruhBencana: !sama,
+    daerah: daerah.size ? [...daerah.values()].join(', ') : null,
   }
 }
 

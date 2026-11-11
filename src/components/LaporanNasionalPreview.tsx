@@ -4,8 +4,8 @@ import { susunJenis, warnaJenis } from '../lib/jenisBencana'
 import type { ItemLaporanNasional, KorbanNegeri, PpsDitutup } from '../lib/laporanNasional'
 import type { TitikGraf } from '../lib/laporanNasionalGraf'
 import petaMalaysia from '../assets/peta-malaysia.png'
-import { NEGERI_NORM } from '../lib/negeriVisual'
 import { kumpulanNegeri } from '../lib/kumpulanNegeri'
+import { BARIS_KOTAK, kotakPetaLaporan } from '../lib/kotakPetaLaporan'
 
 // Colour of each disaster type = its category's colour (Urus Kategori)
 const warnaHex = warnaJenis
@@ -296,7 +296,7 @@ function IkonBencana({ jenis, cx, cy, r }: { jenis: string; cx: number; cy: numb
 // Direct port of the PDF map's layout algorithm: same outer-left / shared-middle
 // (in the gap between Peninsular and Borneo) / outer-right column logic, same
 // leader lines, same callout box shape — just drawn as SVG instead of jsPDF calls.
-function PetaLaporan({ items, negeriAktif }: { items: ItemLaporanNasional[]; negeriAktif: string[] }) {
+function PetaLaporan({ items }: { items: ItemLaporanNasional[] }) {
   const lebar = 297
   const margin = 14
   const kotakLebar = 32
@@ -309,7 +309,7 @@ function PetaLaporan({ items, negeriAktif }: { items: ItemLaporanNasional[]; neg
 
   const kotakTinggi = 5
   const lineTinggi = 2.6
-  const langkah = kotakTinggi + 3 + 5 * lineTinggi + 2
+  const langkah = kotakTinggi + 3 + BARIS_KOTAK * lineTinggi + 2
 
   const xLuarKiri = margin
   const xTengah = petaX + 0.27 * petaLebar
@@ -323,30 +323,15 @@ function PetaLaporan({ items, negeriAktif }: { items: ItemLaporanNasional[]; neg
 
   const elemen: ReactNode[] = []
 
-  for (const negeri of negeriAktif) {
-    const norm = NEGERI_NORM[negeri]
-    if (!norm) continue
-    const mx = petaX + norm.x * petaLebar
-    const my = petaY + norm.y * petaTinggi
+  // One box per state + disaster type (a state with two types gets two boxes)
+  for (const k of kotakPetaLaporan(items)) {
+    const mx = petaX + k.x * petaLebar
+    const my = petaY + k.y * petaTinggi
 
-    // KL, Putrajaya and Labuan: one Wilayah Persekutuan box
-    const punya = items.filter((i) => kumpulanNegeri(i.negeri) === negeri)
-    const jenisUtama = punya[0]?.jenisBencana ?? ''
-    const daerah = new Set(punya.filter((i) => i.daerah).map((i) => i.daerah))
-    const pps = punya.reduce((n, i) => n + kiraPps(i.pps), 0)
-    const keluarga = punya.reduce((n, i) => n + i.jumlahKeluarga, 0)
-    const mangsa = punya.reduce((n, i) => n + i.jumlahMangsa, 0)
-    const trend = punya.some((i) => i.trend === 'naik')
-      ? 'NAIK'
-      : punya.some((i) => i.trend === 'turun')
-        ? 'TURUN'
-        : 'KEKAL'
-
-    const kiri = norm.x < 0.5
     let cx: number
     let cy: number
     let sisiKanan: boolean
-    if (kiri) {
+    if (k.kiri) {
       const guna = kiriGiliran % 2 === 0 ? 'luar' : 'tengah'
       kiriGiliran++
       cx = guna === 'luar' ? xLuarKiri : xTengah
@@ -367,28 +352,18 @@ function PetaLaporan({ items, negeriAktif }: { items: ItemLaporanNasional[]; neg
     const garisX = sisiKanan ? cx : cx + kotakLebar
 
     elemen.push(
-      <g key={negeri}>
+      <g key={`${k.negeri}|${k.jenis}`}>
         <line x1={mx} y1={my} x2={garisX} y2={cy + kotakTinggi / 2} stroke="#969696" strokeWidth={0.3} />
         <rect x={cx} y={cy} width={kotakLebar} height={kotakTinggi} rx={1.2} fill="#0b2a5c" />
         <text x={cx + kotakLebar / 2} y={cy + 3.6} textAnchor="middle" className="fill-white text-[3px] font-bold">
-          {negeri.toUpperCase()}
+          {k.negeri.toUpperCase()}
         </text>
-        <text x={cx} y={cy + kotakTinggi + 3} className="fill-neutral-700 text-[2.6px]">
-          {`TREND : ${trend}`}
-        </text>
-        <text x={cx} y={cy + kotakTinggi + 3 + lineTinggi} className="fill-neutral-700 text-[2.6px]">
-          {`DAERAH : ${daerah.size}`}
-        </text>
-        <text x={cx} y={cy + kotakTinggi + 3 + lineTinggi * 2} className="fill-neutral-700 text-[2.6px]">
-          {`PPS : ${pps}`}
-        </text>
-        <text x={cx} y={cy + kotakTinggi + 3 + lineTinggi * 3} className="fill-neutral-700 text-[2.6px]">
-          {`KELUARGA : ${keluarga}`}
-        </text>
-        <text x={cx} y={cy + kotakTinggi + 3 + lineTinggi * 4} className="fill-neutral-700 text-[2.6px]">
-          {`MANGSA : ${mangsa}`}
-        </text>
-        <IkonBencana jenis={jenisUtama} cx={mx} cy={my} r={1.9} />
+        {k.baris.map((t, i) => (
+          <text key={i} x={cx} y={cy + kotakTinggi + 3 + lineTinggi * i} className="fill-neutral-700 text-[2.6px]">
+            {t}
+          </text>
+        ))}
+        <IkonBencana jenis={k.jenis} cx={mx} cy={my} r={1.9} />
       </g>,
     )
   }
@@ -460,8 +435,6 @@ export function LaporanNasionalPreview({
     { label: 'Mangsa', nilai: jumlahMangsa },
   ]
 
-  const negeriAktif = [...new Set(aktif.map((i) => kumpulanNegeri(i.negeri)).filter((n): n is string => !!n))]
-
   // Same order as the category list (Urus Kategori)
   const jenisSet = susunJenis(items.map((i) => i.jenisBencana))
 
@@ -502,7 +475,7 @@ export function LaporanNasionalPreview({
       <div>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-700">Peta Bencana</h3>
         <div className="rounded-xl border border-neutral-100 bg-white/70 p-3">
-          <PetaLaporan items={aktif} negeriAktif={negeriAktif} />
+          <PetaLaporan items={aktif} />
         </div>
       </div>
 
