@@ -291,11 +291,17 @@ export async function ambilDataGraf(tapis: TapisGraf = {}): Promise<{ duaJam: Ti
   jamGenap.setMinutes(0, 0, 0)
   if (jamGenap.getHours() % 2 !== 0) jamGenap.setHours(jamGenap.getHours() - 1)
 
+  // Each bar covers its 2-hour window: "1400H" = latest figures received
+  // between 14:00 and 15:59 (reports arrive at or just after the hour).
+  // The current window isn't over yet, so its bar shows the live figures.
+  const DUA_JAM = 2 * 60 * 60 * 1000
+  const kini = Date.now()
   const duaJam: TitikGraf[] = []
   for (let i = 11; i >= 0; i--) {
-    const masa = new Date(jamGenap.getTime() - i * 2 * 60 * 60 * 1000)
-    const s = snapshotPadaMasa(masa, sejarah, tapis)
-    duaJam.push({ label: `${pad(masa.getHours())}${pad(masa.getMinutes())}H`, ...s })
+    const mula = new Date(jamGenap.getTime() - i * DUA_JAM)
+    const hujung = new Date(Math.min(mula.getTime() + DUA_JAM - 1, kini))
+    const s = snapshotPadaMasa(hujung, sejarah, tapis)
+    duaJam.push({ label: `${pad(mula.getHours())}${pad(mula.getMinutes())}H`, ...s })
   }
 
   const harian: TitikGraf[] = []
