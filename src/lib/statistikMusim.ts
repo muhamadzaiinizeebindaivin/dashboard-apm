@@ -1,7 +1,7 @@
 import { supabase } from './supabase'
 import { kumpulanNegeri } from './kumpulanNegeri'
 import { ambilSemua, dalamKepingan } from './ambilSemua'
-import { kunci } from './normalisasi'
+import { kunci, normalAgensi } from './normalisasi'
 import { ambilSejarahPps, snapshotIkutBencana } from './laporanNasionalGraf'
 
 // Full statistics of one monsoon season (Statistik Musim page).
@@ -423,22 +423,40 @@ export async function ambilStatistikMusim(tarikhMula: string, tarikhTamat: strin
     })
   }
 
-  // Mobilisasi: highest figure reported per disaster + state + agency, then added up per agency
-  const mobPuncak = new Map<string, { agensi: string; kekuatan: number; darat: number; air: number; udara: number }>()
+  // Mobilisasi. Agency names are merged first (normalAgensi: "APM KUALA SELANGOR" -> "APM",
+  // "Jabatan Bomba Dan Penyelamat Malaysia (JBPM)" -> "JBPM"), then:
+  type Mob = { agensi: string; kekuatan: number; darat: number; air: number; udara: number }
+  const mobBaru = (agensi: string): Mob => ({ agensi, kekuatan: 0, darat: 0, air: 0, udara: 0 })
+
+  // 1. Within one report: units of the same agency are added up (different teams)
+  const mobLaporan = new Map<string, Mob & { kunciBencana: string }>()
   for (const m of mobilisasiRows) {
     const r = laporanIkutId.get(m.laporan_id)
     if (!r) continue
-    const agensi = m.agensi?.trim() || 'Lain-lain'
-    tambahKe(mobPuncak, `${kunciLaporan(r)}|${kunci(agensi)}`, () => ({ agensi, kekuatan: 0, darat: 0, air: 0, udara: 0 }), (x) => {
-      x.kekuatan = Math.max(x.kekuatan, nom(m.kekuatan))
-      x.darat = Math.max(x.darat, nom(m.darat_kuantiti))
-      x.air = Math.max(x.air, nom(m.air_kuantiti))
-      x.udara = Math.max(x.udara, nom(m.udara_kuantiti))
+    const agensi = normalAgensi(m.agensi)
+    tambahKe(mobLaporan, `${m.laporan_id}|${agensi}`, () => ({ ...mobBaru(agensi), kunciBencana: kunciLaporan(r) }), (x) => {
+      x.kekuatan += nom(m.kekuatan)
+      x.darat += nom(m.darat_kuantiti)
+      x.air += nom(m.air_kuantiti)
+      x.udara += nom(m.udara_kuantiti)
     })
   }
-  const mobAgensi = new Map<string, { agensi: string; kekuatan: number; darat: number; air: number; udara: number }>()
+
+  // 2. Same disaster + state: highest figure over its reports (a repeated report isn't counted twice)
+  const mobPuncak = new Map<string, Mob>()
+  for (const x of mobLaporan.values()) {
+    tambahKe(mobPuncak, `${x.kunciBencana}|${x.agensi}`, () => mobBaru(x.agensi), (p) => {
+      p.kekuatan = Math.max(p.kekuatan, x.kekuatan)
+      p.darat = Math.max(p.darat, x.darat)
+      p.air = Math.max(p.air, x.air)
+      p.udara = Math.max(p.udara, x.udara)
+    })
+  }
+
+  // 3. Added up per agency over all disasters and states
+  const mobAgensi = new Map<string, Mob>()
   for (const x of mobPuncak.values()) {
-    tambahKe(mobAgensi, kunci(x.agensi), () => ({ agensi: x.agensi, kekuatan: 0, darat: 0, air: 0, udara: 0 }), (a) => {
+    tambahKe(mobAgensi, x.agensi, () => mobBaru(x.agensi), (a) => {
       a.kekuatan += x.kekuatan
       a.darat += x.darat
       a.air += x.air
