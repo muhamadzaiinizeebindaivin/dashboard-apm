@@ -21,11 +21,21 @@ export async function ambilSemua<T>(bina: () => BolehJulat): Promise<T[]> {
 
 // For .in('laporan_id', ids) with many ids: 100 ids per request (hundreds of
 // UUIDs in one URL is too long for the server), each chunk loaded completely.
+// Chunks load in parallel (at most SELARI at a time); results keep the chunk order.
+const SELARI = 6
+
 export async function dalamKepingan<T>(ids: string[], bina: (ids: string[]) => BolehJulat): Promise<T[]> {
-  const hasil: T[] = []
-  for (let i = 0; i < ids.length; i += 100) {
-    const kepingan = ids.slice(i, i + 100)
-    hasil.push(...(await ambilSemua<T>(() => bina(kepingan))))
+  const kepingan: string[][] = []
+  for (let i = 0; i < ids.length; i += 100) kepingan.push(ids.slice(i, i + 100))
+
+  const hasil: T[][] = new Array(kepingan.length)
+  let seterusnya = 0
+  const pekerja = async () => {
+    while (seterusnya < kepingan.length) {
+      const i = seterusnya++
+      hasil[i] = await ambilSemua<T>(() => bina(kepingan[i]))
+    }
   }
-  return hasil
+  await Promise.all(Array.from({ length: Math.min(SELARI, kepingan.length) }, pekerja))
+  return hasil.flat()
 }

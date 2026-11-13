@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
@@ -19,7 +19,7 @@ import {
   Wrench,
   Construction,
 } from 'lucide-react'
-import { ambilStatistikMusim } from '../lib/statistikMusim'
+import { kiraStatistikMusim, statistikDisimpan } from '../lib/statistikMusim'
 import type { Puncak, StatistikMusimData, TitikHarian } from '../lib/statistikMusim'
 import type { Musim } from '../pages/StatistikMusim'
 import { Memuat, Skeleton } from './Memuatkan'
@@ -193,6 +193,9 @@ export function PaparanStatistikMusim({ musim, senarai, onTukar, onKembali }: Pr
   const [data, setData] = useState<StatistikMusimData | null>(null)
   const [ralat, setRalat] = useState(false)
   const [muatSemula, setMuatSemula] = useState(0)
+  const [dikiraPada, setDikiraPada] = useState<number | null>(null)
+  // Set by "Kira semula" / "Cuba lagi": skip the kept result once
+  const paksaKira = useRef(false)
   const [menjana, setMenjana] = useState<'' | 'pdf' | 'excel'>('')
   const [toast, setToast] = useState<ToastState>(null)
 
@@ -214,11 +217,24 @@ export function PaparanStatistikMusim({ musim, senarai, onTukar, onKembali }: Pr
 
   useEffect(() => {
     let dibatalkan = false
-    setData(null)
     setRalat(false)
-    ambilStatistikMusim(musim.tarikh_mula, musim.tarikh_tamat)
+
+    // Already calculated in this tab: show it at once
+    const paksa = paksaKira.current
+    paksaKira.current = false
+    const ada = paksa ? null : statistikDisimpan(musim.tarikh_mula, musim.tarikh_tamat)
+    if (ada) {
+      setData(ada.data)
+      setDikiraPada(ada.dikiraPada)
+      return
+    }
+
+    setData(null)
+    kiraStatistikMusim(musim.tarikh_mula, musim.tarikh_tamat)
       .then((d) => {
-        if (!dibatalkan) setData(d)
+        if (dibatalkan) return
+        setData(d.data)
+        setDikiraPada(d.dikiraPada)
       })
       .catch(() => {
         if (!dibatalkan) setRalat(true)
@@ -241,6 +257,13 @@ export function PaparanStatistikMusim({ musim, senarai, onTukar, onKembali }: Pr
             {tarikhPendek(musim.tarikh_mula)} – {tarikhPendek(musim.tarikh_tamat)}
             {data && !data.belumMula && data.sehingga < musim.tarikh_tamat && (
               <span className="text-neutral-400"> · dikira sehingga hari ini</span>
+            )}
+            {data && dikiraPada && (
+              <span className="text-neutral-400">
+                {' '}
+                · dikira pada{' '}
+                {new Date(dikiraPada).toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit' })}
+              </span>
             )}
           </p>
         </div>
@@ -276,7 +299,10 @@ export function PaparanStatistikMusim({ musim, senarai, onTukar, onKembali }: Pr
             {menjana === 'excel' ? 'Menjana Excel...' : 'Muat Turun Excel'}
           </button>
           <button
-            onClick={() => setMuatSemula((n) => n + 1)}
+            onClick={() => {
+              paksaKira.current = true
+              setMuatSemula((n) => n + 1)
+            }}
             disabled={!data && !ralat}
             title="Kira semula"
             className="flex h-9 items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 text-sm font-medium text-neutral-600 hover:border-emerald-500 hover:text-emerald-700 disabled:opacity-50"
@@ -298,7 +324,10 @@ export function PaparanStatistikMusim({ musim, senarai, onTukar, onKembali }: Pr
         <div className={`mt-6 text-center ${kad}`}>
           <p className="text-sm font-medium text-red-600">Gagal mengira statistik musim.</p>
           <button
-            onClick={() => setMuatSemula((n) => n + 1)}
+            onClick={() => {
+              paksaKira.current = true
+              setMuatSemula((n) => n + 1)
+            }}
             className="mt-3 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800"
           >
             Cuba lagi

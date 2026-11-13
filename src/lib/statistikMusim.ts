@@ -533,3 +533,19 @@ export async function ambilStatistikMusim(tarikhMula: string, tarikhTamat: strin
     },
   }
 }
+
+// Results kept for this browser tab, per date range: reopening a season is instant.
+// "Kira semula" (paksa) recalculates; a page reload clears everything.
+type StatistikDisimpan = { data: StatistikMusimData; dikiraPada: number }
+const simpanan = new Map<string, StatistikDisimpan>()
+
+export function statistikDisimpan(tarikhMula: string, tarikhTamat: string): StatistikDisimpan | null {
+  return simpanan.get(`${tarikhMula}|${tarikhTamat}`) ?? null
+}
+
+export async function kiraStatistikMusim(tarikhMula: string, tarikhTamat: string): Promise<StatistikDisimpan> {
+  const data = await ambilStatistikMusim(tarikhMula, tarikhTamat)
+  const hasil = { data, dikiraPada: Date.now() }
+  simpanan.set(`${tarikhMula}|${tarikhTamat}`, hasil)
+  return hasil
+}
