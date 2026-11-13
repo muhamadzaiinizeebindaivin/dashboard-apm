@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabase'
+import { useRealtime } from './realtime'
+import { useAuth } from '../hooks/useAuth'
 
 // Devices logged in to an account (Profil Saya, and Admin for the Super Admin).
 // Rows come from the senarai_peranti SQL function (auth.sessions + sesi_aktif).
@@ -66,6 +68,8 @@ export function bacaEjen(ua: string | null): { nama: string; jenis: JenisPeranti
 
 // userId omitted = the logged-in user's own devices
 export function usePeranti(userId?: string) {
+  const { session } = useAuth()
+  const sasaran = userId ?? session?.user?.id
   const [senarai, setSenarai] = useState<Peranti[]>([])
   const [memuat, setMemuat] = useState(true)
   const [ralat, setRalat] = useState('')
@@ -81,12 +85,25 @@ export function usePeranti(userId?: string) {
     setSenarai((data as Peranti[]) ?? [])
   }, [userId])
 
-  // Refreshed every minute, like the last-seen times
   useEffect(() => {
     void muat()
-    const pemasa = setInterval(muat, SEGAR_MS)
-    return () => clearInterval(pemasa)
   }, [muat])
+
+  // Live: login / heartbeat of this account's devices, and any device logout
+  // (Supabase can't filter delete events, so every logout reloads the open list).
+  // The poll is a safety net in case the Realtime connection drops.
+  useRealtime(
+    'senarai-peranti',
+    sasaran
+      ? [
+          { jadual: 'sesi_aktif', peristiwa: 'INSERT', tapis: `user_id=eq.${sasaran}` },
+          { jadual: 'sesi_aktif', peristiwa: 'UPDATE', tapis: `user_id=eq.${sasaran}` },
+          { jadual: 'sesi_aktif', peristiwa: 'DELETE' },
+        ]
+      : [],
+    muat,
+    { aktif: !!sasaran, tinjau: SEGAR_MS },
+  )
 
   return { senarai, memuat, ralat, muat }
 }

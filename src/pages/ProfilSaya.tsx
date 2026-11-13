@@ -127,6 +127,7 @@ export function ProfilSaya() {
   async function logKeluarSemua() {
     setSahLogKeluarSemua(false)
     // Ends every session of this account (phones, other computers…), this one included
+    await supabase.rpc('tamat_sesi_saya', { p_semua: true })
     await supabase.auth.signOut({ scope: 'global' })
   }
 

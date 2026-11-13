@@ -150,6 +150,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [userIdSesi])
 
   async function signOut() {
+    // Remove this device from open device lists right away (errors ignored: logout must still happen)
+    await supabase.rpc('tamat_sesi_saya')
     await supabase.auth.signOut()
   }
 
