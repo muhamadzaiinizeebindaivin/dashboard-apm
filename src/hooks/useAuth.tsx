@@ -27,6 +27,12 @@ type AuthContextValue = {
 
 const PROFIL_KOLUM = 'id, full_name, role, status, catatan_kelulusan, negeri'
 
+// Max 2 devices per account (limit enforced in SQL: hadkan_sesi)
+const SEMAK_SESI_MS = 60_000
+// Set when this device was logged out by a newer login; read by the login form
+export const KUNCI_NOTIS_SESI = 'notis-sesi-tamat'
+
+
 // maybeSingle: a missing row gives data = null WITHOUT an error,
 // so `error` only ever means the request itself failed
 function ambilProfil(userId: string) {
@@ -54,8 +60,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
     })
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession)
+      if (event === 'SIGNED_IN' && newSession) {
+        // New login (password, invite or reset link): keep max 2 devices.
+        // Run outside the callback, since Supabase calls inside it can deadlock.
+        setTimeout(() => {
+          void supabase.rpc('hadkan_sesi').then(({ error }) => {
+            if (error) console.error('[hadkan_sesi] gagal:', error)
+          })
+        }, 0)
+      }
       if (!newSession) {
         // Back to the initial state, so the next login waits for its own profile
         // instead of briefly showing the status page
@@ -97,6 +112,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfilSedia(true)
     })
   }, [session])
+
+  // Device kicked by a newer login: its token stays valid up to 1 h,
+  // so check every minute and on tab focus, and log it out right away
+  const userIdSesi = session?.user?.id
+  useEffect(() => {
+    if (!userIdSesi) return
+    let batal = false
+
+    const semak = async () => {
+      const { data, error } = await supabase.rpc('sesi_masih_sah')
+      if (batal || error) return // network/server error: never log out on a failed check
+      if (data === false) {
+        try {
+          sessionStorage.setItem(KUNCI_NOTIS_SESI, '1')
+        } catch {
+          // storage blocked: the logout still happens, just without the notice
+        }
+        await supabase.auth.signOut({ scope: 'local' })
+      }
+    }
+
+    const bilaNampak = () => {
+      if (document.visibilityState === 'visible') void semak()
+    }
+
+    void semak()
+    const pemasa = setInterval(semak, SEMAK_SESI_MS)
+    document.addEventListener('visibilitychange', bilaNampak)
+    window.addEventListener('focus', bilaNampak)
+    return () => {
+      batal = true
+      clearInterval(pemasa)
+      document.removeEventListener('visibilitychange', bilaNampak)
+      window.removeEventListener('focus', bilaNampak)
+    }
+  }, [userIdSesi])
 
   async function signOut() {
     await supabase.auth.signOut()

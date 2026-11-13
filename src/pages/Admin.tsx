@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { Home, ChevronRight, ChevronLeft, Trash2, Check, X, Loader2, UserPlus } from 'lucide-react'
+import { Home, ChevronRight, ChevronLeft, Trash2, Check, X, Loader2, UserPlus, Smartphone } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useRealtime } from '../lib/realtime'
 import { ROLE_LABEL } from '../lib/roles'
@@ -14,6 +14,7 @@ import { SkeletonBarisJadual } from '../components/Memuatkan'
 import { SENARAI_KUMPULAN_NEGERI } from '../lib/kumpulanNegeri'
 import { KodAksesSection } from '../components/KodAksesSection'
 import { SandaranSection } from '../components/SandaranSection'
+import { SenaraiPeranti } from '../components/SenaraiPeranti'
 
 // Accounts are created by self-registration (/daftar) only. Here the Super Admin
 // approves or rejects new registrations and manages existing accounts.
@@ -170,6 +171,39 @@ function KeputusanModal({ keputusan, onClose, onSelesai }: { keputusan: Keputusa
 }
 
 // PKOP -> PKON: the state is required, saved together with the role
+// Devices logged in to one account (Super Admin view)
+function PerantiModal({ pengguna, onClose }: { pengguna: ProfileRow; onClose: () => void }) {
+  return createPortal(
+    <div className="fixed inset-0 z-[1250] flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-lg font-semibold text-neutral-900">Peranti Pengguna</h2>
+          <button
+            onClick={onClose}
+            aria-label="Tutup"
+            className="rounded-full p-1.5 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="mt-3 rounded-lg bg-neutral-50 px-3 py-2 text-sm">
+          <p className="font-medium text-neutral-800">{pengguna.full_name ?? '—'}</p>
+          <p className="text-neutral-500">{pengguna.email}</p>
+        </div>
+        <div className="mt-4">
+          <SenaraiPeranti
+            userId={pengguna.id}
+            namaPengguna={pengguna.full_name ?? pengguna.email ?? undefined}
+            bolehLogKeluar
+            tunjukIp={false}
+          />
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
 function TukarPkonModal({
   pengguna,
   onClose,
@@ -269,6 +303,7 @@ export function Admin() {
   const [fadingId, setFadingId] = useState<string | null>(null)
   const [toast, setToast] = useState<ToastState>(null)
   const [tukarPkon, setTukarPkon] = useState<ProfileRow | null>(null)
+  const [perantiUntuk, setPerantiUntuk] = useState<ProfileRow | null>(null)
 
   const muatSemula = useCallback(async () => {
     const { data, error } = await supabase
@@ -558,6 +593,16 @@ export function Admin() {
                         <span className="hidden lg:inline">Luluskan</span>
                       </button>
                     )}
+                    {user.status === 'aktif' && (
+                      <button
+                        onClick={() => setPerantiUntuk(user)}
+                        title="Lihat peranti yang log masuk"
+                        className="flex items-center gap-1 whitespace-nowrap rounded-full border border-emerald-200 bg-white/60 px-2.5 py-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-50"
+                      >
+                        <Smartphone size={14} />
+                        Senarai peranti
+                      </button>
+                    )}
                     {user.id !== profile?.id && (
                       <button
                         onClick={() => setPendingDelete(user)}
@@ -626,6 +671,8 @@ export function Admin() {
           onSimpan={(negeri) => simpanPeranan(tukarPkon.id, 'pkon', negeri)}
         />
       )}
+
+      {perantiUntuk && <PerantiModal pengguna={perantiUntuk} onClose={() => setPerantiUntuk(null)} />}
 
       <ConfirmModal
         open={!!pendingDelete}

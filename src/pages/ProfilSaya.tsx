@@ -9,6 +9,7 @@ import { ConfirmModal } from '../components/ConfirmModal'
 import { Toast } from '../components/Toast'
 import type { ToastState } from '../components/Toast'
 import { Memuat, Skeleton } from '../components/Memuatkan'
+import { SenaraiPeranti } from '../components/SenaraiPeranti'
 
 // "Profil Saya": every approved user sees their own account, edits their name and
 // position, and changes their password. Role, state and status are managed by PKOP in Admin.
@@ -276,6 +277,9 @@ export function ProfilSaya() {
               Jika telefon atau komputer anda hilang, log keluar dari semua peranti. Anda perlu log masuk semula di
               semua tempat, termasuk di sini.
             </p>
+            <div className="mt-4">
+              <SenaraiPeranti />
+            </div>
             <div className="mt-4 flex justify-end">
               <button
                 onClick={() => setSahLogKeluarSemua(true)}

@@ -4,6 +4,17 @@ import { motion } from 'framer-motion'
 import { Mail, Lock, ArrowLeft, MailCheck } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { KUNCI_NOTIS_SESI } from '../hooks/useAuth'
+
+const NOTIS_SESI = 'Sesi anda telah ditamatkan. Sila log masuk semula.'
+
+function adaNotisSesi() {
+  try {
+    return sessionStorage.getItem(KUNCI_NOTIS_SESI) === '1'
+  } catch {
+    return false
+  }
+}
 
 type LoginFormProps = {
   onSuccess: () => void
@@ -18,7 +29,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   const [mod, setMod] = useState<'masuk' | 'lupa'>('masuk')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [ralat, setRalat] = useState('')
+  const [ralat, setRalat] = useState(() => (adaNotisSesi() ? NOTIS_SESI : ''))
   const [loading, setLoading] = useState(false)
   const [dihantar, setDihantar] = useState(false)
   const [baki, setBaki] = useState(0) // seconds before another reset e-mail can be requested
@@ -39,6 +50,11 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     e.preventDefault()
     setLoading(true)
     setRalat('')
+    try {
+      sessionStorage.removeItem(KUNCI_NOTIS_SESI)
+    } catch {
+      // storage blocked: nothing to clear
+    }
 
     const { error } = await supabase.auth.signInWithPassword({ email, password })
 
