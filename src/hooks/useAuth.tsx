@@ -32,6 +32,17 @@ const SEMAK_SESI_MS = 60_000
 // Set when this device was logged out by a newer login; read by the login form
 export const KUNCI_NOTIS_SESI = 'notis-sesi-tamat'
 
+// Session id inside the access token (JWT claim "session_id"): names this device's Realtime channel
+function idSesiDaripadaToken(token: string | undefined): string | null {
+  if (!token) return null
+  try {
+    const muatan = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+    return typeof muatan.session_id === 'string' ? muatan.session_id : null
+  } catch {
+    return null
+  }
+}
+
 
 // maybeSingle: a missing row gives data = null WITHOUT an error,
 // so `error` only ever means the request itself failed
@@ -113,9 +124,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
   }, [session])
 
-  // Device kicked by a newer login: its token stays valid up to 1 h,
-  // so check every minute and on tab focus, and log it out right away
+  // Device kicked by a newer login or by the Super Admin: its token stays valid up to 1 h.
+  // The database sends a "sesi_tamat" message on this device's own channel (instant),
+  // and the check also runs every minute and on tab focus as a backup.
   const userIdSesi = session?.user?.id
+  const idSesi = idSesiDaripadaToken(session?.access_token)
   useEffect(() => {
     if (!userIdSesi) return
     let batal = false
@@ -141,13 +154,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const pemasa = setInterval(semak, SEMAK_SESI_MS)
     document.addEventListener('visibilitychange', bilaNampak)
     window.addEventListener('focus', bilaNampak)
+
+    // Instant: the message only triggers the check, which confirms the session is really gone
+    const saluran = idSesi
+      ? supabase
+          .channel(`sesi:${idSesi}`)
+          .on('broadcast', { event: 'sesi_tamat' }, () => void semak())
+          .subscribe()
+      : null
+
     return () => {
       batal = true
       clearInterval(pemasa)
       document.removeEventListener('visibilitychange', bilaNampak)
       window.removeEventListener('focus', bilaNampak)
+      if (saluran) void supabase.removeChannel(saluran)
     }
-  }, [userIdSesi])
+  }, [userIdSesi, idSesi])
 
   async function signOut() {
     // Remove this device from open device lists right away (errors ignored: logout must still happen)
