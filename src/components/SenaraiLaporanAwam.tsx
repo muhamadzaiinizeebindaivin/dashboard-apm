@@ -33,6 +33,7 @@ import { TARIKH_MASA_FIELD, KEJADIAN_FIELDS, HAL_LAIN_FIELD, PENYEDIA_FIELDS } f
 import { SEMASA_MAKLUMAT_FIELDS, SEMASA_PENYEDIA_FIELDS, TREND_LABEL } from '../lib/laporanBencana'
 import type { FieldDef, LaporanBencanaRow } from '../lib/laporanBencana'
 import { SENARAI_KUMPULAN_NEGERI, ahliKumpulan } from '../lib/kumpulanNegeri'
+import { kunci } from '../lib/normalisasi'
 import { useNegeriTetap } from '../hooks/useNegeriTetap'
 import { janaRekodKejadian } from '../lib/janaRekodKejadian'
 import { useBencanaTamat } from '../lib/bencanaTamat'
@@ -59,6 +60,7 @@ type Tapisan = {
   hingga: string
   pengesahan: '' | 'disahkan' | 'belum'
   ringkasanStatus: '' | 'ada_perubahan' | 'tiada_perubahan' // Laporan Semasa only
+  daerah: string // Laporan Semasa: a PPS in this daerah; Laporan Awal: the report's own Daerah
 }
 const TAPISAN_KOSONG: Tapisan = {
   cari: '',
@@ -67,7 +69,14 @@ const TAPISAN_KOSONG: Tapisan = {
   hingga: '',
   pengesahan: '',
   ringkasanStatus: '',
+  daerah: '',
 }
+
+// "  kuala   selangor " -> "KUALA SELANGOR" (same daerah typed differently = one option)
+const kemasDaerah = (s: string) => s.replace(/\s+/g, ' ').trim().toUpperCase()
+
+// Characters with a meaning in ilike: % and _ are matched literally
+const tepatIlike = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`)
 
 const kelasPilih =
   'h-9 rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-700 outline-none focus:border-emerald-600'
@@ -85,6 +94,8 @@ function padanTapisan(r: LaporanBencanaRow, negeri: string, t: Tapisan) {
   if (t.pengesahan === 'disahkan' && !r.perhatian_nama) return false
   if (t.pengesahan === 'belum' && r.perhatian_nama) return false
   if (t.ringkasanStatus && r.ringkasan_status !== t.ringkasanStatus) return false
+  // Laporan Awal only (a Laporan Semasa's daerah is in its PPS rows, checked on the server)
+  if (t.daerah && kunci(r.daerah ?? '') !== kunci(t.daerah)) return false
   const c = bersihCari(t.cari).toLowerCase()
   if (c && ![r.nama_bencana, r.daerah, r.penyedia_nama].some((v) => (v ?? '').toLowerCase().includes(c))) return false
   return true
@@ -191,8 +202,45 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
     tapisan.dari ||
     tapisan.hingga ||
     tapisan.pengesahan ||
-    tapisan.ringkasanStatus
+    tapisan.ringkasanStatus ||
+    tapisan.daerah
   )
+
+  // Daerah choices: from the PPS of Laporan Semasa, or the Daerah of Laporan Awal (chosen Negeri only)
+  const [senaraiDaerah, setSenaraiDaerah] = useState<string[]>([])
+  useEffect(() => {
+    let batal = false
+    const negeri = tapisNegeri ? ahliKumpulan(tapisNegeri) : null
+    ambilSemua<{ daerah: string | null }>(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let q: any =
+        jenis === 'semasa'
+          ? supabase.from('laporan_pps').select('id, daerah')
+          : supabase.from('laporan_bencana').select('id, daerah').eq('jenis_laporan', 'awal')
+      q = q.not('daerah', 'is', null)
+      if (negeri) q = q.in('negeri', negeri)
+      return q.order('id')
+    })
+      .then((rows) => {
+        if (batal) return
+        const unik = new Map<string, string>()
+        for (const r of rows) {
+          const nama = kemasDaerah(r.daerah ?? '')
+          if (nama) unik.set(kunci(nama), nama)
+        }
+        setSenaraiDaerah([...unik.values()].sort((a, b) => a.localeCompare(b)))
+      })
+      .catch(() => {
+        if (!batal) setSenaraiDaerah([])
+      })
+    return () => {
+      batal = true
+    }
+  }, [jenis, tapisNegeri])
+
+  // Laporan Semasa + Daerah: only reports with at least one PPS in that daerah (inner join)
+  const tapisPps = jenis === 'semasa' && !!tapisan.daerah
+  const kolum = (asal: string) => (tapisPps ? `${asal}, laporan_pps!inner(daerah)` : asal)
 
   // All filters, added to any laporan_bencana query (list, count, "Muat lagi", PDF)
   const terapkan = useCallback(
@@ -208,6 +256,11 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
       if (jenis === 'semasa' && tapisan.ringkasanStatus) q = q.eq('ringkasan_status', tapisan.ringkasanStatus)
       const c = bersihCari(tapisan.cari)
       if (c) q = q.or(`nama_bencana.ilike.%${c}%,daerah.ilike.%${c}%,penyedia_nama.ilike.%${c}%`)
+      if (tapisan.daerah) {
+        // Case-insensitive, whole name ("Petaling" doesn't match "Petaling Jaya")
+        const d = tepatIlike(tapisan.daerah)
+        q = jenis === 'semasa' ? q.ilike('laporan_pps.daerah', d) : q.ilike('daerah', d)
+      }
       return q
     },
     [jenis, tapisNegeri, tapisan],
@@ -215,19 +268,21 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
 
   // Same type + filters for the list, "Muat lagi" and the PDF
   const asas = useCallback(
-    () => terapkan(supabase.from('laporan_bencana').select('*').eq('jenis_laporan', jenis)),
-    [jenis, terapkan],
+    () => terapkan(supabase.from('laporan_bencana').select(kolum('*')).eq('jenis_laporan', jenis)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [jenis, terapkan, tapisPps],
   )
 
   const kiraJumlah = useCallback(async () => {
     const id = permintaan.current
     const q = terapkan(
-      supabase.from('laporan_bencana').select('id', { count: 'exact', head: true }).eq('jenis_laporan', jenis),
+      supabase.from('laporan_bencana').select(kolum('id'), { count: 'exact', head: true }).eq('jenis_laporan', jenis),
     )
     const { count, error } = await q
     if (id !== permintaan.current) return
     if (!error && count !== null) setJumlah(count)
-  }, [jenis, terapkan])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jenis, terapkan, tapisPps])
 
   // First batch: on opening the page and whenever the filter changes
   const muatPertama = useCallback(async () => {
@@ -284,10 +339,12 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
   const tapisRef = useRef(tapisNegeri)
   const tapisanRef = useRef(tapisan)
   const kiraRef = useRef(kiraJumlah)
+  const muatRef = useRef(muatPertama)
   useEffect(() => {
     tapisRef.current = tapisNegeri
     tapisanRef.current = tapisan
     kiraRef.current = kiraJumlah
+    muatRef.current = muatPertama
   })
 
   useEffect(() => {
@@ -300,6 +357,12 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
           const baru = payload.new as LaporanBencanaRow
           setToast({ type: 'success', message: 'Laporan baru diterima.' })
           kiraRef.current()
+          // Laporan Semasa filtered by daerah: its PPS rows are saved just after the report,
+          // so the list is reloaded from the server a moment later
+          if (jenis === 'semasa' && tapisanRef.current.daerah) {
+            setTimeout(() => muatRef.current(), 1500)
+            return
+          }
           // Added to the list only if it matches the active filters
           if (!padanTapisan(baru, tapisRef.current, tapisanRef.current)) return
           setRows((prev) => (prev.some((r) => r.id === baru.id) ? prev : [baru, ...prev]))
@@ -572,7 +635,11 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
           {!negeriTetap && (
             <select
               value={tapisNegeri}
-              onChange={(e) => setTapisNegeri(e.target.value)}
+              onChange={(e) => {
+                setTapisNegeri(e.target.value)
+                // The daerah list changes with the state
+                setTapisan((f) => (f.daerah ? { ...f, daerah: '' } : f))
+              }}
               aria-label="Negeri"
               className={kelasPilih}
             >
@@ -584,6 +651,23 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
               ))}
             </select>
           )}
+          <select
+            value={tapisan.daerah}
+            onChange={(e) => setTapisan((f) => ({ ...f, daerah: e.target.value }))}
+            aria-label="Daerah"
+            className={kelasPilih}
+          >
+            <option value="">Semua daerah</option>
+            {/* A chosen daerah stays listed even before the list has loaded */}
+            {(tapisan.daerah && !senaraiDaerah.includes(tapisan.daerah)
+              ? [tapisan.daerah, ...senaraiDaerah]
+              : senaraiDaerah
+            ).map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
           <select
             value={tapisan.jenisBencana}
             onChange={(e) => setTapisan((f) => ({ ...f, jenisBencana: e.target.value }))}
