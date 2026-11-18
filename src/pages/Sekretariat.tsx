@@ -353,7 +353,7 @@ export function Sekretariat() {
     ? previewData.ditutup.filter(
         (p) =>
           (!tapisNegeri || samaKumpulan(p.negeri, tapisNegeri)) &&
-          (!tapisZon || cariZon(p.negeri) === tapisZon) &&
+          (!tapisZon || cariZon(p.negeri, p.daerah) === tapisZon) &&
           (!tapisJenis || jenisIkutBencana.get(p.nama_bencana) === tapisJenis) &&
           lulusBencana(p.nama_bencana) &&
           (!adaTapisKawasan || lulusKawasan(p)),

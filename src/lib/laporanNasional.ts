@@ -80,7 +80,8 @@ function itemDariPusat(nama: string, terkini: BarisSemasa, pusat: BarisPusat[]):
     return [
       {
         ...asas,
-        zon: terkini.negeri ? cariZon(terkini.negeri) : null,
+        // All PPS closed: the daerah of its PPS tells Labuan (Borneo) from KL / Putrajaya (Tengah)
+        zon: terkini.negeri ? cariZon(terkini.negeri, pusat[0]?.daerah) : null,
         negeri: terkini.negeri,
         daerah: null,
         pps: null,
@@ -219,7 +220,7 @@ export async function ambilLaporanNasional(): Promise<ItemLaporanNasional[]> {
         jenisBencana: terkini.jenis_bencana || 'Lain-lain',
         namaBencana: nama,
         trend: null,
-        zon: terkini.negeri ? cariZon(terkini.negeri) : null,
+        zon: terkini.negeri ? cariZon(terkini.negeri, pusatIkutBencana.get(nama.trim())?.[0]?.daerah) : null,
         negeri: terkini.negeri,
         daerah: null,
         pps: null,

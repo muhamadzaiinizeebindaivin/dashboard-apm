@@ -434,9 +434,14 @@ export async function ambilDataEksport(tapis: TapisEksport): Promise<DataEksport
   const semuaPps = (ppsData as PpsEksport[]) ?? []
   const tamat = new Set(((tamatData as { nama_bencana: string }[]) ?? []).map((t) => t.nama_bencana))
 
-  const lulusNegeri = (n: string | null) =>
-    // "Wilayah Persekutuan" covers KL, Putrajaya and Labuan
-    !!n && (!tapis.negeri || samaKumpulan(n, tapis.negeri)) && (!tapis.zon || cariZon(n) === tapis.zon)
+  // "Wilayah Persekutuan" covers KL, Putrajaya (Tengah) and Labuan (Borneo)
+  const lulusZon = (n: string, daerah?: string | null) =>
+    !tapis.zon ||
+    cariZon(n, daerah) === tapis.zon ||
+    // A whole WP report (no daerah) can hold both: its PPS decide what goes in the workbook
+    (daerah === undefined && n === 'Wilayah Persekutuan' && (tapis.zon === 'Tengah' || tapis.zon === 'Borneo'))
+  const lulusNegeri = (n: string | null, daerah?: string | null) =>
+    !!n && (!tapis.negeri || samaKumpulan(n, tapis.negeri)) && lulusZon(n, daerah)
 
   // Type of each active disaster = type in its latest report
   const jenisIkutBencana = new Map<string, string>()
@@ -455,7 +460,7 @@ export async function ambilDataEksport(tapis: TapisEksport): Promise<DataEksport
   const ppsAktif = semuaPps.filter(
     (p) =>
       bencanaAktif.has(p.nama_bencana) &&
-      lulusNegeri(p.negeri) &&
+      lulusNegeri(p.negeri, p.daerah ?? null) &&
       (!tapis.parlimen || p.parlimen === tapis.parlimen) &&
       (!tapis.dun || p.dun === tapis.dun),
   )

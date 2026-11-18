@@ -872,7 +872,7 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
           return {
             negeri: nilai.negeri,
             daerah: kemasNamaTempat(g.daerah),
-            zon: cariZon(nilai.negeri),
+            zon: cariZon(nilai.negeri, g.daerah),
             // Legacy group fields, still read by older views
             pps: items.map((i) => i.nama).join('\n'),
             jumlah_mangsa: items.reduce((n, i) => n + i.jumlah_mangsa, 0),
@@ -932,7 +932,9 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const zonPps = nilai.negeri ? cariZon(nilai.negeri) : ''
+  // Wilayah Persekutuan: the zone depends on the daerah (Labuan = Borneo), so it's shown per daerah
+  const zonIkutDaerah = nilai.negeri === 'Wilayah Persekutuan'
+  const zonPps = nilai.negeri && !zonIkutDaerah ? cariZon(nilai.negeri) : ''
 
   // Something typed or uploaded and not sent yet: confirm before leaving through the logo
   const adaDraf =
@@ -1232,6 +1234,7 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
                             </div>
                             <p className="text-xs text-neutral-500">
                               {g.rows.length} PPS
+                              {zonIkutDaerah && g.daerah.trim() && ` · Zon ${cariZon(nilai.negeri, g.daerah)}`}
                               {bilTutup > 0 && ` · ${bilTutup} ditanda "Tutup" dalam fail`}
                               {(() => {
                                 const tiada = g.rows.filter(perluLokasi).length

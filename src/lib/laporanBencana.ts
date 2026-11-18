@@ -96,7 +96,7 @@ export const ZON_NEGERI: Record<string, string> = {
   Perlis: 'Utara',
   Kedah: 'Utara',
   'Pulau Pinang': 'Utara',
-  Perak: 'Utara',
+  Perak: 'Tengah',
   Selangor: 'Tengah',
   'Kuala Lumpur': 'Tengah',
   Putrajaya: 'Tengah',
@@ -113,7 +113,10 @@ export const ZON_NEGERI: Record<string, string> = {
   'Wilayah Persekutuan': 'Tengah',
 }
 
-export function cariZon(negeri: string): string {
+// Wilayah Persekutuan is chosen as one state, so its zone depends on the daerah:
+// Labuan is in Borneo, Kuala Lumpur / Putrajaya in Tengah
+export function cariZon(negeri: string, daerah?: string | null): string {
+  if (negeri === 'Wilayah Persekutuan' && daerah && /labuan/i.test(daerah)) return 'Borneo'
   return ZON_NEGERI[negeri] ?? '—'
 }
 
