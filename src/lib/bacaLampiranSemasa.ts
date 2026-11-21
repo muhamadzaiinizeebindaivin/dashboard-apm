@@ -137,6 +137,13 @@ const SUBTAJUK = new Set([
   'kuantiti unit', 'rosak', 'musnah', 'latitude', 'longitude',
 ])
 
+// A sub-heading row holds ONLY heading words. A data row can contain one too
+// (a victim's Jantina "Lelaki"), but it also has a name, an age… so it's kept as data.
+function barisSubtajuk(r: unknown[]): boolean {
+  const isi = r.map((c) => kunci(teks(c))).filter(Boolean)
+  return isi.length > 0 && isi.every((x) => SUBTAJUK.has(x))
+}
+
 type Jadual = {
   rows: unknown[][]
   mula: number // first data row index
@@ -155,7 +162,7 @@ function bacaJadual(alat: AlatBaca, helaian: string, labelPertama: string): Jadu
   if (hi < 0) return null
 
   let mula = hi + 1
-  while (mula <= hi + 3 && mula < rows.length && rows[mula].some((c) => SUBTAJUK.has(kunci(teks(c))))) mula++
+  while (mula <= hi + 3 && mula < rows.length && barisSubtajuk(rows[mula])) mula++
 
   const tajuk = rows.slice(hi, mula).map((r) => r.map((c) => kunci(teks(c))))
   return {

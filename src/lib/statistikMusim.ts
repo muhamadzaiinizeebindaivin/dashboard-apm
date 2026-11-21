@@ -83,6 +83,8 @@ type RowKorban = Ada & {
   kanak_perempuan: number | null
   jumlah: number | null
 }
+// CasualtiesDetail: one row per named person
+type RowButiran = Ada & { kategori: string | null; umur: string | number | null; jantina: string | null }
 type RowKerosakan = Ada & { jenis: string; kategori: string | null; rosak: number | null; musnah: number | null }
 type RowPertanian = Ada & {
   kategori: string | null
@@ -358,8 +360,9 @@ export async function ambilStatistikMusim(tarikhMula: string, tarikhTamat: strin
       ? Promise.resolve([] as T[])
       : dalamKepingan<T>(ids, (x) => supabase.from(jadual).select(`id, laporan_id, ${kolum}`).in('laporan_id', x).order('id'))
 
-  const [korbanRows, kerosakanRows, pertanianRows, mobilisasiRows, jalanRows] = await Promise.all([
+  const [korbanJadual, butiranRows, kerosakanRows, pertanianRows, mobilisasiRows, jalanRows] = await Promise.all([
     ambil<RowKorban>('laporan_korban', 'kategori, dewasa_lelaki, dewasa_perempuan, kanak_lelaki, kanak_perempuan, jumlah', idCalon),
+    ambil<RowButiran>('laporan_korban_butiran', 'kategori, umur, jantina', idCalon),
     ambil<RowKerosakan>('laporan_kerosakan', 'jenis, kategori, rosak, musnah', idCalon),
     ambil<RowPertanian>('laporan_pertanian', 'kategori, bil_terlibat, kawasan_ha, jumlah_terjejas', idCalon),
     ambil<RowMobilisasi>('laporan_mobilisasi', 'agensi, kekuatan, darat_kuantiti, air_kuantiti, udara_kuantiti', idSemua),
@@ -381,7 +384,29 @@ export async function ambilStatistikMusim(tarikhMula: string, tarikhTamat: strin
   }
   const negeriOf = (x: Ada) => kumpulanNegeri(laporanIkutId.get(x.laporan_id)?.negeri) || 'Tidak dinyatakan'
 
-  // Korban
+  // Korban. Reports that only filled the name list (CasualtiesDetail) and left the
+  // Damage_Casualties table empty: each named person counts as one, so no death is lost.
+  const adaJadualKorban = new Set(korbanJadual.map((k) => k.laporan_id))
+  const korbanDariNama: RowKorban[] = butiranRows
+    .filter((b) => !adaJadualKorban.has(b.laporan_id))
+    .map((b) => {
+      const umur = Number.parseInt(String(b.umur ?? ''), 10)
+      const jantina = kunci(b.jantina ?? '')
+      const lelaki = jantina.startsWith('l') || jantina === 'male'
+      const perempuan = jantina.startsWith('p') || jantina === 'female'
+      const dewasa = Number.isFinite(umur) ? umur >= 18 : null // unknown age: not in the adult / child profile
+      return {
+        laporan_id: b.laporan_id,
+        kategori: b.kategori,
+        dewasa_lelaki: dewasa === true && lelaki ? 1 : 0,
+        dewasa_perempuan: dewasa === true && perempuan ? 1 : 0,
+        kanak_lelaki: dewasa === false && lelaki ? 1 : 0,
+        kanak_perempuan: dewasa === false && perempuan ? 1 : 0,
+        jumlah: 1,
+      }
+    })
+  const korbanRows = [...korbanJadual, ...korbanDariNama]
+
   const korbanNegeri = new Map<string, { kematian: number; cedera: number; hilang: number }>()
   const profil = { dewasaLelaki: 0, dewasaPerempuan: 0, kanakLelaki: 0, kanakPerempuan: 0 }
   for (const k of terkini(korbanRows)) {
