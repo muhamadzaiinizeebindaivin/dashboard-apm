@@ -20,6 +20,9 @@ import {
   Search,
   Inbox,
   AlertTriangle,
+  Hourglass,
+  FileCheck2,
+  Link2,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useRealtime } from '../lib/realtime'
@@ -31,6 +34,7 @@ import { Memuat, SkeletonBaris } from '../components/Memuatkan'
 import { EditInsidenModal } from '../components/EditInsidenModal'
 import { muatTurunPosterPng, muatTurunPosterPdf, posterPdfBase64 } from '../lib/posterInsiden'
 import { SENARAI_KUMPULAN_NEGERI, ahliKumpulan } from '../lib/kumpulanNegeri'
+import { normalNamaBencana } from '../lib/normalisasi'
 
 // PKOP only: incidents sent by PKOD (Laporan Insiden), assessed here —
 // declared a disaster or not, turned into a "Makluman Awal Insiden" poster (PNG / PDF),
@@ -54,6 +58,10 @@ export type LaporanInsidenRow = {
   emel_bil_penerima: number | null
   dikemaskini_nama: string | null
   dikemaskini_pada: string | null
+  // Confirmed as a disaster: its name, and the Laporan Awal it became (null = still waiting)
+  nama_bencana: string | null
+  laporan_awal_id: string | null
+  laporan_awal_pada: string | null
 }
 
 const STATUS_LABEL: Record<StatusInsiden, { label: string; className: string }> = {
@@ -65,7 +73,8 @@ const STATUS_LABEL: Record<StatusInsiden, { label: string; className: string }> 
 const TEKS_KEPUTUSAN: Record<StatusInsiden, { title: string; message: string; label: string; danger: boolean }> = {
   disahkan_bencana: {
     title: 'Sahkan sebagai Bencana',
-    message: 'Insiden ini akan direkodkan sebagai bencana. PKOD masih perlu menghantar Laporan Awal seperti biasa.',
+    message:
+      'Insiden ini akan direkodkan sebagai bencana dan berstatus "Menunggu Laporan Awal" sehingga PKOD menghantar Laporan Awal dengan nama bencana di bawah.',
     label: 'Sahkan Bencana',
     danger: true,
   },
@@ -83,12 +92,14 @@ const TEKS_KEPUTUSAN: Record<StatusInsiden, { title: string; message: string; la
   },
 }
 
-type TapisStatus = StatusInsiden | 'semua'
+// "menunggu": confirmed as a disaster, Laporan Awal not received yet
+type TapisStatus = StatusInsiden | 'menunggu' | 'semua'
+type Kiraan = Record<StatusInsiden | 'menunggu', number>
 type Tapisan = { negeri: string; dari: string; hingga: string; cari: string }
 const TAPISAN_KOSONG: Tapisan = { negeri: '', dari: '', hingga: '', cari: '' }
 const SAIZ_HALAMAN = 20
 
-type Hasil = { baris: LaporanInsidenRow[]; jumlah: number; kiraan: Record<StatusInsiden, number> }
+type Hasil = { baris: LaporanInsidenRow[]; jumlah: number; kiraan: Kiraan }
 type Tindakan = 'png' | 'pdf' | 'emel'
 
 // Results already seen (page + filters), kept while the app is open: going back to a page,
@@ -138,6 +149,16 @@ const kelasPilih =
 
 type Keputusan = { insiden: LaporanInsidenRow; status: StatusInsiden }
 
+const BULAN = ['JANUARI', 'FEBRUARI', 'MAC', 'APRIL', 'MEI', 'JUN', 'JULAI', 'OGOS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DISEMBER']
+
+// Example in the Laporan Awal format: (Jenis Bencana) (Lokaliti) (Bulan) (Tahun)
+function contohNama(i: LaporanInsidenRow) {
+  const t = new Date(i.tarikh_masa)
+  return `cth. BANJIR ${i.daerah.toUpperCase()} ${BULAN[t.getMonth()]} ${t.getFullYear()}`
+}
+
+type LaporanAwalPilihan = { id: string; nama_bencana: string | null; created_at: string }
+
 export function LaporanInsiden() {
   const navigate = useNavigate()
   const [tapisStatus, setTapisStatus] = useState<TapisStatus>('baharu')
@@ -158,6 +179,14 @@ export function LaporanInsiden() {
   const [keputusan, setKeputusan] = useState<Keputusan | null>(null)
   const [memproses, setMemproses] = useState(false)
   const [ralatKeputusan, setRalatKeputusan] = useState('')
+  const [namaBencana, setNamaBencana] = useState('')
+
+  // Manual link to a Laporan Awal sent under another name
+  const [dipautkan, setDipautkan] = useState<LaporanInsidenRow | null>(null)
+  const [pilihanAwal, setPilihanAwal] = useState<LaporanAwalPilihan[] | null>(null)
+  const [awalDipilih, setAwalDipilih] = useState('')
+  const [memaut, setMemaut] = useState(false)
+  const [ralatPaut, setRalatPaut] = useState('')
 
   const [sedang, setSedang] = useState<{ id: string; tindakan: Tindakan } | null>(null)
   const [sahkanEmel, setSahkanEmel] = useState<LaporanInsidenRow | null>(null)
@@ -240,7 +269,7 @@ export function LaporanInsiden() {
 
   const baris = hasil?.baris ?? []
   const jumlah = hasil?.jumlah ?? 0
-  const kiraan = hasil?.kiraan ?? { baharu: 0, disahkan_bencana: 0, bukan_bencana: 0 }
+  const kiraan: Kiraan = { baharu: 0, disahkan_bencana: 0, bukan_bencana: 0, menunggu: 0, ...hasil?.kiraan }
   const jumlahSemua = kiraan.baharu + kiraan.disahkan_bencana + kiraan.bukan_bencana
   const bilHalaman = Math.max(1, Math.ceil(jumlah / SAIZ_HALAMAN))
   const adaTapisan = !!(tapisan.negeri || tapisan.dari || tapisan.hingga || tapisan.cari || cariInput)
@@ -294,13 +323,25 @@ export function LaporanInsiden() {
     }
   }
 
+  function bukaKeputusan(insiden: LaporanInsidenRow, status: StatusInsiden) {
+    setRalatKeputusan('')
+    setNamaBencana(insiden.nama_bencana ?? '')
+    setKeputusan({ insiden, status })
+  }
+
   async function sahkanKeputusan() {
     if (!keputusan) return
+    const nama = normalNamaBencana(namaBencana)
+    if (keputusan.status === 'disahkan_bencana' && !nama) {
+      setRalatKeputusan('Sila isi Nama Bencana.')
+      return
+    }
     setMemproses(true)
     setRalatKeputusan('')
     const { error } = await supabase.rpc('putuskan_laporan_insiden', {
       p_id: keputusan.insiden.id,
       p_status: keputusan.status,
+      p_nama_bencana: keputusan.status === 'disahkan_bencana' ? nama : null,
     })
     setMemproses(false)
     if (error) {
@@ -310,6 +351,52 @@ export function LaporanInsiden() {
     setToast({ type: 'success', message: `Keputusan disimpan: ${STATUS_LABEL[keputusan.status].label}.` })
     setKeputusan(null)
     segarkan()
+  }
+
+  // Laporan Awal of the same state (latest first), to link by hand
+  async function bukaPautan(i: LaporanInsidenRow) {
+    setDipautkan(i)
+    setPilihanAwal(null)
+    setAwalDipilih('')
+    setRalatPaut('')
+    const { data, error } = await supabase
+      .from('laporan_bencana')
+      .select('id, nama_bencana, created_at')
+      .eq('jenis_laporan', 'awal')
+      .in('negeri', ahliKumpulan(i.negeri))
+      .gte('created_at', new Date(new Date(i.tarikh_masa).getTime() - 2 * 86_400_000).toISOString())
+      .order('created_at', { ascending: false })
+      .limit(50)
+    if (error) {
+      setRalatPaut('Gagal memuatkan senarai Laporan Awal.')
+      setPilihanAwal([])
+      return
+    }
+    setPilihanAwal((data as LaporanAwalPilihan[]) ?? [])
+  }
+
+  async function sahkanPautan() {
+    if (!dipautkan) return
+    if (!awalDipilih) {
+      setRalatPaut('Sila pilih Laporan Awal.')
+      return
+    }
+    setMemaut(true)
+    setRalatPaut('')
+    const { error } = await supabase.rpc('pautkan_insiden', { p_id: dipautkan.id, p_laporan_id: awalDipilih })
+    setMemaut(false)
+    if (error) {
+      setRalatPaut('Gagal memautkan. Sila cuba lagi.')
+      return
+    }
+    setDipautkan(null)
+    setToast({ type: 'success', message: 'Insiden dipautkan dengan Laporan Awal.' })
+    segarkan()
+  }
+
+  // The linked Laporan Awal, found by its disaster name in the Laporan Awal list
+  function lihatLaporanAwal(i: LaporanInsidenRow) {
+    navigate(`/sekretariat/laporan-awal?cari=${encodeURIComponent(i.nama_bencana ?? '')}`)
   }
 
   async function padam() {
@@ -435,6 +522,7 @@ export function LaporanInsiden() {
             [
               ['baharu', 'Baharu', kiraan.baharu],
               ['disahkan_bencana', 'Disahkan Bencana', kiraan.disahkan_bencana],
+              ['menunggu', 'Menunggu Laporan Awal', kiraan.menunggu],
               ['bukan_bencana', 'Bukan Bencana', kiraan.bukan_bencana],
               ['semua', 'Semua', jumlahSemua],
             ] as const
@@ -485,7 +573,9 @@ export function LaporanInsiden() {
                   ? 'Tiada laporan insiden baharu.'
                   : tapisStatus === 'semua'
                     ? 'Belum ada laporan insiden.'
-                    : `Tiada laporan insiden berstatus ${STATUS_LABEL[tapisStatus].label}.`}
+                    : tapisStatus === 'menunggu'
+                      ? 'Tiada insiden yang menunggu Laporan Awal.'
+                      : `Tiada laporan insiden berstatus ${STATUS_LABEL[tapisStatus].label}.`}
             </p>
           </div>
         ) : (
@@ -529,9 +619,21 @@ export function LaporanInsiden() {
                         />
                       </button>
 
-                      <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${st.className}`}>
-                        {st.label}
-                      </span>
+                      <div className="flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:items-center">
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${st.className}`}>{st.label}</span>
+                        {i.status === 'disahkan_bencana' &&
+                          (i.laporan_awal_id ? (
+                            <span className="flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                              <FileCheck2 size={12} />
+                              Laporan Awal diterima
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-1 text-xs font-medium text-orange-700">
+                              <Hourglass size={12} />
+                              Menunggu Laporan Awal
+                            </span>
+                          ))}
+                      </div>
                     </div>
 
                     {buka && (
@@ -580,6 +682,47 @@ export function LaporanInsiden() {
                           </div>
                         </dl>
 
+                        {/* Confirmed as a disaster: where it went */}
+                        {i.status === 'disahkan_bencana' && (
+                          <div
+                            className={`mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-3 text-sm ${
+                              i.laporan_awal_id
+                                ? 'border-emerald-200 bg-emerald-50/70'
+                                : 'border-orange-200 bg-orange-50/70'
+                            }`}
+                          >
+                            <div className="min-w-0">
+                              <p className="text-xs text-neutral-500">Nama Bencana</p>
+                              <p className="font-semibold text-neutral-900">{i.nama_bencana || '—'}</p>
+                              <p className={`text-xs ${i.laporan_awal_id ? 'text-emerald-700' : 'text-orange-700'}`}>
+                                {i.laporan_awal_id
+                                  ? `Laporan Awal diterima${i.laporan_awal_pada ? ` · ${masaPenuh(i.laporan_awal_pada)}` : ''}`
+                                  : `Menunggu Laporan Awal${i.diputuskan_pada ? ` sejak ${masaPenuh(i.diputuskan_pada)}` : ''}`}
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {i.laporan_awal_id && (
+                                <button
+                                  type="button"
+                                  onClick={() => lihatLaporanAwal(i)}
+                                  className="flex h-9 items-center gap-1.5 rounded-lg bg-emerald-700 px-3 text-sm font-medium text-white transition-colors hover:bg-emerald-800"
+                                >
+                                  <FileCheck2 size={15} />
+                                  Lihat Laporan Awal
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => bukaPautan(i)}
+                                className="flex h-9 items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 text-sm font-medium text-neutral-700 transition-colors hover:border-emerald-600 hover:text-emerald-700"
+                              >
+                                <Link2 size={15} />
+                                {i.laporan_awal_id ? 'Tukar Pautan' : 'Pautkan Laporan Awal'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
                         {/* Poster / PDF / e-mail */}
                         <div className="mt-4 flex flex-wrap gap-2">
                           {(
@@ -622,7 +765,7 @@ export function LaporanInsiden() {
                             <>
                               <button
                                 type="button"
-                                onClick={() => setKeputusan({ insiden: i, status: 'disahkan_bencana' })}
+                                onClick={() => bukaKeputusan(i, 'disahkan_bencana')}
                                 className="flex h-9 items-center gap-1.5 rounded-lg bg-red-600 px-3 text-sm font-medium text-white transition-colors hover:bg-red-700"
                               >
                                 <CheckCircle2 size={15} />
@@ -630,7 +773,7 @@ export function LaporanInsiden() {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => setKeputusan({ insiden: i, status: 'bukan_bencana' })}
+                                onClick={() => bukaKeputusan(i, 'bukan_bencana')}
                                 className="flex h-9 items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50"
                               >
                                 <XCircle size={15} />
@@ -640,7 +783,7 @@ export function LaporanInsiden() {
                           ) : (
                             <button
                               type="button"
-                              onClick={() => setKeputusan({ insiden: i, status: 'baharu' })}
+                              onClick={() => bukaKeputusan(i, 'baharu')}
                               className="flex h-9 items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50"
                             >
                               <RotateCcw size={15} />
@@ -750,7 +893,75 @@ export function LaporanInsiden() {
           setKeputusan(null)
           setRalatKeputusan('')
         }}
-      />
+      >
+        {keputusan?.status === 'disahkan_bencana' && (
+          <div className="mt-3 text-left">
+            <label className="mb-1 block text-sm font-medium text-neutral-700">
+              Nama Bencana <span className="text-red-500">*</span>
+            </label>
+            <input
+              value={namaBencana}
+              onChange={(e) => setNamaBencana(e.target.value)}
+              placeholder={contohNama(keputusan.insiden)}
+              autoFocus
+              className="h-10 w-full rounded-lg border border-neutral-200 bg-white px-3 text-sm uppercase text-neutral-800 outline-none focus:border-emerald-600"
+            />
+            <p className="mt-1 text-xs text-neutral-500">
+              Format: (Jenis Bencana) (Lokaliti) (Bulan) (Tahun). PKOD akan menggunakan nama ini dalam Laporan Awal.
+            </p>
+          </div>
+        )}
+      </ConfirmModal>
+
+      <ConfirmModal
+        open={!!dipautkan}
+        title="Pautkan Laporan Awal"
+        message={
+          dipautkan
+            ? `Pilih Laporan Awal ${dipautkan.negeri} bagi insiden "${dipautkan.nama_bencana || dipautkan.ringkasan}".`
+            : ''
+        }
+        confirmLabel="Pautkan"
+        loading={memaut}
+        loadingLabel="Memautkan..."
+        error={ralatPaut}
+        onConfirm={sahkanPautan}
+        onCancel={() => {
+          if (memaut) return
+          setDipautkan(null)
+          setRalatPaut('')
+        }}
+      >
+        <div className="mt-3 text-left">
+          {pilihanAwal === null ? (
+            <p className="flex items-center gap-2 text-sm text-neutral-500">
+              <Loader2 size={15} className="animate-spin" />
+              Memuatkan Laporan Awal...
+            </p>
+          ) : pilihanAwal.length === 0 ? (
+            <p className="text-sm text-neutral-500">Tiada Laporan Awal {dipautkan?.negeri} sejak insiden ini.</p>
+          ) : (
+            <select
+              value={awalDipilih}
+              onChange={(e) => setAwalDipilih(e.target.value)}
+              className="h-10 w-full rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-800 outline-none focus:border-emerald-600"
+            >
+              <option value="">— Pilih Laporan Awal —</option>
+              {pilihanAwal.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.nama_bencana || 'Tanpa nama'} ·{' '}
+                  {new Date(a.created_at).toLocaleString('ms-MY', {
+                    day: 'numeric',
+                    month: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      </ConfirmModal>
 
       <ConfirmModal
         open={!!sahkanEmel}

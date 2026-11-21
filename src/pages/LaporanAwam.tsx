@@ -46,7 +46,10 @@ import { ConfirmModal } from '../components/ConfirmModal'
 import { hurufBesar, kemasNamaTempat, kunci, normalNamaBencana } from '../lib/normalisasi'
 import { keNilaiTempatan } from '../lib/tarikhBebas'
 // KL, Putrajaya and Labuan: one "Wilayah Persekutuan" choice
-import { SENARAI_KUMPULAN_NEGERI } from '../lib/kumpulanNegeri'
+import { SENARAI_KUMPULAN_NEGERI, ahliKumpulan } from '../lib/kumpulanNegeri'
+import { useInsidenMenunggu, namaInsiden } from '../lib/insidenMenunggu'
+import type { InsidenMenunggu } from '../lib/insidenMenunggu'
+import { InsidenMenungguBanner } from '../components/InsidenMenungguBanner'
 import { semakPps } from '../lib/ppsPusat'
 import { useJenisBencana } from '../lib/jenisBencana'
 import type { PpsInput } from '../lib/ppsPusat'
@@ -490,6 +493,8 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
   const [sahkanTanpaAwal, setSahkanTanpaAwal] = useState(false)
   // Jenis Bencana choices = the categories of the Bencana map (Urus Kategori)
   const senaraiJenis = useJenisBencana().map((j) => j.label)
+  // Insiden confirmed as a disaster, still waiting for their Laporan Awal (notification)
+  const { senarai: insidenMenunggu, muat: muatInsiden } = useInsidenMenunggu(dalaman ? null : ambilKod('laporan'))
 
   // Existing disaster names (last 90 days) for the Nama Bencana suggestions
   useEffect(() => {
@@ -567,6 +572,37 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
     kosongkanFail()
     // Laporan Insiden: Tarikh & Masa Berlaku starts at "now" (still editable)
     if (v === 'insiden') setNilai({ tarikh_masa: keNilaiTempatan(new Date()) })
+  }
+
+  // From the notification: Laporan Awal form, with the insiden's disaster name and place filled in
+  function mulaDariInsiden(i: InsidenMenunggu) {
+    pilihJenis('awal')
+    setCara('borang')
+    setNilai({
+      tarikh_masa: keNilaiTempatan(new Date()),
+      nama_bencana: normalNamaBencana(namaInsiden(i)),
+      negeri: i.negeri,
+      daerah: i.daerah,
+    })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  // Laporan Awal: a waiting insiden of the same state, picked so the name matches exactly
+  const samaNegeri = (a: string, b: string) => ahliKumpulan(a).includes(b) || ahliKumpulan(b).includes(a)
+  const insidenNegeri = insidenMenunggu.filter((i) => !nilai.negeri || samaNegeri(i.negeri, nilai.negeri))
+  const insidenTerpilih = insidenNegeri.find(
+    (i) => kunci(normalNamaBencana(namaInsiden(i))) === kunci(nilai.nama_bencana ?? ''),
+  )
+
+  function pilihInsidenBerkaitan(id: string) {
+    const i = insidenMenunggu.find((x) => x.id === id)
+    if (!i) return
+    setNilai((prev) => ({
+      ...prev,
+      nama_bencana: normalNamaBencana(namaInsiden(i)),
+      negeri: prev.negeri || i.negeri,
+      daerah: prev.daerah || i.daerah,
+    }))
   }
 
   // Laporan Awal: switch between the form and the upload
@@ -928,6 +964,8 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
     }
 
     setBerjaya({ jenis, nama: (nilai.nama_bencana ?? '').trim(), masa: new Date() })
+    // A Laporan Awal may have answered a waiting insiden: refresh the notification
+    if (jenis === 'awal') void muatInsiden()
     pilihJenis('')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -983,6 +1021,8 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
             <KejayaanHantar berjaya={berjaya} onLagi={() => setBerjaya(null)} onKeluar={() => navigate('/')} />
           ) : (
             <div className="space-y-6">
+              {jenis === '' && <InsidenMenungguBanner senarai={insidenMenunggu} onPilih={mulaDariInsiden} />}
+
               <div>
                 <label className="mb-2 block text-sm font-medium text-neutral-700">
                   Jenis Laporan <span className="text-red-500">*</span>
@@ -1050,6 +1090,27 @@ export function LaporanAwam({ dalaman = false }: { dalaman?: boolean } = {}) {
               {/* Laporan Awal step 2: fill / check the values, then choose the location */}
               {jenis === 'awal' && adaBorang && (
                 <>
+                  {insidenNegeri.length > 0 && (
+                    <div className="rounded-xl border border-orange-200 bg-orange-50/70 p-4 text-sm">
+                      <label className="mb-1.5 block font-medium text-orange-900">Insiden berkaitan (pilihan)</label>
+                      <select
+                        value={insidenTerpilih?.id ?? ''}
+                        onChange={(e) => pilihInsidenBerkaitan(e.target.value)}
+                        className="h-10 w-full rounded-lg border border-orange-200 bg-white px-3 text-sm text-neutral-800 outline-none focus:border-orange-500"
+                      >
+                        <option value="">— Bukan daripada insiden —</option>
+                        {insidenNegeri.map((i) => (
+                          <option key={i.id} value={i.id}>
+                            {namaInsiden(i)} ({i.daerah}, {i.negeri})
+                          </option>
+                        ))}
+                      </select>
+                      <p className="mt-1.5 text-xs text-orange-800">
+                        Jika laporan ini untuk insiden yang telah disahkan bencana, pilih di sini supaya Nama Bencana
+                        sama dan insiden dipautkan secara automatik.
+                      </p>
+                    </div>
+                  )}
                   {fail ? (
                     <BannerSemak
                       fail={fail}

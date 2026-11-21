@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import type { ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   FileText,
   FileDown,
@@ -163,8 +163,11 @@ export function SenaraiLaporanAwam({ jenis, label }: SenaraiLaporanAwamProps) {
   // Other Excel sheets stored with each Laporan Semasa (loaded on expand)
   const [lampiranMap, setLampiranMap] = useState<Record<string, DataLampiran>>({})
   const [tapisNegeri, setTapisNegeri] = useState('')
-  const [tapisan, setTapisan] = useState<Tapisan>(TAPISAN_KOSONG)
-  const [cariInput, setCariInput] = useState('') // typed text, applied after a short pause
+  // ?cari=…: opened from another page (e.g. Laporan Insiden → its Laporan Awal) with a search
+  const [params] = useSearchParams()
+  const cariAwal = params.get('cari')?.trim() ?? ''
+  const [tapisan, setTapisan] = useState<Tapisan>(() => ({ ...TAPISAN_KOSONG, cari: cariAwal }))
+  const [cariInput, setCariInput] = useState(cariAwal) // typed text, applied after a short pause
   const senaraiJenis = useJenisBencana()
   const negeriTetap = useNegeriTetap()
   const [pendingDelete, setPendingDelete] = useState<LaporanBencanaRow | null>(null)

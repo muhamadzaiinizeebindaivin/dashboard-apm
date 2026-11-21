@@ -156,7 +156,7 @@ export function Sekretariat() {
   // and open PPS with no report for more than HAD_TIADA_KEMASKINI_JAM hours
   const kiraBadge = useCallback(async () => {
     const had = new Date(Date.now() - HAD_TIADA_KEMASKINI_JAM * 3_600_000).toISOString()
-    const [cadangan, senyap, insiden] = await Promise.all([
+    const [cadangan, senyap, insiden, menunggu] = await Promise.all([
       supabase.from('pps_pusat').select('id', { count: 'exact', head: true }).eq('status', 'cadangan_tutup'),
       supabase
         .from('pps_pusat')
@@ -165,11 +165,17 @@ export function Sekretariat() {
         .lt('dilapor_pada', had),
       // Laporan Insiden waiting for a decision (RLS: always 0 for a PKON)
       supabase.from('laporan_insiden').select('id', { count: 'exact', head: true }).eq('status', 'baharu'),
+      // ...and confirmed as a disaster, still waiting for their Laporan Awal
+      supabase
+        .from('laporan_insiden')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'disahkan_bencana')
+        .is('laporan_awal_id', null),
     ])
     if (cadangan.error || senyap.error) return // keep the last counts
     setBilCadangan(cadangan.count ?? 0)
     setBilSenyap(senyap.count ?? 0)
-    if (!insiden.error) setBilInsiden(insiden.count ?? 0)
+    if (!insiden.error && !menunggu.error) setBilInsiden((insiden.count ?? 0) + (menunggu.count ?? 0))
   }, [])
 
   useEffect(() => {
@@ -466,7 +472,7 @@ export function Sekretariat() {
                   {label}
                   {to === 'laporan-insiden' && bilInsiden > 0 && (
                     <span
-                      title="Laporan insiden menunggu keputusan"
+                      title="Laporan insiden menunggu keputusan atau menunggu Laporan Awal"
                       className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-semibold text-white"
                     >
                       {bilInsiden}
